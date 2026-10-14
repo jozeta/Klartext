@@ -84,7 +84,8 @@ export const IPC_CHANNELS = {
   // Events pushed from Main -> Renderer
   EVENT_WATCHER_CHANGE: 'event:watcher-change',
   EVENT_AI_STREAM_CHUNK: 'event:ai-stream-chunk',
-  EVENT_GIT_STATUS_CHANGED: 'event:git-status-changed'
+  EVENT_GIT_STATUS_CHANGED: 'event:git-status-changed',
+  EVENT_MENU_ACTION: 'event:menu-action'
 } as const
 
 export const DEFAULT_KEYBINDINGS: Record<string, string> = {

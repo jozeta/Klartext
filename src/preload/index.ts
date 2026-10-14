@@ -275,6 +275,11 @@ export const klartextApi = {
     const listener = (_e: unknown, ev: AIStreamChunkEvent) => callback(ev)
     ipcRenderer.on(IPC_CHANNELS.EVENT_AI_STREAM_CHUNK, listener)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.EVENT_AI_STREAM_CHUNK, listener)
+  },
+  onMenuAction: (callback: (action: string) => void): (() => void) => {
+    const listener = (_e: unknown, action: string) => callback(action)
+    ipcRenderer.on(IPC_CHANNELS.EVENT_MENU_ACTION, listener)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.EVENT_MENU_ACTION, listener)
   }
 }
 

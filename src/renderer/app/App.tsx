@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PanelLeft,
-  Command,
+  PanelRight,
   Maximize2,
-  Download,
-  Settings as SettingsIcon,
-  Sun,
-  Moon,
   Sparkles,
   AlertCircle,
   GitBranch,
-  X
+  X,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
+  Plus
 } from 'lucide-react'
 import type {
   AppSettings,
@@ -21,9 +22,17 @@ import type {
   RecoverySnapshot,
   WorkspaceRoot
 } from '../../shared/types'
-import { extractHeadings } from '../../shared/markdown/pipeline'
+import {
+  extractHeadings,
+  extractFrontmatter,
+  updateFrontmatterInMarkdown
+} from '../../shared/markdown/pipeline'
 import { MultiRootSidebar, type LeftSidebarTab } from '../features/workspace/MultiRootSidebar'
 import { MarkdownEditorWorkspace } from '../features/editor/MarkdownEditorWorkspace'
+import {
+  SPELL_LANGUAGE_LABELS,
+  type SupportedSpellLanguage
+} from '../features/editor/spellcheck-extension'
 import { LocalAIPanel } from '../features/ai/LocalAIPanel'
 import { ExcalidrawCanvasModal } from '../features/diagrams/DiagramWidgets'
 import {
@@ -43,6 +52,8 @@ export interface OpenDocumentTab {
   externalConflictContent?: string
 }
 
+const DEFAULT_FRONTMATTER_KEYS = ['title', 'author', 'date', 'tags', 'status']
+
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [roots, setRoots] = useState<WorkspaceRoot[]>([])
@@ -53,7 +64,31 @@ export const App: React.FC = () => {
   const [activeTabKey, setActiveTabKey] = useState<string | null>(null)
   const [editMode, setEditMode] = useState<EditMode>('inline')
   const [leftSidebarTab, setLeftSidebarTab] = useState<LeftSidebarTab>('explorer')
+  const [lastActiveRightPanel, setLastActiveRightPanel] = useState<'frontmatter' | 'ai'>('ai')
   const [backlinks, setBacklinks] = useState<BacklinkItem[]>([])
+  const [scrollToLine, setScrollToLine] = useState<{ line: number; nonce: number } | null>(null)
+  const [editorCommandTrigger, setEditorCommandTrigger] = useState<{
+    command:
+      | 'undo'
+      | 'redo'
+      | 'cut'
+      | 'copy'
+      | 'paste'
+      | 'select-all'
+      | 'copy-rich-html'
+      | 'toggle-inline-ai'
+      | 'ai-improve'
+    nonce: number
+  } | null>(null)
+  const [showFileMenu, setShowFileMenu] = useState(false)
+  const [showEditMenu, setShowEditMenu] = useState(false)
+  const [showViewMenu, setShowViewMenu] = useState(false)
+  const [showAIMenu, setShowAIMenu] = useState(false)
+  const [customFrontmatterKey, setCustomFrontmatterKey] = useState('')
+
+  // Tab bar horizontal scroll state when many tabs are open
+  const tabBarScrollRef = useRef<HTMLDivElement | null>(null)
+  const [tabBarHasOverflow, setTabBarHasOverflow] = useState(false)
 
   // Modals & Overlays
   const [paletteMode, setPaletteMode] = useState<'commands' | 'files' | null>(null)
@@ -93,22 +128,212 @@ export const App: React.FC = () => {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }, [settings?.theme])
 
-  // Apply theme & typography CSS variables to documentElement without remounting editor
+  // Resizable Left & Right Sidebar widths
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState<number>(260)
+  const [frontmatterSidebarWidth, setFrontmatterSidebarWidth] = useState<number>(288)
+  const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(320)
+  const activeSidebarDragRef = useRef<'left' | 'frontmatter' | 'right' | null>(null)
+
+  const updateTabBarOverflow = useCallback(() => {
+    const el = tabBarScrollRef.current
+    if (!el) {
+      setTabBarHasOverflow(false)
+      return
+    }
+    setTabBarHasOverflow(el.scrollWidth > el.clientWidth + 4 || tabs.length > 5)
+  }, [tabs.length])
+
+  useEffect(() => {
+    updateTabBarOverflow()
+    window.addEventListener('resize', updateTabBarOverflow)
+    return () => window.removeEventListener('resize', updateTabBarOverflow)
+  }, [
+    updateTabBarOverflow,
+    tabs.length,
+    leftSidebarWidth,
+    rightSidebarWidth,
+    frontmatterSidebarWidth,
+    settings?.pageTabsPosition
+  ])
+
+  useEffect(() => {
+    if (settings?.leftSidebarWidth) setLeftSidebarWidth(settings.leftSidebarWidth)
+    if (settings?.frontmatterSidebarWidth) {
+      setFrontmatterSidebarWidth(settings.frontmatterSidebarWidth)
+    }
+    if (settings?.rightSidebarWidth) setRightSidebarWidth(settings.rightSidebarWidth)
+  }, [
+    settings?.leftSidebarWidth,
+    settings?.frontmatterSidebarWidth,
+    settings?.rightSidebarWidth
+  ])
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!activeSidebarDragRef.current) return
+      if (activeSidebarDragRef.current === 'left') {
+        const nextW = Math.max(180, Math.min(520, e.clientX))
+        setLeftSidebarWidth(nextW)
+      } else if (activeSidebarDragRef.current === 'frontmatter') {
+        const rightOffset = settings?.rightSidebarOpen ? rightSidebarWidth : 0
+        const nextW = Math.max(
+          200,
+          Math.min(520, window.innerWidth - e.clientX - rightOffset)
+        )
+        setFrontmatterSidebarWidth(nextW)
+      } else if (activeSidebarDragRef.current === 'right') {
+        const nextW = Math.max(220, Math.min(560, window.innerWidth - e.clientX))
+        setRightSidebarWidth(nextW)
+      }
+    }
+    const onMouseUp = () => {
+      if (activeSidebarDragRef.current === 'left') {
+        window.klartext.updateSettings({ leftSidebarWidth }).catch(() => {})
+      } else if (activeSidebarDragRef.current === 'frontmatter') {
+        window.klartext.updateSettings({ frontmatterSidebarWidth }).catch(() => {})
+      } else if (activeSidebarDragRef.current === 'right') {
+        window.klartext.updateSettings({ rightSidebarWidth }).catch(() => {})
+      }
+      activeSidebarDragRef.current = null
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [
+    leftSidebarWidth,
+    frontmatterSidebarWidth,
+    rightSidebarWidth,
+    settings?.rightSidebarOpen
+  ])
+
+  const dispatchEditorCommand = useCallback(
+    (
+      command:
+        | 'undo'
+        | 'redo'
+        | 'cut'
+        | 'copy'
+        | 'paste'
+        | 'select-all'
+        | 'copy-rich-html'
+        | 'toggle-inline-ai'
+        | 'ai-improve'
+    ) => {
+      setEditorCommandTrigger({ command, nonce: Date.now() + Math.random() })
+    },
+    []
+  )
+
+  // Auto-collapse File, Edit, View & AI menus when clicking anywhere in the app
+  useEffect(() => {
+    if (!showFileMenu && !showEditMenu && !showViewMenu && !showAIMenu) return
+    const handleGlobalClick = () => {
+      setShowFileMenu(false)
+      setShowEditMenu(false)
+      setShowViewMenu(false)
+      setShowAIMenu(false)
+    }
+    window.addEventListener('click', handleGlobalClick)
+    return () => window.removeEventListener('click', handleGlobalClick)
+  }, [showFileMenu, showEditMenu, showViewMenu, showAIMenu])
+
+  // Apply theme, white-paper-in-dark-mode, & granular typography CSS variables to documentElement
   useEffect(() => {
     const rootEl = document.documentElement
     rootEl.setAttribute('data-theme', resolvedTheme)
+    rootEl.setAttribute('data-light-paper', String(Boolean(settings?.lightPaperInDarkMode)))
     if (settings) {
-      rootEl.style.setProperty('--editor-font-size', `${settings.typography.fontSizePx}px`)
-      rootEl.style.setProperty('--editor-line-height', String(settings.typography.lineHeight))
+      const typo = settings.typography
+      rootEl.style.setProperty('--font-editor', typo.bodyFontFamily)
+      rootEl.style.setProperty('--font-mono', typo.monoFontFamily)
+      rootEl.style.setProperty('--editor-font-size', `${typo.fontSizePx}px`)
+      rootEl.style.setProperty('--code-font-size', `${typo.codeFontSizePx ?? 14}px`)
+      rootEl.style.setProperty('--editor-line-height', String(typo.lineHeight))
       rootEl.style.setProperty(
         '--editor-max-width',
-        settings.typography.fullWidth ? '100%' : `${settings.typography.maxLineWidthCh}ch`
+        typo.fullWidth || settings.wordWrap === false
+          ? '100%'
+          : `${typo.maxLineWidthCh}ch`
       )
+      if (typo.bodyColor) {
+        rootEl.style.setProperty('--text-editor-custom', typo.bodyColor)
+      } else {
+        rootEl.style.removeProperty('--text-editor-custom')
+      }
+
+      const defaultSizes: Record<'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6', number> = {
+        h1: 1.85,
+        h2: 1.45,
+        h3: 1.2,
+        h4: 1.08,
+        h5: 1.0,
+        h6: 0.92
+      }
+
+      ;(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).forEach((lvl) => {
+        const hCfg = typo.headings?.[lvl]
+        rootEl.style.setProperty(
+          `--${lvl}-font-family`,
+          hCfg?.fontFamily || 'var(--font-editor)'
+        )
+        rootEl.style.setProperty(
+          `--${lvl}-font-size`,
+          `${hCfg?.fontSizeEm ?? defaultSizes[lvl]}em`
+        )
+        rootEl.style.setProperty(
+          `--${lvl}-color`,
+          hCfg?.color || 'var(--text-editor-effective)'
+        )
+      })
+
       if (settings.accentColorOverride) {
         rootEl.style.setProperty('--accent-primary', settings.accentColorOverride)
       }
     }
   }, [resolvedTheme, settings])
+
+  const isBootedRef = useRef(false)
+
+  const handleUpdateSettings = useCallback(async (partial: Partial<AppSettings>) => {
+    const effective: Partial<AppSettings> = { ...partial }
+    // Enforce mutual exclusion on the right side: only one right panel visible at a time
+    if (effective.frontmatterPanelVisible === true) {
+      effective.rightSidebarOpen = false
+      effective.lastActiveRightPanel = 'frontmatter'
+      setLastActiveRightPanel('frontmatter')
+    } else if (effective.rightSidebarOpen === true) {
+      effective.frontmatterPanelVisible = false
+      effective.lastActiveRightPanel = 'ai'
+      setLastActiveRightPanel('ai')
+    }
+
+    setSettings((prev) => (prev ? { ...prev, ...effective } : prev))
+    try {
+      const updated = await window.klartext.updateSettings(effective)
+      setSettings((prev) => ({ ...(prev || updated), ...updated, ...effective }))
+    } catch {
+      // Keep optimistic state if main process update fails
+    }
+  }, [])
+
+  const handleSelectLeftSidebarTab = useCallback(
+    (tab: LeftSidebarTab) => {
+      setLeftSidebarTab(tab)
+      handleUpdateSettings({ leftSidebarTab: tab })
+    },
+    [handleUpdateSettings]
+  )
+
+  const handleChangeEditMode = useCallback(
+    (mode: EditMode) => {
+      setEditMode(mode)
+      handleUpdateSettings({ defaultEditMode: mode })
+    },
+    [handleUpdateSettings]
+  )
 
   const refreshWorkspaceAndTrees = useCallback(async () => {
     const ws = await window.klartext.getWorkspaceState()
@@ -157,12 +382,111 @@ export const App: React.FC = () => {
     [tabs, roots]
   )
 
-  // Initial boot: load settings, workspace roots, recovery snapshots, and first Markdown document
+  const navigateToLine = useCallback(
+    async (rootId: string, relativePath: string, lineNumber: number) => {
+      await openDocument(rootId, relativePath)
+      setScrollToLine({ line: lineNumber, nonce: Date.now() + Math.random() })
+    },
+    [openDocument]
+  )
+
+  const handleExportHtml = useCallback(async () => {
+    if (!activeTab) return
+    const res = await window.klartext.exportHtml({
+      rootId: activeTab.rootId,
+      relativePath: activeTab.relativePath,
+      markdown: activeTab.content,
+      title: activeTab.relativePath
+    })
+    setExportStatusBanner(`Exported HTML: ${res.outputPath}`)
+  }, [activeTab])
+
+  const handleExportPdf = useCallback(async () => {
+    if (!activeTab) return
+    const res = await window.klartext.exportPdf({
+      rootId: activeTab.rootId,
+      relativePath: activeTab.relativePath,
+      markdown: activeTab.content,
+      title: activeTab.relativePath
+    })
+    setExportStatusBanner(`Exported PDF (${res.sizeBytes} bytes): ${res.outputPath}`)
+  }, [activeTab])
+
+  // Subscribe to native application File, Edit & View Menu actions
+  useEffect(() => {
+    if (!window.klartext.onMenuAction) return
+    const unsubscribe = window.klartext.onMenuAction(async (action) => {
+      if (action === 'undo') {
+        dispatchEditorCommand('undo')
+      } else if (action === 'redo') {
+        dispatchEditorCommand('redo')
+      } else if (action === 'export-html') {
+        await handleExportHtml()
+      } else if (action === 'export-pdf') {
+        await handleExportPdf()
+      } else if (action === 'open-folder') {
+        await window.klartext.openFolderDialog()
+        await refreshWorkspaceAndTrees()
+      } else if (action === 'toggle-status-bar' && settings) {
+        await handleUpdateSettings({ statusBarVisible: !settings.statusBarVisible })
+      } else if (action === 'toggle-toolbar' && settings) {
+        await handleUpdateSettings({
+          formattingToolbarVisible: !settings.formattingToolbarVisible
+        })
+      } else if (action === 'toggle-theme') {
+        await handleUpdateSettings({ theme: resolvedTheme === 'dark' ? 'light' : 'dark' })
+      } else if (action === 'toggle-frontmatter' && settings) {
+        await handleUpdateSettings({
+          frontmatterPanelVisible: !settings.frontmatterPanelVisible
+        })
+      } else if (action === 'toggle-spellcheck' && settings) {
+        await handleUpdateSettings({
+          spellcheckEnabled: settings.spellcheckEnabled === false
+        })
+      }
+    })
+    return unsubscribe
+  }, [
+    dispatchEditorCommand,
+    handleExportHtml,
+    handleExportPdf,
+    refreshWorkspaceAndTrees,
+    settings,
+    resolvedTheme,
+    handleUpdateSettings
+  ])
+
+  // Initial boot: load settings, workspace roots, recovery snapshots, and saved open tabs (or first Markdown document)
   useEffect(() => {
     const init = async () => {
       const loadedSettings = await window.klartext.getSettings()
-      setSettings(loadedSettings)
-      setEditMode(loadedSettings.defaultEditMode || 'inline')
+      const normalizedSettings: AppSettings = {
+        ...loadedSettings,
+        ...(loadedSettings.frontmatterPanelVisible && loadedSettings.rightSidebarOpen
+          ? { rightSidebarOpen: false }
+          : {})
+      }
+      if (normalizedSettings.frontmatterPanelVisible) {
+        setLastActiveRightPanel('frontmatter')
+      } else if (normalizedSettings.rightSidebarOpen) {
+        setLastActiveRightPanel('ai')
+      } else if (normalizedSettings.lastActiveRightPanel) {
+        setLastActiveRightPanel(normalizedSettings.lastActiveRightPanel)
+      }
+      if (normalizedSettings.leftSidebarWidth) {
+        setLeftSidebarWidth(normalizedSettings.leftSidebarWidth)
+      }
+      if (normalizedSettings.frontmatterSidebarWidth) {
+        setFrontmatterSidebarWidth(normalizedSettings.frontmatterSidebarWidth)
+      }
+      if (normalizedSettings.rightSidebarWidth) {
+        setRightSidebarWidth(normalizedSettings.rightSidebarWidth)
+      }
+      if (normalizedSettings.leftSidebarTab) {
+        setLeftSidebarTab(normalizedSettings.leftSidebarTab)
+      }
+      setSettings(normalizedSettings)
+      setEditMode(normalizedSettings.defaultEditMode || 'inline')
 
       const ws = await window.klartext.getWorkspaceState()
       setRoots(ws.roots)
@@ -183,8 +507,42 @@ export const App: React.FC = () => {
       const snaps = await window.klartext.listRecoverySnapshots()
       setRecoverySnapshots(snaps)
 
-      // Open first available .md file automatically
-      if (ws.roots.length > 0) {
+      // Restore previously open document tabs if available, otherwise open first .md file
+      const restoredTabs: OpenDocumentTab[] = []
+      if (Array.isArray(normalizedSettings.openTabs) && normalizedSettings.openTabs.length > 0) {
+        for (const savedTab of normalizedSettings.openTabs) {
+          const rootObj = ws.roots.find((r) => r.id === savedTab.rootId)
+          if (!rootObj) continue
+          try {
+            const { content } = await window.klartext.readDocument(
+              savedTab.rootId,
+              savedTab.relativePath
+            )
+            const key = `${savedTab.rootId}::${savedTab.relativePath}`
+            if (!restoredTabs.some((t) => t.key === key)) {
+              restoredTabs.push({
+                key,
+                rootId: savedTab.rootId,
+                rootName: rootObj.name,
+                relativePath: savedTab.relativePath,
+                content,
+                savedContent: content,
+                dirty: false
+              })
+            }
+          } catch {
+            // Skip missing or deleted files
+          }
+        }
+      }
+
+      if (restoredTabs.length > 0) {
+        setTabs(restoredTabs)
+        const matchingActive =
+          normalizedSettings.activeTabKey &&
+          restoredTabs.find((t) => t.key === normalizedSettings.activeTabKey)
+        setActiveTabKey(matchingActive ? matchingActive.key : restoredTabs[0].key)
+      } else if (ws.roots.length > 0) {
         const firstRoot = ws.roots[0]
         const firstTree = nextTrees[firstRoot.id] || []
         const firstMd = firstTree.find((n) => !n.isDirectory && n.name.endsWith('.md'))
@@ -208,11 +566,28 @@ export const App: React.FC = () => {
           setActiveTabKey(key)
         }
       }
+
+      isBootedRef.current = true
     }
     init()
   }, [])
 
-  // Subscribe to MultiRootWatcher external disk changes
+  // Persist open document tabs and active tab key across restarts
+  useEffect(() => {
+    if (!isBootedRef.current) return
+    const openTabs = tabs.map((t) => ({
+      rootId: t.rootId,
+      relativePath: t.relativePath
+    }))
+    window.klartext
+      .updateSettings({
+        openTabs,
+        activeTabKey
+      })
+      .catch(() => {})
+  }, [tabs, activeTabKey])
+
+  // Subscribe to MultiRootWatcher external disk changes (never interrupt local edits with conflict errors)
   useEffect(() => {
     const unsubscribe = window.klartext.onWatcherChange(async (ev) => {
       await refreshWorkspaceAndTrees()
@@ -221,29 +596,20 @@ export const App: React.FC = () => {
       const key = `${ev.rootId}::${ev.relativePath}`
       setTabs((prevTabs) => {
         const target = prevTabs.find((t) => t.key === key)
-        if (!target) return prevTabs
-        // Fetch disk content asynchronously
+        if (!target || target.dirty) return prevTabs
         window.klartext
           .readDocument(ev.rootId, ev.relativePath)
           .then(({ content: diskContent }) => {
             setTabs((current) =>
               current.map((t) => {
                 if (t.key !== key) return t
-                if (diskContent === t.content) return t
-                // Seamless reload if clean; conflict prompt if dirty!
-                if (!t.dirty) {
-                  return {
-                    ...t,
-                    content: diskContent,
-                    savedContent: diskContent,
-                    dirty: false,
-                    externalConflictContent: undefined
-                  }
-                } else {
-                  return {
-                    ...t,
-                    externalConflictContent: diskContent
-                  }
+                if (t.dirty || diskContent === t.content) return t
+                return {
+                  ...t,
+                  content: diskContent,
+                  savedContent: diskContent,
+                  dirty: false,
+                  externalConflictContent: undefined
                 }
               })
             )
@@ -302,8 +668,16 @@ export const App: React.FC = () => {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         if (settings) {
-          const nextZen = !settings.zenMode
-          window.klartext.updateSettings({ zenMode: nextZen }).then(setSettings)
+          handleUpdateSettings({ zenMode: !settings.zenMode })
+        }
+      } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'b') {
+        // Note: Mod+B when not focused inside editor toggles left sidebar
+        const activeEl = document.activeElement
+        if (!activeEl || !activeEl.closest('.cm-editor')) {
+          e.preventDefault()
+          if (settings) {
+            handleUpdateSettings({ leftSidebarOpen: !settings.leftSidebarOpen })
+          }
         }
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault()
@@ -314,7 +688,12 @@ export const App: React.FC = () => {
               setTabs((prev) =>
                 prev.map((t) =>
                   t.key === activeTab.key
-                    ? { ...t, savedContent: t.content, dirty: false }
+                    ? {
+                        ...t,
+                        savedContent: t.content,
+                        dirty: false,
+                        externalConflictContent: undefined
+                      }
                     : t
                 )
               )
@@ -324,12 +703,7 @@ export const App: React.FC = () => {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTab, settings])
-
-  const handleUpdateSettings = async (partial: Partial<AppSettings>) => {
-    const updated = await window.klartext.updateSettings(partial)
-    setSettings(updated)
-  }
+  }, [activeTab, settings, handleUpdateSettings])
 
   const handleEditorContentChange = (nextContent: string) => {
     if (!activeTab) return
@@ -343,20 +717,27 @@ export const App: React.FC = () => {
           ? {
               ...t,
               content: nextContent,
-              dirty: nextContent !== t.savedContent
+              dirty: nextContent !== t.savedContent,
+              externalConflictContent: undefined
             }
           : t
       )
     )
 
-    // Write periodic crash recovery snapshot & debounced atomic save
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(async () => {
       await window.klartext.saveRecoverySnapshot(rootId, relativePath, nextContent)
       await window.klartext.writeDocument(rootId, relativePath, nextContent)
       setTabs((prev) =>
         prev.map((t) =>
-          t.key === tabKey ? { ...t, savedContent: nextContent, dirty: false } : t
+          t.key === tabKey
+            ? {
+                ...t,
+                savedContent: nextContent,
+                dirty: t.content !== nextContent,
+                externalConflictContent: undefined
+              }
+            : t
         )
       )
     }, settings?.autosaveDelayMs || 900)
@@ -409,7 +790,6 @@ export const App: React.FC = () => {
     })
     setCrossRootMovePrompt(null)
     await refreshWorkspaceAndTrees()
-    // Close old tab if open and open moved file in target root
     const oldKey = `${sourceRootId}::${sourceRelativePath}`
     setTabs((prev) => prev.filter((t) => t.key !== oldKey))
     await openDocument(targetRootId, res.movedFileRelativePath)
@@ -497,21 +877,21 @@ export const App: React.FC = () => {
         category: 'Editor',
         label: 'Switch to Source Mode',
         shortcut: 'Mod+1',
-        run: () => setEditMode('source')
+        run: () => handleChangeEditMode('source')
       },
       {
         id: 'mode-inline',
         category: 'Editor',
         label: 'Switch to Inline Rich Mode (Live Preview)',
         shortcut: 'Mod+2',
-        run: () => setEditMode('inline')
+        run: () => handleChangeEditMode('inline')
       },
       {
         id: 'mode-split',
         category: 'Editor',
         label: 'Switch to Split Mode',
         shortcut: 'Mod+3',
-        run: () => setEditMode('split')
+        run: () => handleChangeEditMode('split')
       },
       {
         id: 'zen-toggle',
@@ -519,6 +899,26 @@ export const App: React.FC = () => {
         label: 'Toggle Zen / Focus Mode',
         shortcut: 'Mod+Shift+F',
         run: () => settings && handleUpdateSettings({ zenMode: !settings.zenMode })
+      },
+      {
+        id: 'frontmatter-panel-toggle',
+        category: 'View',
+        label: 'Toggle Right Frontmatter Properties Window',
+        run: () =>
+          settings &&
+          handleUpdateSettings({
+            frontmatterPanelVisible: !settings.frontmatterPanelVisible
+          })
+      },
+      {
+        id: 'spellcheck-toggle',
+        category: 'Spellcheck',
+        label: 'Toggle Document Spellcheck (Red Squiggly Underlines)',
+        run: () =>
+          settings &&
+          handleUpdateSettings({
+            spellcheckEnabled: settings.spellcheckEnabled === false
+          })
       },
       {
         id: 'git-sync-all',
@@ -542,25 +942,64 @@ export const App: React.FC = () => {
         id: 'export-html',
         category: 'Export',
         label: 'Export Document to Standalone HTML',
-        run: async () => {
-          if (!activeTab) return
-          const res = await window.klartext.exportHtml({
-            rootId: activeTab.rootId,
-            relativePath: activeTab.relativePath,
-            markdown: activeTab.content,
-            title: activeTab.relativePath
-          })
-          setExportStatusBanner(`Exported HTML to ${res.outputPath}`)
-        }
+        run: handleExportHtml
+      },
+      {
+        id: 'export-pdf',
+        category: 'Export',
+        label: 'Export Document to PDF',
+        run: handleExportPdf
       }
     ],
-    [activeTab, resolvedTheme, settings, refreshWorkspaceAndTrees]
+    [
+      activeTab,
+      resolvedTheme,
+      settings,
+      refreshWorkspaceAndTrees,
+      handleExportHtml,
+      handleExportPdf,
+      handleUpdateSettings,
+      handleChangeEditMode
+    ]
   )
 
   const headings = useMemo(
     () => (activeTab ? extractHeadings(activeTab.content) : []),
     [activeTab?.content]
   )
+
+  const parsedFrontmatter = useMemo(() => {
+    if (!activeTab || activeTab.relativePath.toLowerCase().endsWith('.svg')) {
+      return { frontmatter: null, body: '' }
+    }
+    return extractFrontmatter(activeTab.content)
+  }, [activeTab?.content, activeTab?.relativePath])
+
+  const allFrontmatterKeys = useMemo(() => {
+    const existingKeys = parsedFrontmatter.frontmatter
+      ? Object.keys(parsedFrontmatter.frontmatter)
+      : []
+    const merged = [...DEFAULT_FRONTMATTER_KEYS]
+    for (const k of existingKeys) {
+      if (!merged.includes(k)) merged.push(k)
+    }
+    return merged
+  }, [parsedFrontmatter.frontmatter])
+
+  const updateFrontmatterField = (key: string, value: string) => {
+    if (!activeTab) return
+    const currentObj = { ...(parsedFrontmatter.frontmatter || {}) }
+    if (key === 'tags') {
+      currentObj[key] = value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    } else {
+      currentObj[key] = value
+    }
+    const nextContent = updateFrontmatterInMarkdown(activeTab.content, currentObj)
+    handleEditorContentChange(nextContent)
+  }
 
   const wordCount = useMemo(() => {
     if (!activeTab) return 0
@@ -581,6 +1020,8 @@ export const App: React.FC = () => {
     return <div className="h-screen w-screen bg-app flex items-center justify-center text-xs">Loading Klartext...</div>
   }
 
+  const currentSpellLangs = settings.spellcheckLanguages || ['en-US', 'sv-SE']
+
   return (
     <div
       data-testid="klartext-app-shell"
@@ -592,7 +1033,7 @@ export const App: React.FC = () => {
           data-testid="top-titlebar"
           className="h-9 px-3 bg-app border-b border-subtle flex items-center justify-between text-xs titlebar-drag-region shrink-0"
         >
-          <div className="flex items-center gap-2 titlebar-no-drag pl-14">
+          <div className="flex items-center gap-2 titlebar-drag-region pl-14 relative shrink-0">
             <button
               type="button"
               title="Toggle Left Sidebar (Mod+B)"
@@ -601,106 +1042,648 @@ export const App: React.FC = () => {
               onClick={() =>
                 handleUpdateSettings({ leftSidebarOpen: !settings.leftSidebarOpen })
               }
-              className={`p-1 rounded hover:bg-secondary ${
+              className={`p-1 rounded hover:bg-secondary titlebar-no-drag ${
                 settings.leftSidebarOpen ? 'text-accent' : 'text-muted'
               }`}
             >
               <PanelLeft className="w-4 h-4" />
             </button>
-            <span className="font-semibold tracking-tight text-primary">Klartext</span>
-          </div>
-
-          {/* Center Mode Switcher (Source / Inline Rich / Split) & Command Palette Trigger */}
-          <div className="flex items-center gap-2 titlebar-no-drag">
-            <div
-              className="flex items-center bg-secondary p-0.5 rounded-md border border-subtle"
-              data-testid="edit-mode-switcher"
+            <span
+              data-testid="app-title-drag"
+              className="font-semibold tracking-tight text-primary titlebar-drag-region select-none px-1 py-1"
             >
-              {(
-                [
-                  { id: 'source', label: 'Source' },
-                  { id: 'inline', label: 'Inline Rich' },
-                  { id: 'split', label: 'Split' }
-                ] as Array<{ id: EditMode; label: string }>
-              ).map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  data-testid={`mode-btn-${m.id}`}
-                  onClick={() => setEditMode(m.id)}
-                  className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${
-                    editMode === m.id
-                      ? 'bg-panel text-accent shadow-sm'
-                      : 'text-muted hover:text-primary'
-                  }`}
+              Klartext
+            </span>
+
+            {/* File Menu (Open Folder, Export HTML/PDF, Settings) */}
+            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                data-testid="file-menu-btn"
+                onClick={() => {
+                  setShowFileMenu((v) => !v)
+                  setShowEditMenu(false)
+                  setShowViewMenu(false)
+                  setShowAIMenu(false)
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+              >
+                <span>File</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showFileMenu && (
+                <div
+                  data-testid="file-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-56 rounded-md bg-panel border border-subtle shadow-lg py-1 text-xs"
                 >
-                  {m.label}
-                </button>
-              ))}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setShowFileMenu(false)
+                      await window.klartext.openFolderDialog()
+                      await refreshWorkspaceAndTrees()
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary"
+                  >
+                    Open Folder...
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
+                    data-testid="export-html-btn"
+                    onClick={async () => {
+                      setShowFileMenu(false)
+                      await handleExportHtml()
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Export to Standalone HTML...</span>
+                    <kbd className="text-[10px] font-mono text-muted">⇧⌘E</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="export-pdf-btn"
+                    onClick={async () => {
+                      setShowFileMenu(false)
+                      await handleExportPdf()
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Export to PDF...</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌥⌘E</kbd>
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
+                    data-testid="open-settings-btn"
+                    onClick={() => {
+                      setShowFileMenu(false)
+                      setShowSettingsModal(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Settings...</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘,</kbd>
+                  </button>
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              data-testid="open-command-palette-btn"
-              onClick={() => setPaletteMode('commands')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent"
-            >
-              <Command className="w-3.5 h-3.5" />
-              <span>Command Palette</span>
-              <kbd className="text-[10px] font-mono opacity-75">⌘K</kbd>
-            </button>
+            {/* Edit Menu (Undo, Redo, Cut, Copy, Paste, Select All, Find, Copy Rich HTML) */}
+            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                data-testid="edit-menu-btn"
+                onClick={() => {
+                  setShowEditMenu((v) => !v)
+                  setShowFileMenu(false)
+                  setShowViewMenu(false)
+                  setShowAIMenu(false)
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+              >
+                <span>Edit</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
 
-            <button
-              type="button"
-              data-testid="open-quick-switcher-btn"
-              onClick={() => setPaletteMode('files')}
-              className="px-2 py-1 rounded bg-panel border border-subtle text-muted hover:text-primary"
-            >
-              Quick Open (⌘P)
-            </button>
+              {showEditMenu && (
+                <div
+                  data-testid="edit-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-56 rounded-md bg-panel border border-subtle shadow-lg py-1 text-xs"
+                >
+                  <button
+                    type="button"
+                    data-testid="edit-menu-undo"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      dispatchEditorCommand('undo')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Undo</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘Z</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="edit-menu-redo"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      dispatchEditorCommand('redo')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Redo</span>
+                    <kbd className="text-[10px] font-mono text-muted">⇧⌘Z</kbd>
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
+                    data-testid="edit-menu-cut"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      dispatchEditorCommand('cut')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Cut</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘X</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="edit-menu-copy"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      dispatchEditorCommand('copy')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Copy</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘C</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="edit-menu-paste"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      dispatchEditorCommand('paste')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Paste</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘V</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="edit-menu-select-all"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      dispatchEditorCommand('select-all')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Select All</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘A</kbd>
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
+                    data-testid="edit-menu-find"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      if (!settings.leftSidebarOpen) {
+                        handleUpdateSettings({ leftSidebarOpen: true, leftSidebarTab: 'search' })
+                      } else {
+                        handleSelectLeftSidebarTab('search')
+                      }
+                      setLeftSidebarTab('search')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Find in Workspace...</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘F</kbd>
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
+                    data-testid="copy-rich-html-btn"
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      dispatchEditorCommand('copy-rich-html')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Copy Rich HTML</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* View & Spellcheck Menu Dropdown */}
+            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                data-testid="view-menu-btn"
+                onClick={() => {
+                  setShowViewMenu((v) => !v)
+                  setShowFileMenu(false)
+                  setShowEditMenu(false)
+                  setShowAIMenu(false)
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+              >
+                <span>View</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showViewMenu && (
+                <div
+                  data-testid="view-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-64 rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
+                >
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-theme"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        theme: resolvedTheme === 'dark' ? 'light' : 'dark'
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>
+                      Switch to {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                    </span>
+                    <span>{resolvedTheme === 'dark' ? '☀️' : '🌙'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-lightpaper"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        lightPaperInDarkMode: !settings.lightPaperInDarkMode
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>White Paper Background in Dark Mode</span>
+                    <span>{settings.lightPaperInDarkMode ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-wordwrap"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        wordWrap: settings.wordWrap === false
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Word Wrap (Off = Infinite Workspace)</span>
+                    <span>{settings.wordWrap !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-toolbar"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        formattingToolbarVisible: !settings.formattingToolbarVisible
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Formatting Toolbar Row</span>
+                    <span>{settings.formattingToolbarVisible ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-statusbar"
+                    onClick={() => {
+                      handleUpdateSettings({ statusBarVisible: !settings.statusBarVisible })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Bottom Status Row</span>
+                    <span>{settings.statusBarVisible ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-sidebar-bar"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        sidebarControlBarVisible: settings.sidebarControlBarVisible === false
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Left Panel Control Bar</span>
+                    <span>{settings.sidebarControlBarVisible !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-frontmatter"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        frontmatterPanelVisible: !settings.frontmatterPanelVisible
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Right Frontmatter Window</span>
+                    <span>{settings.frontmatterPanelVisible ? '✓' : ''}</span>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-outline"
+                    onClick={() => {
+                      const nextVal = settings.showOutlineTab === false
+                      if (!nextVal && leftSidebarTab === 'outline') {
+                        setLeftSidebarTab('explorer')
+                        handleUpdateSettings({
+                          showOutlineTab: nextVal,
+                          leftSidebarTab: 'explorer'
+                        })
+                      } else {
+                        handleUpdateSettings({ showOutlineTab: nextVal })
+                      }
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Outline in Sidebar</span>
+                    <span>{settings.showOutlineTab !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-links"
+                    onClick={() => {
+                      const nextVal = settings.showBacklinksTab === false
+                      if (!nextVal && leftSidebarTab === 'backlinks') {
+                        setLeftSidebarTab('explorer')
+                        handleUpdateSettings({
+                          showBacklinksTab: nextVal,
+                          leftSidebarTab: 'explorer'
+                        })
+                      } else {
+                        handleUpdateSettings({ showBacklinksTab: nextVal })
+                      }
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Links in Sidebar</span>
+                    <span>{settings.showBacklinksTab !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-spellcheck"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        spellcheckEnabled: settings.spellcheckEnabled === false
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Spellcheck (Red Squiggly Underlines)</span>
+                    <span>{settings.spellcheckEnabled !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <div className="px-3 py-1.5 space-y-1">
+                    <div className="text-[10px] font-semibold uppercase text-muted">
+                      Spellcheck Languages:
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {(Object.keys(SPELL_LANGUAGE_LABELS) as SupportedSpellLanguage[]).map(
+                        (lang) => {
+                          const active = currentSpellLangs.includes(lang)
+                          return (
+                            <button
+                              key={lang}
+                              type="button"
+                              data-testid={`view-menu-spell-lang-${lang}`}
+                              onClick={() => {
+                                const next = active
+                                  ? currentSpellLangs.filter((l) => l !== lang)
+                                  : [...currentSpellLangs, lang]
+                                handleUpdateSettings({
+                                  spellcheckLanguages: next.length > 0 ? next : ['en-US']
+                                })
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] border font-medium ${
+                                active
+                                  ? 'bg-accent text-white border-accent'
+                                  : 'bg-app border-subtle text-muted hover:text-primary'
+                              }`}
+                            >
+                              {lang}
+                            </button>
+                          )
+                        }
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* AI Menu Dropdown (Local AI Panel, Inline Draft, AI Improve) */}
+            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                data-testid="ai-menu-btn"
+                onClick={() => {
+                  setShowAIMenu((v) => !v)
+                  setShowFileMenu(false)
+                  setShowEditMenu(false)
+                  setShowViewMenu(false)
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+              >
+                <Sparkles className="w-3 h-3 text-accent" />
+                <span>AI</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showAIMenu && (
+                <div
+                  data-testid="ai-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-64 rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
+                >
+                  <button
+                    type="button"
+                    data-testid="toggle-right-sidebar-btn"
+                    onClick={() => {
+                      setShowAIMenu(false)
+                      handleUpdateSettings({ rightSidebarOpen: !settings.rightSidebarOpen })
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Local AI Panel ({settings.ai.activeModel})</span>
+                    <span>{settings.rightSidebarOpen ? '✓' : ''}</span>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+
+                  <button
+                    type="button"
+                    data-testid="toggle-inline-ai-prompt-btn"
+                    onClick={() => {
+                      setShowAIMenu(false)
+                      dispatchEditorCommand('toggle-inline-ai')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Inline Draft</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘J</kbd>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="ai-quick-improve-btn"
+                    onClick={() => {
+                      setShowAIMenu(false)
+                      dispatchEditorCommand('ai-improve')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-accent" />
+                      <span>AI Improve (SV/EN)</span>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Right Utility Controls */}
-          <div className="flex items-center gap-1.5 titlebar-no-drag">
-            <button
-              type="button"
-              title="Export Standalone HTML"
-              aria-label="Export HTML"
-              data-testid="export-html-btn"
-              onClick={async () => {
-                if (!activeTab) return
-                const res = await window.klartext.exportHtml({
-                  rootId: activeTab.rootId,
-                  relativePath: activeTab.relativePath,
-                  markdown: activeTab.content,
-                  title: activeTab.relativePath
-                })
-                setExportStatusBanner(`Exported HTML: ${res.outputPath}`)
-              }}
-              className="px-2 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+          {/* Page Tabs on Top Menu Row (starting on the right side of the last menu item when configured) */}
+          {settings.pageTabsPosition === 'top-menu' && tabs.length > 0 && (
+            <div
+              data-testid="document-tab-bar"
+              className="flex-1 flex items-center gap-1 text-xs min-w-0 whitespace-nowrap titlebar-drag-region ml-2 mr-2 self-end pt-1"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>HTML</span>
-            </button>
+              {tabBarHasOverflow && (
+                <button
+                  type="button"
+                  data-tooltip="Scroll Tabs Left"
+                  data-testid="tab-bar-scroll-left"
+                  onClick={() => {
+                    tabBarScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })
+                  }}
+                  className="p-0.5 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+              )}
 
+              <div
+                ref={tabBarScrollRef}
+                onScroll={updateTabBarOverflow}
+                className="flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap min-w-0 max-w-full titlebar-no-drag"
+              >
+                {tabs.map((tab) => {
+                  const isCurrent = tab.key === activeTab?.key
+                  const fileNameOnly = tab.relativePath.split('/').pop() || tab.relativePath
+                  return (
+                    <div
+                      key={tab.key}
+                      title={`${tab.rootName} — ${tab.relativePath}`}
+                      data-testid={`doc-tab-${tab.rootId}-${tab.relativePath}`}
+                      onClick={() => setActiveTabKey(tab.key)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-t-md border-t border-x cursor-pointer shrink-0 max-w-[180px] titlebar-no-drag ${
+                        isCurrent
+                          ? 'bg-panel border-subtle text-primary font-medium'
+                          : 'bg-secondary/50 border-transparent text-muted hover:text-primary'
+                      }`}
+                    >
+                      <span className="truncate whitespace-nowrap block max-w-[140px]">
+                        {fileNameOnly}
+                        {tab.dirty ? ' •' : ''}
+                      </span>
+                      {tabs.length > 1 && (
+                        <button
+                          type="button"
+                          data-testid={`close-tab-${tab.rootId}-${tab.relativePath}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const remaining = tabs.filter((t) => t.key !== tab.key)
+                            setTabs(remaining)
+                            if (isCurrent && remaining[0]) {
+                              setActiveTabKey(remaining[0].key)
+                            }
+                          }}
+                          className="text-muted hover:text-danger shrink-0 titlebar-no-drag"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {tabBarHasOverflow && (
+                <button
+                  type="button"
+                  data-tooltip="Scroll Tabs Right"
+                  data-testid="tab-bar-scroll-right"
+                  onClick={() => {
+                    tabBarScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })
+                  }}
+                  className="p-0.5 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {/* Draggable empty space to the right of the last page tab so dragging moves the app window */}
+              <div
+                data-testid="tab-bar-drag-spacer"
+                className="flex-1 self-stretch min-w-[16px] titlebar-drag-region"
+              />
+            </div>
+          )}
+
+          {/* Right Utility Controls (Toggle Right Panel & Zen Mode) */}
+          <div className="flex items-center gap-1.5 titlebar-no-drag shrink-0">
             <button
               type="button"
-              title="Export PDF"
-              aria-label="Export PDF"
-              data-testid="export-pdf-btn"
-              onClick={async () => {
-                if (!activeTab) return
-                const res = await window.klartext.exportPdf({
-                  rootId: activeTab.rootId,
-                  relativePath: activeTab.relativePath,
-                  markdown: activeTab.content,
-                  title: activeTab.relativePath
-                })
-                setExportStatusBanner(`Exported PDF (${res.sizeBytes} bytes): ${res.outputPath}`)
+              title="Toggle Right Panel"
+              aria-label="Toggle Right Panel"
+              data-testid="toggle-right-panel-btn"
+              onClick={() => {
+                if (settings.frontmatterPanelVisible || settings.rightSidebarOpen) {
+                  const lastPanel = settings.frontmatterPanelVisible ? 'frontmatter' : 'ai'
+                  setLastActiveRightPanel(lastPanel)
+                  handleUpdateSettings({
+                    frontmatterPanelVisible: false,
+                    rightSidebarOpen: false,
+                    lastActiveRightPanel: lastPanel
+                  })
+                } else if (lastActiveRightPanel === 'frontmatter') {
+                  handleUpdateSettings({
+                    frontmatterPanelVisible: true,
+                    rightSidebarOpen: false,
+                    lastActiveRightPanel: 'frontmatter'
+                  })
+                } else {
+                  handleUpdateSettings({
+                    rightSidebarOpen: true,
+                    frontmatterPanelVisible: false,
+                    lastActiveRightPanel: 'ai'
+                  })
+                }
               }}
-              className="px-2 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className={`p-1 rounded hover:bg-secondary ${
+                settings.frontmatterPanelVisible || settings.rightSidebarOpen
+                  ? 'text-accent'
+                  : 'text-muted hover:text-primary'
+              }`}
             >
-              PDF
+              <PanelRight className="w-4 h-4" />
             </button>
 
             <button
@@ -712,54 +1695,6 @@ export const App: React.FC = () => {
               className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
             >
               <Maximize2 className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
-              title="Switch Theme (Light / Dark)"
-              aria-label="Switch Theme"
-              data-testid="toggle-theme-btn"
-              onClick={() =>
-                handleUpdateSettings({
-                  theme: resolvedTheme === 'dark' ? 'light' : 'dark'
-                })
-              }
-              className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
-            >
-              {resolvedTheme === 'dark' ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              title="Open Settings"
-              aria-label="Open Settings"
-              data-testid="open-settings-btn"
-              onClick={() => setShowSettingsModal(true)}
-              className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
-            >
-              <SettingsIcon className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
-              title="Toggle Local AI Panel"
-              aria-label="Toggle Local AI Panel"
-              data-testid="toggle-right-sidebar-btn"
-              onClick={() =>
-                handleUpdateSettings({ rightSidebarOpen: !settings.rightSidebarOpen })
-              }
-              className={`flex items-center gap-1 px-2 py-1 rounded border border-subtle ${
-                settings.rightSidebarOpen
-                  ? 'bg-accent text-white'
-                  : 'bg-panel text-primary hover:border-accent'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>AI ({settings.ai.activeModel})</span>
             </button>
           </div>
         </header>
@@ -863,171 +1798,207 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main Workspace Area: Collapsible Left Sidebar + Editor Canvas + Collapsible Right AI Panel */}
+      {/* Main Workspace Area: Resizable Collapsible Left Sidebar + Editor Canvas + Resizable Right Frontmatter Window + Resizable Right AI Panel */}
       <div className="flex-1 flex overflow-hidden">
         {!settings.zenMode && settings.leftSidebarOpen && (
-          <div
-            style={{ width: settings.leftSidebarWidth }}
-            className="h-full shrink-0 nordic-panel-transition"
-          >
-            <MultiRootSidebar
-              activeTab={leftSidebarTab}
-              onSelectTab={setLeftSidebarTab}
-              roots={roots}
-              treesByRoot={treesByRoot}
-              gitStatuses={gitStatuses}
-              activeDoc={
-                activeTab
-                  ? { rootId: activeTab.rootId, relativePath: activeTab.relativePath }
-                  : null
-              }
-              headings={headings}
-              backlinks={backlinks}
-              onOpenDocument={openDocument}
-              onAddRootDialog={async () => {
-                await window.klartext.openFolderDialog()
-                await refreshWorkspaceAndTrees()
+          <>
+            <div
+              style={{ width: `${leftSidebarWidth}px` }}
+              className="h-full shrink-0"
+            >
+              <MultiRootSidebar
+                activeTab={leftSidebarTab}
+                onSelectTab={handleSelectLeftSidebarTab}
+                onCollapseSidebar={() => handleUpdateSettings({ leftSidebarOpen: false })}
+                sidebarControlBarVisible={settings.sidebarControlBarVisible !== false}
+                editMode={editMode}
+                onChangeEditMode={handleChangeEditMode}
+                onOpenCommandPalette={() => setPaletteMode('commands')}
+                onOpenQuickSwitcher={() => setPaletteMode('files')}
+                showOutlineTab={settings.showOutlineTab !== false}
+                showBacklinksTab={settings.showBacklinksTab !== false}
+                roots={roots}
+                treesByRoot={treesByRoot}
+                gitStatuses={gitStatuses}
+                activeDoc={
+                  activeTab
+                    ? { rootId: activeTab.rootId, relativePath: activeTab.relativePath }
+                    : null
+                }
+                headings={headings}
+                backlinks={backlinks}
+                onOpenDocument={openDocument}
+                onNavigateToLine={navigateToLine}
+                onAddRootDialog={async () => {
+                  await window.klartext.openFolderDialog()
+                  await refreshWorkspaceAndTrees()
+                }}
+                onAddRootByPath={async (folderPath, name) => {
+                  await window.klartext.addRoot({ path: folderPath, name })
+                  await refreshWorkspaceAndTrees()
+                }}
+                onRemoveRoot={async (rootId) => {
+                  await window.klartext.removeRoot(rootId)
+                  await refreshWorkspaceAndTrees()
+                }}
+                onCreateFileInRoot={async (rootId, relativePath) => {
+                  await window.klartext.createDocument(
+                    rootId,
+                    relativePath,
+                    `# ${relativePath.replace(/\.md$/i, '')}\n\n`
+                  )
+                  await refreshWorkspaceAndTrees()
+                  await openDocument(rootId, relativePath)
+                }}
+                onDeleteFileInRoot={async (rootId, relativePath) => {
+                  await window.klartext.deleteDocument(rootId, relativePath)
+                  const closedKey = `${rootId}::${relativePath}`
+                  setTabs((prev) => {
+                    const remaining = prev.filter((t) => t.key !== closedKey)
+                    if (activeTabKey === closedKey) {
+                      setActiveTabKey(remaining[0]?.key || null)
+                    }
+                    return remaining
+                  })
+                  await refreshWorkspaceAndTrees()
+                }}
+                onRenameFileInRoot={async (rootId, oldRelativePath, newRelativePath) => {
+                  await window.klartext.renameDocument(rootId, oldRelativePath, newRelativePath)
+                  await refreshWorkspaceAndTrees()
+                  const oldKey = `${rootId}::${oldRelativePath}`
+                  const newKey = `${rootId}::${newRelativePath}`
+                  setTabs((prev) =>
+                    prev.map((t) =>
+                      t.key === oldKey
+                        ? { ...t, key: newKey, relativePath: newRelativePath }
+                        : t
+                    )
+                  )
+                  if (activeTabKey === oldKey) {
+                    setActiveTabKey(newKey)
+                  } else {
+                    await openDocument(rootId, newRelativePath)
+                  }
+                }}
+                onMoveFileCrossRoot={handleInitiateCrossRootMove}
+                onSyncAllRepos={async () => {
+                  await window.klartext.gitSyncAll()
+                  await refreshWorkspaceAndTrees()
+                }}
+                onRefreshGit={refreshWorkspaceAndTrees}
+                onCommitRepo={async (rootId, message) => {
+                  await window.klartext.gitStage(rootId, ['.'])
+                  await window.klartext.gitCommit(rootId, message)
+                  await refreshWorkspaceAndTrees()
+                }}
+                onResolveConflictFromGitPanel={(rootId, relPath, resolution) =>
+                  handleResolveConflict(rootId, relPath, resolution)
+                }
+                onAbortMergeRepo={async (rootId) => {
+                  await window.klartext.gitAbortMerge(rootId)
+                  await refreshWorkspaceAndTrees()
+                }}
+              />
+            </div>
+            <div
+              data-testid="left-sidebar-resizer"
+              title="Drag to resize Left Sidebar"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                activeSidebarDragRef.current = 'left'
               }}
-              onAddRootByPath={async (folderPath, name) => {
-                await window.klartext.addRoot({ path: folderPath, name })
-                await refreshWorkspaceAndTrees()
-              }}
-              onRemoveRoot={async (rootId) => {
-                await window.klartext.removeRoot(rootId)
-                await refreshWorkspaceAndTrees()
-              }}
-              onCreateFileInRoot={async (rootId, relativePath) => {
-                await window.klartext.createDocument(
-                  rootId,
-                  relativePath,
-                  `# ${relativePath.replace(/\.md$/i, '')}\n\n`
-                )
-                await refreshWorkspaceAndTrees()
-                await openDocument(rootId, relativePath)
-              }}
-              onMoveFileCrossRoot={handleInitiateCrossRootMove}
-              onSyncAllRepos={async () => {
-                await window.klartext.gitSyncAll()
-                await refreshWorkspaceAndTrees()
-              }}
-              onRefreshGit={refreshWorkspaceAndTrees}
-              onCommitRepo={async (rootId, message) => {
-                await window.klartext.gitStage(rootId, ['.'])
-                await window.klartext.gitCommit(rootId, message)
-                await refreshWorkspaceAndTrees()
-              }}
-              onResolveConflictFromGitPanel={(rootId, relPath, resolution) =>
-                handleResolveConflict(rootId, relPath, resolution)
-              }
-              onAbortMergeRepo={async (rootId) => {
-                await window.klartext.gitAbortMerge(rootId)
-                await refreshWorkspaceAndTrees()
-              }}
+              className="w-1 h-full cursor-col-resize bg-transparent hover:bg-accent transition-colors shrink-0 z-20"
             />
-          </div>
+          </>
         )}
 
         {/* Center Document Tabs + Editor */}
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-panel">
-          {/* Root-Disambiguated Document Tab Bar */}
-          {!settings.zenMode && tabs.length > 0 && (
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-panel min-w-0">
+          {/* Document Tab Bar (Single-row tabs with ellipsis truncation + < > scroll buttons when overflowing + window drag region to the right of the last tab) */}
+          {!settings.zenMode && settings.pageTabsPosition !== 'top-menu' && tabs.length > 0 && (
             <div
               data-testid="document-tab-bar"
-              className="flex items-center bg-app border-b border-subtle px-2 pt-1 gap-1 overflow-x-auto text-xs shrink-0"
+              className="flex items-center bg-app border-b border-subtle px-1.5 pt-1 gap-1 text-xs shrink-0 whitespace-nowrap titlebar-drag-region"
             >
-              {tabs.map((tab) => {
-                const isCurrent = tab.key === activeTab?.key
-                return (
-                  <div
-                    key={tab.key}
-                    data-testid={`doc-tab-${tab.rootId}-${tab.relativePath}`}
-                    onClick={() => setActiveTabKey(tab.key)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-t-md border-t border-x cursor-pointer ${
-                      isCurrent
-                        ? 'bg-panel border-subtle text-primary font-medium'
-                        : 'bg-secondary/50 border-transparent text-muted hover:text-primary'
-                    }`}
-                  >
-                    <span>
-                      {tab.relativePath}
-                      {tab.dirty ? ' •' : ''}
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded bg-secondary text-[10px] text-accent">
-                      {tab.rootName}
-                    </span>
-                    {tabs.length > 1 && (
-                      <button
-                        type="button"
-                        data-testid={`close-tab-${tab.rootId}-${tab.relativePath}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          const remaining = tabs.filter((t) => t.key !== tab.key)
-                          setTabs(remaining)
-                          if (isCurrent && remaining[0]) {
-                            setActiveTabKey(remaining[0].key)
-                          }
-                        }}
-                        className="text-muted hover:text-danger"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+              {tabBarHasOverflow && (
+                <button
+                  type="button"
+                  data-tooltip="Scroll Tabs Left"
+                  data-testid="tab-bar-scroll-left"
+                  onClick={() => {
+                    tabBarScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })
+                  }}
+                  className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+              )}
 
-          {/* External Modification Conflict Banner on Dirty Buffer */}
-          {activeTab?.externalConflictContent !== undefined && (
-            <div
-              data-testid="external-disk-conflict-banner"
-              className="px-4 py-2 bg-secondary border-b border-warning flex items-center justify-between text-xs"
-            >
-              <span className="text-warning font-medium">
-                This file was modified externally on disk while you have unsaved edits in Klartext.
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  data-testid="keep-local-edits-btn"
-                  onClick={() => {
-                    setTabs((prev) =>
-                      prev.map((t) =>
-                        t.key === activeTab.key
-                          ? { ...t, externalConflictContent: undefined }
-                          : t
-                      )
-                    )
-                  }}
-                  className="px-2.5 py-1 rounded bg-panel border border-subtle text-primary"
-                >
-                  Keep Local Version
-                </button>
-                <button
-                  type="button"
-                  data-testid="accept-disk-version-btn"
-                  onClick={() => {
-                    const diskText = activeTab.externalConflictContent!
-                    setTabs((prev) =>
-                      prev.map((t) =>
-                        t.key === activeTab.key
-                          ? {
-                              ...t,
-                              content: diskText,
-                              savedContent: diskText,
-                              dirty: false,
-                              externalConflictContent: undefined
+              <div
+                ref={tabBarScrollRef}
+                onScroll={updateTabBarOverflow}
+                className="flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap min-w-0 max-w-full titlebar-no-drag"
+              >
+                {tabs.map((tab) => {
+                  const isCurrent = tab.key === activeTab?.key
+                  const fileNameOnly = tab.relativePath.split('/').pop() || tab.relativePath
+                  return (
+                    <div
+                      key={tab.key}
+                      title={`${tab.rootName} — ${tab.relativePath}`}
+                      data-testid={`doc-tab-${tab.rootId}-${tab.relativePath}`}
+                      onClick={() => setActiveTabKey(tab.key)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-md border-t border-x cursor-pointer shrink-0 max-w-[180px] titlebar-no-drag ${
+                        isCurrent
+                          ? 'bg-panel border-subtle text-primary font-medium'
+                          : 'bg-secondary/50 border-transparent text-muted hover:text-primary'
+                      }`}
+                    >
+                      <span className="truncate whitespace-nowrap block max-w-[140px]">
+                        {fileNameOnly}
+                        {tab.dirty ? ' •' : ''}
+                      </span>
+                      {tabs.length > 1 && (
+                        <button
+                          type="button"
+                          data-testid={`close-tab-${tab.rootId}-${tab.relativePath}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const remaining = tabs.filter((t) => t.key !== tab.key)
+                            setTabs(remaining)
+                            if (isCurrent && remaining[0]) {
+                              setActiveTabKey(remaining[0].key)
                             }
-                          : t
-                      )
-                    )
-                  }}
-                  className="px-2.5 py-1 rounded bg-accent text-white font-medium"
-                >
-                  Accept Disk Version
-                </button>
+                          }}
+                          className="text-muted hover:text-danger shrink-0 titlebar-no-drag"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
+
+              {tabBarHasOverflow && (
+                <button
+                  type="button"
+                  data-tooltip="Scroll Tabs Right"
+                  data-testid="tab-bar-scroll-right"
+                  onClick={() => {
+                    tabBarScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })
+                  }}
+                  className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {/* Draggable empty space to the right of the last page tab so dragging moves the app window */}
+              <div
+                data-testid="tab-bar-drag-spacer"
+                className="flex-1 self-stretch min-w-[16px] titlebar-drag-region"
+              />
             </div>
           )}
 
@@ -1039,7 +2010,19 @@ export const App: React.FC = () => {
               editMode={editMode}
               theme={resolvedTheme}
               floatingToolbarEnabled={settings.floatingToolbarEnabled}
+              formattingToolbarVisible={Boolean(settings.formattingToolbarVisible)}
               aiEnabled={settings.ai.enabled}
+              showLineNumbers={Boolean(settings.showLineNumbers)}
+              wordWrap={settings.wordWrap !== false}
+              spellcheckEnabled={settings.spellcheckEnabled !== false}
+              spellcheckLanguages={currentSpellLangs}
+              customDictionaryWords={settings.customDictionaryWords || []}
+              scrollToLine={scrollToLine}
+              editorCommandTrigger={editorCommandTrigger}
+              initialSplitPercent={settings.splitViewPercent ?? 50}
+              onChangeSplitPercent={(percent) =>
+                handleUpdateSettings({ splitViewPercent: percent })
+              }
               onChangeContent={handleEditorContentChange}
               onPasteOrDropAsset={handlePasteOrDropAsset}
               onOpenExcalidrawModal={(drawingRelPath) =>
@@ -1059,9 +2042,50 @@ export const App: React.FC = () => {
                   hunkIndex
                 )
               }
-              onNavigateWikiLink={(target) => {
-                const clean = target.endsWith('.md') ? target : `${target}.md`
-                openDocument(activeTab.rootId, clean)
+              onNavigateLink={async (target, isWiki) => {
+                if (target.startsWith('http://') || target.startsWith('https://')) {
+                  await window.klartext.openExternalUrl(target)
+                  return
+                }
+                const [filePart, hashPart] = target.split('#')
+                if (filePart) {
+                  const clean =
+                    isWiki && !filePart.includes('.') ? `${filePart}.md` : filePart.replace(/^\.\//, '')
+                  const foundInAll =
+                    allWorkspaceFiles.find(
+                      (f) =>
+                        f.rootId === activeTab.rootId &&
+                        (f.relativePath === clean ||
+                          f.relativePath.toLowerCase() === `${clean.toLowerCase()}.md`)
+                    ) ||
+                    allWorkspaceFiles.find(
+                      (f) =>
+                        f.relativePath === clean ||
+                        f.relativePath.toLowerCase() === `${clean.toLowerCase()}.md`
+                    )
+                  const targetRoot = foundInAll?.rootId || activeTab.rootId
+                  const targetRel = foundInAll?.relativePath || (clean.endsWith('.md') ? clean : `${clean}.md`)
+                  await openDocument(targetRoot, targetRel)
+                }
+                if (hashPart) {
+                  setScrollToLine({ line: 1, nonce: Date.now() })
+                }
+              }}
+              onToggleSpellcheck={(enabled) =>
+                handleUpdateSettings({ spellcheckEnabled: enabled })
+              }
+              onChangeSpellcheckLanguage={(lang) => {
+                const exists = currentSpellLangs.includes(lang)
+                const next = exists ? currentSpellLangs : [...currentSpellLangs, lang]
+                handleUpdateSettings({ spellcheckLanguages: next })
+              }}
+              onAddWordToDictionary={(word) => {
+                const existing = settings.customDictionaryWords || []
+                if (!existing.includes(word)) {
+                  handleUpdateSettings({
+                    customDictionaryWords: [...existing, word]
+                  })
+                }
               }}
             />
           ) : (
@@ -1071,33 +2095,141 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {/* Right Collapsible Local AI Assistant & Hardware Advisor Panel */}
-        {!settings.zenMode && settings.rightSidebarOpen && (
-          <div
-            style={{ width: settings.rightSidebarWidth }}
-            className="h-full shrink-0 nordic-panel-transition"
-          >
-            <LocalAIPanel
-              settings={settings}
-              roots={roots}
-              activeRootName={activeTab?.rootName || 'None'}
-              activeFilePath={activeTab?.relativePath || 'None'}
-              selectedTextOrDoc={activeTab?.content || ''}
-              pendingDiff={pendingAIDiff}
-              onUpdateSettings={handleUpdateSettings}
-              onStartAIAction={handleTriggerAIAction}
-              onCancelStream={(requestId) => window.klartext.cancelAIStream(requestId)}
-              onAcceptDiff={(proposedText) => {
-                handleEditorContentChange(proposedText)
-                setPendingAIDiff(null)
+        {/* Right-Aligned Resizable Frontmatter Properties Window (mutually exclusive with Local AI Panel) */}
+        {!settings.zenMode && settings.frontmatterPanelVisible && activeTab && (
+          <>
+            <div
+              data-testid="frontmatter-sidebar-resizer"
+              title="Drag to resize Frontmatter Window"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                activeSidebarDragRef.current = 'frontmatter'
               }}
-              onRejectDiff={() => setPendingAIDiff(null)}
+              className="w-1 h-full cursor-col-resize bg-transparent hover:bg-accent transition-colors shrink-0 z-20"
             />
-          </div>
+            <aside
+              data-testid="right-frontmatter-window"
+              style={{ width: `${frontmatterSidebarWidth}px` }}
+              className="h-full shrink-0 bg-app border-l border-subtle flex flex-col overflow-hidden select-none"
+            >
+              <div className="flex items-center justify-between px-3 py-2 bg-panel border-b border-subtle text-xs">
+                <div className="flex items-center gap-1.5 font-semibold text-primary">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
+                  <span>Frontmatter Properties</span>
+                </div>
+                <button
+                  type="button"
+                  title="Hide Frontmatter Window"
+                  data-testid="close-frontmatter-window-btn"
+                  onClick={() => handleUpdateSettings({ frontmatterPanelVisible: false })}
+                  className="p-0.5 rounded hover:bg-secondary text-muted hover:text-primary"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
+                {!parsedFrontmatter.frontmatter && (
+                  <div className="text-[11px] text-muted bg-panel border border-subtle rounded p-2">
+                    No YAML frontmatter in this document yet. Type in any field below to create it automatically.
+                  </div>
+                )}
+
+                {allFrontmatterKeys.map((key) => {
+                  const rawVal = parsedFrontmatter.frontmatter?.[key]
+                  const strVal = Array.isArray(rawVal)
+                    ? rawVal.join(', ')
+                    : rawVal !== undefined && rawVal !== null
+                      ? String(rawVal)
+                      : ''
+                  return (
+                    <div key={key} className="space-y-1">
+                      <label className="block text-[11px] font-medium text-muted capitalize">
+                        {key}
+                      </label>
+                      <input
+                        type="text"
+                        data-testid={`frontmatter-input-${key}`}
+                        placeholder={`Enter ${key}...`}
+                        value={strVal}
+                        onChange={(e) => updateFrontmatterField(key, e.target.value)}
+                        className="w-full px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                      />
+                    </div>
+                  )
+                })}
+
+                {/* Add custom frontmatter property */}
+                <div className="pt-2 border-t border-subtle space-y-1.5">
+                  <label className="block text-[10px] font-semibold uppercase text-muted">
+                    Add Custom Property
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      placeholder="Property key..."
+                      value={customFrontmatterKey}
+                      onChange={(e) => setCustomFrontmatterKey(e.target.value)}
+                      className="flex-1 px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const k = customFrontmatterKey.trim()
+                        if (k) {
+                          updateFrontmatterField(k, '')
+                          setCustomFrontmatterKey('')
+                        }
+                      }}
+                      className="px-2 py-1 rounded bg-accent text-white"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </>
+        )}
+
+        {/* Right Collapsible & Resizable Local AI Assistant & Hardware Advisor Panel (mutually exclusive with Frontmatter Window) */}
+        {!settings.zenMode && settings.rightSidebarOpen && !settings.frontmatterPanelVisible && (
+          <>
+            <div
+              data-testid="right-sidebar-resizer"
+              title="Drag to resize Local AI Panel"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                activeSidebarDragRef.current = 'right'
+              }}
+              className="w-1 h-full cursor-col-resize bg-transparent hover:bg-accent transition-colors shrink-0 z-20"
+            />
+            <div
+              style={{ width: `${rightSidebarWidth}px` }}
+              className="h-full shrink-0"
+            >
+              <LocalAIPanel
+                settings={settings}
+                roots={roots}
+                activeRootName={activeTab?.rootName || 'None'}
+                activeFilePath={activeTab?.relativePath || 'None'}
+                selectedTextOrDoc={activeTab?.content || ''}
+                pendingDiff={pendingAIDiff}
+                onUpdateSettings={handleUpdateSettings}
+                onStartAIAction={handleTriggerAIAction}
+                onCancelStream={(requestId) => window.klartext.cancelAIStream(requestId)}
+                onAcceptDiff={(proposedText) => {
+                  handleEditorContentChange(proposedText)
+                  setPendingAIDiff(null)
+                }}
+                onRejectDiff={() => setPendingAIDiff(null)}
+              />
+            </div>
+          </>
         )}
       </div>
 
-      {/* Collapsible Bottom Status Bar */}
+      {/* Collapsible Bottom Status Bar (5 center icons moved to bottom of left sidebar window per user request) */}
       {!settings.zenMode && settings.statusBarVisible && (
         <footer
           data-testid="bottom-status-bar"
@@ -1115,7 +2247,6 @@ export const App: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <span data-testid="status-word-count">{wordCount} words</span>
-            <span>Mode: {editMode}</span>
             <button
               type="button"
               data-testid="status-bar-ai-badge"

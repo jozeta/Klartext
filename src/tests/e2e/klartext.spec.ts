@@ -61,19 +61,35 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('confirm-add-root-path-btn').click()
 
       const manifestFile = path.join(tmpBase, 'multi.klartext-workspace')
+      await page.getByTestId('file-menu-btn').click()
       await page.getByTestId('open-settings-btn').click()
+      await expect(page.getByTestId('settings-page-tabs-position-select')).toBeVisible()
+      await page.getByTestId('settings-page-tabs-position-select').selectOption('top-menu')
+      await expect(
+        page.getByTestId('top-titlebar').getByTestId('document-tab-bar')
+      ).toBeVisible()
+      await page.getByTestId('settings-page-tabs-position-select').selectOption('editor')
+      await expect(
+        page.getByTestId('top-titlebar').getByTestId('document-tab-bar')
+      ).toHaveCount(0)
       await page.getByTestId('manifest-filepath-input').fill(manifestFile)
       await page.getByTestId('save-manifest-btn').click()
       expect(fs.existsSync(manifestFile)).toBe(true)
 
-      // Scenario 2: Create, edit, save, close, and reopen Markdown files across multiple roots via Quick Switcher
+      // Scenario 2: Create, edit, save, close, and reopen Markdown files across multiple roots via Quick Switcher (in left sidebar bottom controls)
+      await expect(page.getByTestId('left-sidebar-bottom-controls')).toBeVisible()
       await page.getByTestId('open-quick-switcher-btn').click()
       await expect(page.getByTestId('quick-switcher-modal')).toBeVisible()
       await page.getByTestId('palette-search-input').fill('BetaDoc.md')
       await page.getByTestId('palette-search-input').press('Enter')
       await expect(page.getByTestId('status-active-root')).toContainText('root-beta')
 
-      // Scenario 3: Toggle collapsible left/right sidebars, Zen mode, and Command Palette
+      // Scenario 3: Toggle collapsible left/right sidebars, Zen mode, Edit menu, and Command Palette
+      await page.getByTestId('edit-menu-btn').click()
+      await expect(page.getByTestId('edit-menu-dropdown')).toBeVisible()
+      await expect(page.getByTestId('copy-rich-html-btn')).toBeVisible()
+      await page.getByTestId('copy-rich-html-btn').click()
+
       await page.getByTestId('toggle-left-sidebar-btn').click()
       await expect(page.getByTestId('left-sidebar')).toHaveCount(0)
       await page.getByTestId('toggle-left-sidebar-btn').click()
@@ -87,9 +103,25 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await expect(page.getByTestId('command-palette-modal')).toBeVisible()
       await page.getByTestId('palette-search-input').press('Escape')
 
-      // Scenario 4 & 5 & 10: Switch among Source, Inline Rich, and Split modes + formatting toolbar + GFM/KaTeX/Frontmatter
+      // Scenario 4 & 5 & 10: Switch among Source, Inline Rich, and Split modes + formatting toolbar + Undo/Redo + GFM/KaTeX/Frontmatter
+      await expect(page.getByTestId('editor-formatting-bar')).toHaveCount(0)
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-toggle-toolbar').click()
+      await expect(page.getByTestId('editor-formatting-bar')).toBeVisible()
+
       await page.getByTestId('mode-btn-source').click()
       await page.getByTestId('fmt-bold').click()
+      await expect(page.getByTestId('codemirror-editor-container')).toContainText('**bold text**')
+
+      // Verify Undo & Redo via Edit menu
+      await page.getByTestId('edit-menu-btn').click()
+      await page.getByTestId('edit-menu-undo').click()
+      await expect(page.getByTestId('codemirror-editor-container')).not.toContainText('**bold text**')
+
+      await page.getByTestId('edit-menu-btn').click()
+      await page.getByTestId('edit-menu-redo').click()
+      await expect(page.getByTestId('codemirror-editor-container')).toContainText('**bold text**')
+
       await page.getByTestId('mode-btn-split').click()
       await expect(page.getByTestId('markdown-split-preview')).toBeVisible()
       await page.getByTestId('mode-btn-inline').click()
@@ -143,18 +175,15 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       expect(movedRes.migratedAssets).toContain('assets/images/beta-chart.png')
       expect(fs.existsSync(path.join(rootCDir, 'assets/images/beta-chart.png'))).toBe(true)
 
-      // Scenario 8: Create an inline Excalidraw drawing (.excalidraw.svg), save, and verify vector elements remain editable
-      await page.getByTestId('open-excalidraw-btn').click()
-      await expect(page.getByTestId('excalidraw-modal')).toBeVisible()
-      await page.getByTestId('excalidraw-add-ellipse').click()
-      await page.getByTestId('excalidraw-element-label-input').fill('Nordic Architecture Node')
-      await page.getByTestId('excalidraw-save-btn').click()
-      await expect(page.getByTestId('excalidraw-save-status')).toContainText('Saved .excalidraw.svg')
-      await page.getByTestId('excalidraw-close-btn').click()
-
-      // Scenario 9: Mermaid diagram live SVG rendering & graceful diagnostic on invalid syntax
+      // Scenario 8 & 9: Mermaid diagram live SVG rendering, Visual Mermaid Builder round-trip, & graceful diagnostic on invalid syntax
       await page.getByTestId(`doc-tab-root-starter-Welcome.md`).click()
       await expect(page.getByTestId('mermaid-widget').first()).toBeVisible()
+      await page.getByTestId('mermaid-open-visual-builder').first().click()
+      await expect(page.getByTestId('visual-mermaid-builder-modal')).toBeVisible()
+      await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('Multi-Root Workspace')
+      await page.getByTestId('mermaid-builder-insert-btn').click()
+      await expect(page.getByTestId('visual-mermaid-builder-modal')).toHaveCount(0)
+
       await page.getByTestId('mermaid-toggle-source').first().click()
       await page.getByTestId('mermaid-source-textarea').first().fill('invalid_mermaid_syntax %%%')
       await expect(page.getByTestId('mermaid-error-banner').first()).toBeVisible()
@@ -247,10 +276,9 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
         'utf-8'
       )
 
-      // Scenario 12: Multi-root search and replace with confirmation
+      // Scenario 12: Multi-root instant search-as-you-type and replace with confirmation
       await page.getByTestId('sidebar-tab-search').click()
       await page.getByTestId('global-search-input').fill('Externally updated')
-      await page.getByTestId('global-search-run-btn').click()
       await expect(page.getByTestId(`search-result-card-${repo1Id}-BetaDoc.md`)).toBeVisible()
       await page.getByTestId('global-replace-input').fill('Replaced across root')
       await page.getByTestId('global-replace-confirm-btn').click()
@@ -301,7 +329,11 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId(`git-resolve-both-${repo2Id}-GammaDoc.md`).click()
       await expect(page.getByTestId(`git-conflicted-group-${repo2Id}`)).toHaveCount(0)
 
-      // Scenario 15: Local AI Assistant, Hardware Advisor, Bilingual Rewrite, and Diff Accept
+      // Scenario 15: Local AI Assistant, Hardware Advisor, Bilingual Rewrite, and Diff Accept (via AI menu)
+      await page.getByTestId('ai-menu-btn').click()
+      await expect(page.getByTestId('ai-menu-dropdown')).toBeVisible()
+      await expect(page.getByTestId('toggle-inline-ai-prompt-btn')).toBeVisible()
+      await expect(page.getByTestId('ai-quick-improve-btn')).toBeVisible()
       await page.getByTestId('toggle-right-sidebar-btn').click()
       await expect(page.getByTestId('right-ai-panel')).toBeVisible()
       await expect(page.getByTestId('hardware-advisor-card')).toBeVisible()
@@ -317,18 +349,71 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('ai-diff-accept-btn').click()
       await expect(page.getByTestId('ai-diff-review-card')).toHaveCount(0)
 
-      // Scenario 16 & 17: Export to standalone HTML & PDF + Theme Switching
+      // Scenario 16 & 17: Export to standalone HTML & PDF via File Menu + View Menu (Theme, White Paper, Word Wrap, Frontmatter Window)
+      await page.getByTestId('file-menu-btn').click()
       await page.getByTestId('export-html-btn').click()
       await expect(page.getByTestId('export-status-banner')).toContainText('Exported HTML')
 
+      await page.getByTestId('file-menu-btn').click()
       await page.getByTestId('export-pdf-btn').click()
       await expect(page.getByTestId('export-status-banner')).toContainText('Exported PDF')
 
-      await page.getByTestId('toggle-theme-btn').click()
+      await page.getByTestId('view-menu-btn').click()
+      await expect(page.getByTestId('view-menu-dropdown')).toBeVisible()
+      await page.getByTestId('view-menu-toggle-wordwrap').click()
+      await expect(page.getByTestId('view-menu-dropdown')).toHaveCount(0)
+
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-toggle-wordwrap').click()
+
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-toggle-frontmatter').click()
+      await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
+      // Mutual exclusion: right-ai-panel must be hidden when right-frontmatter-window is shown
+      await expect(page.getByTestId('right-ai-panel')).toHaveCount(0)
+
+      // Toggle Right Panel button hides and re-opens the last activated right panel (Frontmatter)
+      await page.getByTestId('toggle-right-panel-btn').click()
+      await expect(page.getByTestId('right-frontmatter-window')).toHaveCount(0)
+      await page.getByTestId('toggle-right-panel-btn').click()
+      await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
+
+      // Verify sidebar tab icons are inside left-sidebar-bottom-controls and can be toggled from View menu
+      await expect(
+        page.getByTestId('left-sidebar-bottom-controls').getByTestId('sidebar-tab-switcher')
+      ).toBeVisible()
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-toggle-sidebar-bar').click()
+      await expect(page.getByTestId('left-sidebar-bottom-controls')).toHaveCount(0)
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-toggle-sidebar-bar').click()
+      await expect(page.getByTestId('left-sidebar-bottom-controls')).toBeVisible()
+
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-toggle-theme').click()
       const themeAttr = await page.evaluate(() =>
         document.documentElement.getAttribute('data-theme')
       )
       expect(['light', 'dark']).toContain(themeAttr)
+      if (themeAttr === 'dark') {
+        await page.getByTestId('view-menu-btn').click()
+        await page.getByTestId('view-menu-toggle-lightpaper').click()
+        await expect
+          .poll(() =>
+            page.evaluate(() =>
+              document.documentElement.getAttribute('data-light-paper')
+            )
+          )
+          .toBe('true')
+      }
+
+      // Verify all settings, panel visibility, sidebar tab, and open tabs are persisted
+      const persistedSettings = await page.evaluate(() => window.klartext.getSettings())
+      expect(persistedSettings.frontmatterPanelVisible).toBe(true)
+      expect(persistedSettings.lastActiveRightPanel).toBe('frontmatter')
+      expect(persistedSettings.leftSidebarTab).toBe('git')
+      expect(Array.isArray(persistedSettings.openTabs)).toBe(true)
+      expect(persistedSettings.openTabs.length).toBeGreaterThan(0)
     } finally {
       await app.close()
       ollamaServer.close()

@@ -4,6 +4,7 @@ import type { WatcherChangeEvent } from '../../shared/types'
 
 export class MultiRootWatcher {
   private watchers = new Map<string, FSWatcher>()
+  private internalWriteTimestamps = new Map<string, number>()
   private onChangeCallback?: (event: WatcherChangeEvent) => void
 
   constructor(onChange?: (event: WatcherChangeEvent) => void) {
@@ -12,6 +13,11 @@ export class MultiRootWatcher {
 
   setChangeHandler(handler: (event: WatcherChangeEvent) => void): void {
     this.onChangeCallback = handler
+  }
+
+  markInternalWrite(rootId: string, relativePath: string): void {
+    const cleanRel = relativePath.replace(/\\/g, '/').replace(/^\/+/, '')
+    this.internalWriteTimestamps.set(`${rootId}::${cleanRel}`, Date.now())
   }
 
   watchRoot(rootId: string, rootPath: string): void {
@@ -35,6 +41,12 @@ export class MultiRootWatcher {
       if (!this.onChangeCallback) return
       const rel = path.relative(rootPath, absPath).replace(/\\/g, '/')
       if (!rel || rel.startsWith('..')) return
+      if (eventType === 'change') {
+        const lastInternal = this.internalWriteTimestamps.get(`${rootId}::${rel}`)
+        if (lastInternal && Date.now() - lastInternal < 5000) {
+          return
+        }
+      }
       this.onChangeCallback({
         rootId,
         relativePath: rel,

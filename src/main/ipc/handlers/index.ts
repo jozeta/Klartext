@@ -1,5 +1,4 @@
 import fs from 'fs'
-import path from 'path'
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { IPC_CHANNELS } from '../../../shared/constants'
@@ -165,18 +164,42 @@ export function registerAllIpcHandlers(
   })
 
   // Documents
+  const getBinaryAssetMime = (relPath: string): string | null => {
+    const lower = relPath.toLowerCase()
+    if (lower.endsWith('.png')) return 'image/png'
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+    if (lower.endsWith('.gif')) return 'image/gif'
+    if (lower.endsWith('.webp')) return 'image/webp'
+    if (lower.endsWith('.bmp')) return 'image/bmp'
+    if (lower.endsWith('.ico')) return 'image/x-icon'
+    if (lower.endsWith('.avif')) return 'image/avif'
+    if (lower.endsWith('.pdf')) return 'application/pdf'
+    return null
+  }
+
   ipcMain.handle(IPC_CHANNELS.DOC_READ, async (_e, rawInput) => {
     const { rootId, relativePath } = RootScopedPathSchema.parse(rawInput)
     const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
-    const content = await fs.promises.readFile(absPath, 'utf-8')
     const stat = await fs.promises.stat(absPath)
+    const binaryMime = getBinaryAssetMime(relativePath)
+    if (binaryMime) {
+      const buf = await fs.promises.readFile(absPath)
+      const content = `data:${binaryMime};base64,${buf.toString('base64')}`
+      return { content, updatedAt: stat.mtimeMs }
+    }
+    const content = await fs.promises.readFile(absPath, 'utf-8')
     return { content, updatedAt: stat.mtimeMs }
   })
 
   ipcMain.handle(IPC_CHANNELS.DOC_WRITE, async (_e, rawInput) => {
     const { rootId, relativePath, content } = DocWriteRequestSchema.parse(rawInput)
+    if (getBinaryAssetMime(relativePath)) {
+      return { ok: true, updatedAt: Date.now() }
+    }
     const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
+    watcher.markInternalWrite(rootId, relativePath)
     await atomicWriteFile(absPath, content)
+    watcher.markInternalWrite(rootId, relativePath)
     await recoveryService.clearSnapshot(rootId, relativePath)
     const stat = await fs.promises.stat(absPath)
     return { ok: true, updatedAt: stat.mtimeMs }
@@ -185,7 +208,9 @@ export function registerAllIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.DOC_CREATE, async (_e, rawInput) => {
     const { rootId, relativePath, content } = DocWriteRequestSchema.parse(rawInput)
     const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
+    watcher.markInternalWrite(rootId, relativePath)
     await atomicWriteFile(absPath, content)
+    watcher.markInternalWrite(rootId, relativePath)
     return { ok: true, relativePath }
   })
 

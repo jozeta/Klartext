@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import { app, BrowserWindow, protocol, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, Menu, protocol, safeStorage, shell } from 'electron'
+import { IPC_CHANNELS } from '../shared/constants'
 import { MultiRootRegistry } from './workspace/multi-root-registry'
 import { AssetAndDocumentService } from './assets/asset-service'
 import { RecoveryService } from './recovery/recovery-service'
@@ -11,6 +12,7 @@ import { LocalAIOrchestrator } from './ai/orchestrator'
 import { SettingsAndCredentialService } from './settings/settings-service'
 import { ExportService } from './export/export-service'
 import { registerAllIpcHandlers } from './ipc/handlers'
+import { seedShowcaseDirectory } from '../shared/showcase/seed-showcase'
 
 // Register custom scheme privileges before app ready
 protocol.registerSchemesAsPrivileged([
@@ -28,51 +30,10 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | null = null
 
 function createDefaultStarterWorkspace(registry: MultiRootRegistry, userDataDir: string): void {
-  if (registry.getState().roots.length > 0) return
-
   const starterDir = path.join(userDataDir, 'Starter-Workspace')
-  fs.mkdirSync(path.join(starterDir, 'assets', 'images'), { recursive: true })
-  fs.mkdirSync(path.join(starterDir, 'assets', 'drawings'), { recursive: true })
+  seedShowcaseDirectory(starterDir, false)
 
-  const welcomeFile = path.join(starterDir, 'Welcome.md')
-  if (!fs.existsSync(welcomeFile)) {
-    const starterContent = `---
-title: Welcome to Klartext
-author: Technical Nordic Workspace
-tags:
-  - local-first
-  - markdown
-  - multi-root
----
-
-# Welcome to Klartext
-
-Klartext is a fast, local-first Markdown editor with **Multi-Root Workspaces**, **Concurrent Multi-Repository Git**, **Excalidraw & Mermaid diagrams**, and **Optional Local AI** (English & Svenska).
-
-> [!TIP] Progressive Complexity
-> Press \`Cmd/Ctrl + K\` to open the Command Palette, \`Cmd/Ctrl + P\` for Quick File Switcher, or \`Cmd/Ctrl + Shift + F\` for Zen Mode.
-
-## Supported Markdown Features
-
-| Capability | Engine | Status |
-| :--- | :--- | :--- |
-| Live Inline Rich Editing | CodeMirror 6 Decorations | Active |
-| Mathematical Expressions | KaTeX ($E = mc^2$) | Active |
-| Interactive Diagrams | Mermaid + \`.excalidraw.svg\` | Active |
-
-- [x] Single-root & Multi-root workspaces
-- [x] Per-root portable assets (\`assets/\`)
-- [x] Multi-repository Git sync & conflict resolution
-
-\`\`\`mermaid
-flowchart LR
-    A["Multi-Root Workspace"] --> B["CodeMirror 6 Live Preview"]
-    B --> C["Multi-Repo Git Sync"]
-    B --> D["Local AI (SV / EN)"]
-\`\`\`
-`
-    fs.writeFileSync(welcomeFile, starterContent, 'utf-8')
-  }
+  if (registry.getState().roots.length > 0) return
 
   registry.addRoot({
     id: 'root-starter',
@@ -82,11 +43,19 @@ flowchart LR
   })
 }
 
-function createWindow(preloadPath: string): BrowserWindow {
+function createWindow(
+  preloadPath: string,
+  settingsService: SettingsAndCredentialService
+): BrowserWindow {
   const isMac = process.platform === 'darwin'
+  const savedBounds = settingsService.getSettings().windowBounds
+
   const win = new BrowserWindow({
-    width: 1360,
-    height: 860,
+    ...(typeof savedBounds?.x === 'number' && typeof savedBounds?.y === 'number'
+      ? { x: savedBounds.x, y: savedBounds.y }
+      : {}),
+    width: savedBounds?.width && savedBounds.width >= 760 ? savedBounds.width : 1360,
+    height: savedBounds?.height && savedBounds.height >= 500 ? savedBounds.height : 860,
     minWidth: 760,
     minHeight: 500,
     title: 'Klartext',
@@ -109,6 +78,52 @@ function createWindow(preloadPath: string): BrowserWindow {
       sandbox: true,
       webSecurity: true
     }
+  })
+
+  if (savedBounds?.isMaximized) {
+    win.maximize()
+  }
+  if (savedBounds?.isFullScreen) {
+    win.setFullScreen(true)
+  }
+
+  let saveBoundsTimer: ReturnType<typeof setTimeout> | null = null
+  const persistWindowBoundsNow = () => {
+    if (win.isDestroyed()) return
+    try {
+      const isMaximized = win.isMaximized()
+      const isFullScreen = win.isFullScreen()
+      const normalBounds =
+        isMaximized || isFullScreen ? win.getNormalBounds() : win.getBounds()
+      settingsService.updateSettings({
+        windowBounds: {
+          x: normalBounds.x,
+          y: normalBounds.y,
+          width: Math.max(760, normalBounds.width),
+          height: Math.max(500, normalBounds.height),
+          isMaximized,
+          isFullScreen
+        }
+      })
+    } catch {
+      // Ignore if window state is unavailable during shutdown
+    }
+  }
+
+  const schedulePersistWindowBounds = () => {
+    if (saveBoundsTimer) clearTimeout(saveBoundsTimer)
+    saveBoundsTimer = setTimeout(persistWindowBoundsNow, 120)
+  }
+
+  win.on('resize', schedulePersistWindowBounds)
+  win.on('move', schedulePersistWindowBounds)
+  win.on('maximize', schedulePersistWindowBounds)
+  win.on('unmaximize', schedulePersistWindowBounds)
+  win.on('enter-full-screen', schedulePersistWindowBounds)
+  win.on('leave-full-screen', schedulePersistWindowBounds)
+  win.on('close', () => {
+    if (saveBoundsTimer) clearTimeout(saveBoundsTimer)
+    persistWindowBoundsNow()
   })
 
   // Block arbitrary navigation and open validated external links in system browser
@@ -166,7 +181,11 @@ app.whenReady().then(() => {
   protocol.handle('klartext-asset', async (request) => {
     try {
       const parsed = new URL(request.url)
-      const rootId = decodeURIComponent(parsed.hostname)
+      const rawRootId = decodeURIComponent(parsed.hostname)
+      const matchedRoot = registry
+        .getState()
+        .roots.find((r) => r.id.toLowerCase() === rawRootId.toLowerCase())
+      const rootId = matchedRoot ? matchedRoot.id : rawRootId
       const relPath = decodeURIComponent(parsed.pathname).replace(/^\/+/, '')
       const absPath = registry.pathGuard.resolveScopedPath(rootId, relPath)
       const data = await fs.promises.readFile(absPath)
@@ -182,13 +201,15 @@ app.whenReady().then(() => {
                 ? 'image/gif'
                 : ext === '.webp'
                   ? 'image/webp'
-                  : 'application/octet-stream'
+                  : ext === '.pdf'
+                    ? 'application/pdf'
+                    : 'application/octet-stream'
 
-      return new Response(data, {
+      return new Response(new Uint8Array(data), {
         status: 200,
         headers: {
           'Content-Type': mime,
-          'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'"
+          'Cache-Control': 'no-cache'
         }
       })
     } catch {
@@ -212,11 +233,95 @@ app.whenReady().then(() => {
   )
 
   const preloadPath = path.join(__dirname, '../preload/index.js')
-  mainWindow = createWindow(preloadPath)
+  mainWindow = createWindow(preloadPath, settingsService)
+
+  const sendMenuAction = (action: string) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_CHANNELS.EVENT_MENU_ACTION, action)
+    }
+  }
+
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open Folder...',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => sendMenuAction('open-folder')
+        },
+        { type: 'separator' },
+        {
+          label: 'Export to Standalone HTML...',
+          accelerator: 'CmdOrCtrl+Shift+E',
+          click: () => sendMenuAction('export-html')
+        },
+        {
+          label: 'Export to PDF...',
+          accelerator: 'CmdOrCtrl+Alt+E',
+          click: () => sendMenuAction('export-pdf')
+        },
+        { type: 'separator' },
+        { role: 'close' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        {
+          label: 'Undo',
+          accelerator: 'CmdOrCtrl+Z',
+          click: () => sendMenuAction('undo')
+        },
+        {
+          label: 'Redo',
+          accelerator: 'CmdOrCtrl+Shift+Z',
+          click: () => sendMenuAction('redo')
+        },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Switch Light / Dark Mode',
+          click: () => sendMenuAction('toggle-theme')
+        },
+        {
+          label: 'Toggle Formatting Toolbar Row',
+          click: () => sendMenuAction('toggle-toolbar')
+        },
+        {
+          label: 'Toggle Bottom Status Row',
+          click: () => sendMenuAction('toggle-status-bar')
+        },
+        {
+          label: 'Toggle Right Frontmatter Window',
+          click: () => sendMenuAction('toggle-frontmatter')
+        },
+        {
+          label: 'Toggle Spellcheck Underlines',
+          click: () => sendMenuAction('toggle-spellcheck')
+        },
+        { type: 'separator' },
+        { role: 'reload' },
+        { role: 'toggleDevTools' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    { role: 'windowMenu' }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow(preloadPath)
+      mainWindow = createWindow(preloadPath, settingsService)
     }
   })
 })

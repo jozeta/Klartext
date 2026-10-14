@@ -175,4 +175,134 @@ Footer line.`
     expect(tier4.recommendedModels.some((m) => m.tag === 'gemma4:26b')).toBe(true)
     expect(tier4.embeddingModels.some((m) => m.tag === 'bge-m3')).toBe(true)
   })
+
+  it('renders Inline Rich decorations including Mermaid widget on Welcome.md', async () => {
+    const { EditorState } = await import('@codemirror/state')
+    const { createLivePreviewExtension } = await import(
+      '../../renderer/features/editor/live-preview-extension'
+    )
+    const starterContent = `---
+title: Welcome to Klartext
+author: Technical Nordic Workspace
+tags:
+  - local-first
+  - markdown
+  - multi-root
+---
+
+# Welcome to Klartext
+
+Klartext is a fast, local-first Markdown editor with **Multi-Root Workspaces**, **Concurrent Multi-Repository Git**, **Excalidraw & Mermaid diagrams**, and **Optional Local AI** (English & Svenska).
+
+> [!TIP] Progressive Complexity
+> Press \`Cmd/Ctrl + K\` to open the Command Palette, \`Cmd/Ctrl + P\` for Quick File Switcher, or \`Cmd/Ctrl + Shift + F\` for Zen Mode.
+
+## Supported Markdown Features
+
+| Capability | Engine | Status |
+| :--- | :--- | :--- |
+| Live Inline Rich Editing | CodeMirror 6 Decorations | Active |
+| Mathematical Expressions | KaTeX ($E = mc^2$) | Active |
+| Interactive Diagrams | Mermaid + \`.excalidraw.svg\` | Active |
+
+- [x] Single-root & Multi-root workspaces
+- [x] Per-root portable assets (\`assets/\`)
+- [x] Multi-repository Git sync & conflict resolution
+
+\`\`\`mermaid
+flowchart LR
+    A["Multi-Root Workspace"] --> B["CodeMirror 6 Live Preview"]
+    B --> C["Multi-Repo Git Sync"]
+    B --> D["Local AI (SV / EN)"]
+\`\`\`
+`
+    const ext = createLivePreviewExtension({
+      inlineRichMode: true,
+      rootId: 'root-starter',
+      onResolveConflict: () => {},
+      onNavigateLink: () => {},
+      onOpenExcalidraw: () => {}
+    })
+    const state = EditorState.create({
+      doc: starterContent,
+      extensions: [ext]
+    })
+    const decoSet = state.field(ext[0])
+    const foundWidgets: string[] = []
+    decoSet.between(0, state.doc.length, (from, _to, value) => {
+      const w = (value.spec as { widget?: { constructor: { name: string } } })?.widget
+      if (w) {
+        foundWidgets.push(`${w.constructor.name}@L${state.doc.lineAt(from).number}`)
+      }
+    })
+    expect(foundWidgets).toEqual([
+      'InlineTableWidget@L19',
+      'TaskCheckboxWidget@L25',
+      'TaskCheckboxWidget@L26',
+      'TaskCheckboxWidget@L27',
+      'InlineMermaidBlockWidget@L29'
+    ])
+  })
+
+  it('color-codes code blocks with row numbers, validates spellcheck explanations & synonyms, and parses/generates Mermaid visual graphs', async () => {
+    const { highlightCodeToHtml } = await import('../../shared/markdown/syntax-highlight')
+    const {
+      isWordSpelledCorrectly,
+      getSpellingSuggestions,
+      getSpellingSuggestionsDetailed
+    } = await import('../../renderer/features/editor/spellcheck-extension')
+    const {
+      generateMermaidFromVisualGraph,
+      parseMermaidToVisualGraph
+    } = await import('../../renderer/features/diagrams/DiagramWidgets')
+
+    const highlighted = highlightCodeToHtml(
+      'export async function compute(x: number): Promise<string> { return "ok" // comment\n}',
+      'typescript'
+    )
+    expect(highlighted).toContain('class="klartext-code-linenum"')
+    expect(highlighted).toContain('class="hl-keyword"')
+    expect(highlighted).toContain('class="hl-type"')
+    expect(highlighted).toContain('class="hl-string"')
+    expect(highlighted).toContain('class="hl-comment"')
+
+    // Spellcheck: English & Swedish valid words pass; typos are flagged with explanations & synonyms
+    expect(isWordSpelledCorrectly('architecture', ['en-US', 'sv-SE'])).toBe(true)
+    expect(isWordSpelledCorrectly('användargränssnitt', ['en-US', 'sv-SE'])).toBe(true)
+    expect(isWordSpelledCorrectly('missspelled', ['en-US', 'sv-SE'])).toBe(false)
+    const suggestions = getSpellingSuggestions('missspelled', ['en-US', 'sv-SE'])
+    expect(suggestions).toContain('misspelled')
+    const detailed = getSpellingSuggestionsDetailed('missspelled', ['en-US', 'sv-SE'])
+    expect(detailed.suggestions.length).toBeGreaterThan(0)
+    expect(detailed.suggestions[0].explanation.length).toBeGreaterThan(0)
+    expect(detailed.synonyms.length).toBeGreaterThan(0)
+    expect(detailed.synonyms[0].explanation.length).toBeGreaterThan(0)
+
+    // Visual Mermaid Builder code generation + round-trip parsing
+    const mermaidOut = generateMermaidFromVisualGraph(
+      'LR',
+      [
+        { id: 'A', label: 'Start', shape: 'round', x: 10, y: 10 },
+        { id: 'B', label: 'Check?', shape: 'diamond', x: 150, y: 10 }
+      ],
+      [{ id: 'E1', from: 'A', to: 'B', style: '-->', label: 'Verify' }]
+    )
+    expect(mermaidOut).toContain('flowchart LR')
+    expect(mermaidOut).toContain('A("Start")')
+    expect(mermaidOut).toContain('B{"Check?"}')
+    expect(mermaidOut).toContain('A -->|"Verify"| B')
+
+    // Starting a new diagram in the Visual Mermaid Builder returns a clean, empty canvas
+    const emptyGraph = parseMermaidToVisualGraph()
+    expect(emptyGraph.nodes).toEqual([])
+    expect(emptyGraph.edges).toEqual([])
+
+    const parsedGraph = parseMermaidToVisualGraph(mermaidOut)
+    expect(parsedGraph.direction).toBe('LR')
+    expect(parsedGraph.nodes.length).toBe(2)
+    expect(parsedGraph.nodes[0]).toMatchObject({ id: 'A', label: 'Start', shape: 'round' })
+    expect(parsedGraph.nodes[1]).toMatchObject({ id: 'B', label: 'Check?', shape: 'diamond' })
+    expect(parsedGraph.edges.length).toBe(1)
+    expect(parsedGraph.edges[0]).toMatchObject({ from: 'A', to: 'B', style: '-->', label: 'Verify' })
+  })
 })

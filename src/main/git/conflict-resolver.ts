@@ -1,16 +1,24 @@
 import type { ConflictHunk } from '../../shared/types'
 
 export function hasConflictMarkers(content: string): boolean {
-  return /^<{7}\s/m.test(content) && /^={7}\s*$/m.test(content) && /^>{7}\s/m.test(content)
+  return parseConflictHunks(content).length > 0
 }
 
 export function parseConflictHunks(content: string): ConflictHunk[] {
   const lines = content.split(/\r?\n/)
   const hunks: ConflictHunk[] = []
   let i = 0
+  let inCodeFence = false
 
   while (i < lines.length) {
-    if (lines[i].startsWith('<<<<<<<')) {
+    const trimmed = lines[i].trim()
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inCodeFence = !inCodeFence
+      i++
+      continue
+    }
+
+    if (!inCodeFence && /^<{7}(\s|$)/.test(lines[i])) {
       const startLine = i + 1
       const currentHeader = lines[i].replace(/^<{7}\s*/, '').trim()
       i++
@@ -18,8 +26,10 @@ export function parseConflictHunks(content: string): ConflictHunk[] {
       const baseLines: string[] = []
       const incomingLines: string[] = []
       let inBase = false
+      let foundSeparator = false
+      let foundEnd = false
 
-      while (i < lines.length && !lines[i].startsWith('=======')) {
+      while (i < lines.length && !/^={7}\s*$/.test(lines[i])) {
         if (lines[i].startsWith('|||||||')) {
           inBase = true
           i++
@@ -33,31 +43,35 @@ export function parseConflictHunks(content: string): ConflictHunk[] {
         i++
       }
 
-      if (i < lines.length && lines[i].startsWith('=======')) {
+      if (i < lines.length && /^={7}\s*$/.test(lines[i])) {
+        foundSeparator = true
         i++
       }
 
-      while (i < lines.length && !lines[i].startsWith('>>>>>>>')) {
+      while (i < lines.length && !/^>{7}(\s|$)/.test(lines[i])) {
         incomingLines.push(lines[i])
         i++
       }
 
       let incomingHeader = 'incoming'
-      if (i < lines.length && lines[i].startsWith('>>>>>>>')) {
+      if (i < lines.length && /^>{7}(\s|$)/.test(lines[i])) {
+        foundEnd = true
         incomingHeader = lines[i].replace(/^>{7}\s*/, '').trim()
       }
       const endLine = i + 1
 
-      hunks.push({
-        index: hunks.length,
-        startLine,
-        endLine,
-        currentHeader: currentHeader || 'HEAD',
-        incomingHeader: incomingHeader || 'incoming',
-        currentContent: currentLines.join('\n'),
-        baseContent: baseLines.length > 0 ? baseLines.join('\n') : undefined,
-        incomingContent: incomingLines.join('\n')
-      })
+      if (foundSeparator && foundEnd) {
+        hunks.push({
+          index: hunks.length,
+          startLine,
+          endLine,
+          currentHeader: currentHeader || 'HEAD',
+          incomingHeader: incomingHeader || 'incoming',
+          currentContent: currentLines.join('\n'),
+          baseContent: baseLines.length > 0 ? baseLines.join('\n') : undefined,
+          incomingContent: incomingLines.join('\n')
+        })
+      }
     }
     i++
   }

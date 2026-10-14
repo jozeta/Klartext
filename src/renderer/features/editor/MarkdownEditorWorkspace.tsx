@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { defaultKeymap, history, historyKeymap, undo, redo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import {
   Bold,
@@ -16,22 +16,83 @@ import {
   List,
   CheckSquare,
   Sparkles,
-  GitMerge
+  GitMerge,
+  Eye,
+  FileCode,
+  Workflow,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Languages
 } from 'lucide-react'
 import type { EditMode } from '../../../shared/types'
 import {
   renderMarkdownDocument,
-  extractFrontmatter,
-  updateFrontmatterInMarkdown,
   convertDelimitedTextToTable,
   type RenderedMarkdownResult
 } from '../../../shared/markdown/pipeline'
+import { sanitizeSvgContent } from '../../../shared/serialization/excalidraw-svg'
 import { hasConflictMarkers, parseConflictHunks } from '../../../main/git/conflict-resolver'
 import {
   createLivePreviewExtension,
   applyMarkdownFormatCommand
 } from './live-preview-extension'
-import { MermaidDiagramWidget } from '../diagrams/DiagramWidgets'
+import {
+  createSpellcheckExtension,
+  SPELL_LANGUAGE_LABELS,
+  type SpellSuggestionItem,
+  type SupportedSpellLanguage
+} from './spellcheck-extension'
+import { MermaidDiagramWidget, VisualMermaidBuilderModal } from '../diagrams/DiagramWidgets'
+
+function clearPreviewHighlights(container: HTMLElement) {
+  const marks = container.querySelectorAll('mark.klartext-split-highlight')
+  marks.forEach((mark) => {
+    const parent = mark.parentNode
+    if (parent) {
+      parent.replaceChild(document.createTextNode(mark.textContent || ''), mark)
+      parent.normalize()
+    }
+  })
+}
+
+function highlightSelectionInPreview(container: HTMLElement, rawSelected: string) {
+  clearPreviewHighlights(container)
+  const clean = rawSelected
+    .replace(/^#+\s+/gm, '')
+    .replace(/(\*\*|\*|~~|`)/g, '')
+    .trim()
+  if (clean.length < 2) return
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let node: Node | null = walker.nextNode()
+  while (node) {
+    const text = node.nodeValue || ''
+    const idx = text.toLowerCase().indexOf(clean.toLowerCase())
+    if (idx !== -1 && node.parentElement && node.parentElement.tagName !== 'MARK') {
+      const range = document.createRange()
+      range.setStart(node, idx)
+      range.setEnd(node, idx + clean.length)
+      const mark = document.createElement('mark')
+      mark.className = 'klartext-split-highlight'
+      range.surroundContents(mark)
+      mark.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      break
+    }
+    node = walker.nextNode()
+  }
+}
+
+const IMAGE_ASSET_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.ico',
+  '.avif'
+]
 
 export const MarkdownEditorWorkspace: React.FC<{
   rootId: string
@@ -40,16 +101,41 @@ export const MarkdownEditorWorkspace: React.FC<{
   editMode: EditMode
   theme: 'light' | 'dark'
   floatingToolbarEnabled: boolean
+  formattingToolbarVisible?: boolean
   aiEnabled: boolean
+  showLineNumbers: boolean
+  wordWrap: boolean
+  spellcheckEnabled?: boolean
+  spellcheckLanguages?: string[]
+  customDictionaryWords?: string[]
+  initialSplitPercent?: number
+  onChangeSplitPercent?: (percent: number) => void
+  scrollToLine?: { line: number; nonce: number } | null
+  editorCommandTrigger?: {
+    command:
+      | 'undo'
+      | 'redo'
+      | 'cut'
+      | 'copy'
+      | 'paste'
+      | 'select-all'
+      | 'copy-rich-html'
+      | 'toggle-inline-ai'
+      | 'ai-improve'
+    nonce: number
+  } | null
   onChangeContent: (nextContent: string) => void
   onPasteOrDropAsset: (fileName: string, mimeType: string, base64Data: string) => Promise<string>
-  onOpenExcalidrawModal: (drawingRelPath: string) => void
+  onOpenExcalidrawModal?: (drawingRelPath: string) => void
   onTriggerAIQuickAction: (action: string, selectedText: string) => void
   onResolveConflictHunk: (
     hunkIndex: number,
     resolution: 'current' | 'incoming' | 'both' | 'custom'
   ) => void
-  onNavigateWikiLink: (target: string) => void
+  onNavigateLink: (target: string, isWiki: boolean) => void
+  onToggleSpellcheck?: (enabled: boolean) => void
+  onChangeSpellcheckLanguage?: (lang: string) => void
+  onAddWordToDictionary?: (word: string) => void
 }> = ({
   rootId,
   relativePath,
@@ -57,30 +143,285 @@ export const MarkdownEditorWorkspace: React.FC<{
   editMode,
   theme,
   floatingToolbarEnabled,
+  formattingToolbarVisible = false,
   aiEnabled,
+  showLineNumbers,
+  wordWrap,
+  spellcheckEnabled = true,
+  spellcheckLanguages = ['en-US', 'sv-SE'],
+  customDictionaryWords = [],
+  initialSplitPercent = 50,
+  onChangeSplitPercent,
+  scrollToLine,
+  editorCommandTrigger,
   onChangeContent,
   onPasteOrDropAsset,
   onOpenExcalidrawModal,
   onTriggerAIQuickAction,
   onResolveConflictHunk,
-  onNavigateWikiLink
+  onNavigateLink,
+  onChangeSpellcheckLanguage,
+  onAddWordToDictionary
 }) => {
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
+  const editorScrollWrapperRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const previewContainerRef = useRef<HTMLDivElement | null>(null)
+  const splitContainerRef = useRef<HTMLDivElement | null>(null)
   const latestContentRef = useRef(content)
+  const lastHandledCommandNonceRef = useRef<number | null>(null)
 
   const [rendered, setRendered] = useState<RenderedMarkdownResult | null>(null)
+  const renderedRef = useRef<RenderedMarkdownResult | null>(null)
+  renderedRef.current = rendered
+  const onTriggerAIQuickActionRef = useRef(onTriggerAIQuickAction)
+  onTriggerAIQuickActionRef.current = onTriggerAIQuickAction
+
   const [selectionCoords, setSelectionCoords] = useState<{
     top: number
     left: number
     selectedText: string
   } | null>(null)
-  const [showFrontmatterEditor, setShowFrontmatterEditor] = useState(false)
   const [threeWayModalHunk, setThreeWayModalHunk] = useState<number | null>(null)
   const [showInlineAIPrompt, setShowInlineAIPrompt] = useState(false)
   const [inlineAIPromptText, setInlineAIPromptText] = useState('')
-  const [copiedRichHtml, setCopiedRichHtml] = useState(false)
+
+  // Visual Mermaid Builder Modal state
+  const [mermaidBuilderTarget, setMermaidBuilderTarget] = useState<{
+    initialCode?: string
+    blockFrom?: number
+    blockTo?: number
+  } | null>(null)
+
+  // Right-click Spellcheck Context Menu state & Ignored Occurrences / Session Dictionary
+  const [ignoredSpellOccurrences, setIgnoredSpellOccurrences] = useState<string[]>([])
+  const [sessionIgnoredWords, setSessionIgnoredWords] = useState<string[]>([])
+  const [spellContextMenu, setSpellContextMenu] = useState<{
+    word: string
+    from: number
+    to: number
+    clientX: number
+    clientY: number
+    suggestions: string[]
+    detailedSuggestions: SpellSuggestionItem[]
+    synonyms: SpellSuggestionItem[]
+  } | null>(null)
+
+  // Asset file detection (.svg, .png, .jpg, .jpeg, .gif, .webp, .pdf, .mermaid, .mmd)
+  const lowerPath = relativePath.toLowerCase()
+  const isSvgFile = lowerPath.endsWith('.svg')
+  const isRasterImageAsset = IMAGE_ASSET_EXTENSIONS.some((ext) => lowerPath.endsWith(ext))
+  const isPdfAsset = lowerPath.endsWith('.pdf')
+  const isMermaidAsset = lowerPath.endsWith('.mermaid') || lowerPath.endsWith('.mmd')
+  const isVisualAssetFile = isSvgFile || isRasterImageAsset || isPdfAsset || isMermaidAsset
+
+  const [showRawSvgSource, setShowRawSvgSource] = useState(false)
+  const [assetZoom, setAssetZoom] = useState<number>(100)
+
+  // Resizable Split View percentage (20% to 80%)
+  const [splitPercent, setSplitPercent] = useState<number>(initialSplitPercent)
+  const splitPercentRef = useRef<number>(initialSplitPercent)
+  splitPercentRef.current = splitPercent
+  const onChangeSplitPercentRef = useRef(onChangeSplitPercent)
+  onChangeSplitPercentRef.current = onChangeSplitPercent
+  const isDraggingSplitRef = useRef(false)
+
+  // Auto-scroll when drag-selecting text near top or bottom of editor scroll container
+  const dragSelectScrollVelocityRef = useRef<number>(0)
+  const lastDragMousePosRef = useRef<{ x: number; y: number } | null>(null)
+
+  useEffect(() => {
+    setShowRawSvgSource(false)
+    setAssetZoom(100)
+  }, [relativePath])
+
+  // Handle commands dispatched from top Edit & AI dropdown menus (strictly once per nonce)
+  useEffect(() => {
+    if (!editorCommandTrigger) return
+    if (lastHandledCommandNonceRef.current === editorCommandTrigger.nonce) return
+    lastHandledCommandNonceRef.current = editorCommandTrigger.nonce
+
+    const { command } = editorCommandTrigger
+    const view = viewRef.current
+    if (command === 'undo' && view) {
+      undo(view)
+      view.focus()
+    } else if (command === 'redo' && view) {
+      redo(view)
+      view.focus()
+    } else if (command === 'select-all' && view) {
+      view.dispatch({
+        selection: { anchor: 0, head: view.state.doc.length }
+      })
+      view.focus()
+    } else if (command === 'cut' && view) {
+      const { from, to } = view.state.selection.main
+      if (from < to) {
+        const selected = view.state.sliceDoc(from, to)
+        navigator.clipboard?.writeText(selected).catch(() => {})
+        view.dispatch({ changes: { from, to, insert: '' } })
+      }
+      view.focus()
+    } else if (command === 'copy' && view) {
+      const { from, to } = view.state.selection.main
+      if (from < to) {
+        const selected = view.state.sliceDoc(from, to)
+        navigator.clipboard?.writeText(selected).catch(() => {})
+      }
+      view.focus()
+    } else if (command === 'paste' && view) {
+      navigator.clipboard
+        ?.readText()
+        .then((clipText) => {
+          if (!clipText || !viewRef.current) return
+          const { from, to } = viewRef.current.state.selection.main
+          viewRef.current.dispatch({
+            changes: { from, to, insert: clipText },
+            selection: { anchor: from + clipText.length }
+          })
+          viewRef.current.focus()
+        })
+        .catch(() => {})
+    } else if (command === 'copy-rich-html') {
+      if (renderedRef.current) {
+        navigator.clipboard?.writeText(renderedRef.current.html).catch(() => {})
+      }
+    } else if (command === 'toggle-inline-ai') {
+      setShowInlineAIPrompt((v) => !v)
+    } else if (command === 'ai-improve') {
+      const sel = view
+        ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+        : ''
+      onTriggerAIQuickActionRef.current('improve', sel || latestContentRef.current)
+    }
+  }, [editorCommandTrigger])
+
+  // Close spellcheck context menu on outside click
+  useEffect(() => {
+    if (!spellContextMenu) return
+    const onGlobalClick = () => setSpellContextMenu(null)
+    window.addEventListener('click', onGlobalClick)
+    return () => window.removeEventListener('click', onGlobalClick)
+  }, [spellContextMenu])
+
+  // Auto-scroll editor viewport when clicking and dragging text selection near top or bottom edge
+  useEffect(() => {
+    let rafId: number | null = null
+    let isSelectingInEditor = false
+
+    const stepAutoScroll = () => {
+      const vel = dragSelectScrollVelocityRef.current
+      const scroller = editorScrollWrapperRef.current
+      if (vel !== 0 && scroller && isSelectingInEditor) {
+        scroller.scrollTop += vel
+        // Also extend CodeMirror selection to current mouse coordinates while scrolling
+        if (viewRef.current && lastDragMousePosRef.current) {
+          const pos = viewRef.current.posAtCoords(lastDragMousePosRef.current)
+          if (pos !== null) {
+            const anchor = viewRef.current.state.selection.main.anchor
+            viewRef.current.dispatch({
+              selection: { anchor, head: pos }
+            })
+          }
+        }
+        rafId = requestAnimationFrame(stepAutoScroll)
+      } else {
+        rafId = null
+      }
+    }
+
+    const onWindowMouseDown = (e: MouseEvent) => {
+      const scroller = editorScrollWrapperRef.current
+      if (e.button === 0 && scroller && e.target instanceof Node && scroller.contains(e.target)) {
+        isSelectingInEditor = true
+      } else {
+        isSelectingInEditor = false
+        dragSelectScrollVelocityRef.current = 0
+      }
+    }
+
+    const onWindowMouseMove = (e: MouseEvent) => {
+      if (!isSelectingInEditor || (e.buttons & 1) !== 1 || isDraggingSplitRef.current) {
+        dragSelectScrollVelocityRef.current = 0
+        return
+      }
+      const scroller = editorScrollWrapperRef.current
+      if (!scroller) return
+      const rect = scroller.getBoundingClientRect()
+      if (e.clientX < rect.left || e.clientX > rect.right) {
+        dragSelectScrollVelocityRef.current = 0
+        return
+      }
+
+      lastDragMousePosRef.current = { x: e.clientX, y: e.clientY }
+      const edgeThreshold = 60
+      if (e.clientY >= rect.top - 40 && e.clientY < rect.top + edgeThreshold) {
+        const intensity = Math.max(
+          1,
+          Math.min(18, Math.round((rect.top + edgeThreshold - e.clientY) / 4))
+        )
+        dragSelectScrollVelocityRef.current = -intensity
+        if (rafId === null) rafId = requestAnimationFrame(stepAutoScroll)
+      } else if (e.clientY > rect.bottom - edgeThreshold && e.clientY <= rect.bottom + 40) {
+        const intensity = Math.max(
+          1,
+          Math.min(18, Math.round((e.clientY - (rect.bottom - edgeThreshold)) / 4))
+        )
+        dragSelectScrollVelocityRef.current = intensity
+        if (rafId === null) rafId = requestAnimationFrame(stepAutoScroll)
+      } else {
+        dragSelectScrollVelocityRef.current = 0
+      }
+    }
+
+    const onWindowMouseUp = () => {
+      isSelectingInEditor = false
+      dragSelectScrollVelocityRef.current = 0
+      lastDragMousePosRef.current = null
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+    }
+
+    window.addEventListener('mousedown', onWindowMouseDown)
+    window.addEventListener('mousemove', onWindowMouseMove)
+    window.addEventListener('mouseup', onWindowMouseUp)
+    return () => {
+      window.removeEventListener('mousedown', onWindowMouseDown)
+      window.removeEventListener('mousemove', onWindowMouseMove)
+      window.removeEventListener('mouseup', onWindowMouseUp)
+      if (rafId !== null) cancelAnimationFrame(rafId)
+    }
+  }, [])
+
+  useEffect(() => {
+    setSplitPercent(initialSplitPercent)
+  }, [initialSplitPercent])
+
+  // Mouse handlers for resizable Split View divider
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDraggingSplitRef.current || !splitContainerRef.current) return
+      const rect = splitContainerRef.current.getBoundingClientRect()
+      if (rect.width <= 0) return
+      const rawPct = ((e.clientX - rect.left) / rect.width) * 100
+      const clamped = Math.round(Math.max(20, Math.min(80, rawPct)) * 10) / 10
+      setSplitPercent(clamped)
+    }
+    const onMouseUp = () => {
+      if (isDraggingSplitRef.current) {
+        isDraggingSplitRef.current = false
+        onChangeSplitPercentRef.current?.(splitPercentRef.current)
+      }
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
 
   // Listen for Cmd/Ctrl + J to toggle inline AI prompt bar
   useEffect(() => {
@@ -94,10 +435,12 @@ export const MarkdownEditorWorkspace: React.FC<{
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [aiEnabled])
 
-  const conflictHunks = hasConflictMarkers(content) ? parseConflictHunks(content) : []
+  const conflictHunks =
+    !isVisualAssetFile && hasConflictMarkers(content) ? parseConflictHunks(content) : []
 
   // Debounced Markdown AST & preview rendering
   useEffect(() => {
+    if (isVisualAssetFile) return
     let cancelled = false
     const timer = setTimeout(() => {
       renderMarkdownDocument(content, { rootId }).then((res) => {
@@ -108,11 +451,36 @@ export const MarkdownEditorWorkspace: React.FC<{
       cancelled = true
       clearTimeout(timer)
     }
-  }, [content, rootId])
+  }, [content, rootId, isVisualAssetFile])
 
-  // Initialize or reconfigure CodeMirror 6 without losing undo/redo history on mode switch
+  // Jump/scroll to a target line number in CodeMirror
+  const jumpToLine = (lineNumber: number) => {
+    const view = viewRef.current
+    if (!view) return
+    const safeLine = Math.max(1, Math.min(lineNumber, view.state.doc.lines))
+    const line = view.state.doc.line(safeLine)
+    view.dispatch({
+      selection: { anchor: line.from, head: line.to },
+      effects: EditorView.scrollIntoView(line.from, { y: 'center' })
+    })
+    view.focus()
+  }
+
+  // Respond to external scrollToLine requests (from Search results or Outline panel)
+  useEffect(() => {
+    if (!scrollToLine) return
+    const timer = setTimeout(() => {
+      jumpToLine(scrollToLine.line)
+    }, 30)
+    return () => clearTimeout(timer)
+  }, [scrollToLine])
+
+  const combinedCustomWords = [...customDictionaryWords, ...sessionIgnoredWords]
+
+  // Initialize or reconfigure CodeMirror 6
   useEffect(() => {
     if (!editorContainerRef.current) return
+    if (isVisualAssetFile && !(isSvgFile && showRawSvgSource)) return
 
     if (viewRef.current) {
       viewRef.current.destroy()
@@ -125,13 +493,49 @@ export const MarkdownEditorWorkspace: React.FC<{
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         markdown(),
-        ...(editMode === 'source' ? [lineNumbers()] : []),
-        EditorView.lineWrapping,
-        createLivePreviewExtension(editMode === 'inline', (hunkIdx, res) => {
-          if (res === '3way') {
-            setThreeWayModalHunk(hunkIdx)
-          } else {
-            onResolveConflictHunk(hunkIdx, res)
+        ...(showLineNumbers || editMode === 'source' ? [lineNumbers()] : []),
+        ...(wordWrap ? [EditorView.lineWrapping] : []),
+        createSpellcheckExtension({
+          enabled: spellcheckEnabled && !isVisualAssetFile,
+          languages: spellcheckLanguages,
+          customWords: combinedCustomWords,
+          ignoredOccurrences: ignoredSpellOccurrences,
+          onContextMenuMisspelledWord: (info) => {
+            setSpellContextMenu(info)
+          }
+        }),
+        createLivePreviewExtension({
+          inlineRichMode: editMode === 'inline' && !isVisualAssetFile,
+          rootId,
+          onResolveConflict: (hunkIdx, res) => {
+            if (res === '3way') {
+              setThreeWayModalHunk(hunkIdx)
+            } else {
+              onResolveConflictHunk(hunkIdx, res)
+            }
+          },
+          onNavigateLink: (target, isWiki) => {
+            if (target.startsWith('#')) {
+              const slug = target.slice(1).toLowerCase()
+              const matchHeading = rendered?.headings.find(
+                (h) => h.id.toLowerCase() === slug || h.text.toLowerCase() === slug
+              )
+              if (matchHeading) {
+                jumpToLine(matchHeading.line)
+              }
+              return
+            }
+            onNavigateLink(target, isWiki)
+          },
+          onOpenExcalidraw: (relPath) => {
+            onOpenExcalidrawModal?.(relPath)
+          },
+          onOpenMermaidBuilder: (currentCode, blockFrom, blockTo) => {
+            setMermaidBuilderTarget({
+              initialCode: currentCode,
+              blockFrom,
+              blockTo
+            })
           }
         }),
         EditorView.updateListener.of((update) => {
@@ -141,22 +545,39 @@ export const MarkdownEditorWorkspace: React.FC<{
             onChangeContent(nextStr)
           }
 
-          if (update.selectionSet || update.docChanged) {
+          if (update.selectionSet || update.docChanged || update.viewportChanged) {
             const sel = update.state.selection.main
-            if (!sel.empty && floatingToolbarEnabled) {
-              const coords = update.view.coordsAtPos(sel.from)
-              const containerRect = editorContainerRef.current?.getBoundingClientRect()
-              if (coords && containerRect) {
-                const top = Math.max(8, coords.top - containerRect.top - 44)
-                const left = Math.max(12, Math.min(containerRect.width - 360, coords.left - containerRect.left))
-                setSelectionCoords({
-                  top,
-                  left,
-                  selectedText: update.state.sliceDoc(sel.from, sel.to)
-                })
+            if (!sel.empty) {
+              const selectedStr = update.state.sliceDoc(sel.from, sel.to)
+              if (floatingToolbarEnabled) {
+                const fromCoords = update.view.coordsAtPos(sel.from)
+                const toCoords = update.view.coordsAtPos(sel.to) || fromCoords
+                if (fromCoords && toCoords) {
+                  const selectionTop = Math.min(fromCoords.top, toCoords.top)
+                  const selectionBottom = Math.max(fromCoords.bottom, toCoords.bottom)
+                  const selectionLeft = Math.min(fromCoords.left, toCoords.left)
+                  // Always position directly above the selected text (or directly below if near the top edge)
+                  const placeAbove = selectionTop > 96
+                  const top = placeAbove ? selectionTop - 42 : selectionBottom + 8
+                  const left = Math.max(
+                    12,
+                    Math.min(window.innerWidth - 460, selectionLeft)
+                  )
+                  setSelectionCoords({
+                    top,
+                    left,
+                    selectedText: selectedStr
+                  })
+                }
+              }
+              if (editMode === 'split' && previewContainerRef.current) {
+                highlightSelectionInPreview(previewContainerRef.current, selectedStr)
               }
             } else {
               setSelectionCoords(null)
+              if (editMode === 'split' && previewContainerRef.current) {
+                clearPreviewHighlights(previewContainerRef.current)
+              }
             }
           }
         }),
@@ -237,9 +658,23 @@ export const MarkdownEditorWorkspace: React.FC<{
       view.destroy()
       viewRef.current = null
     }
-  }, [rootId, relativePath, editMode, floatingToolbarEnabled])
+  }, [
+    rootId,
+    relativePath,
+    editMode,
+    floatingToolbarEnabled,
+    showLineNumbers,
+    wordWrap,
+    spellcheckEnabled,
+    spellcheckLanguages.join(','),
+    combinedCustomWords.join(','),
+    ignoredSpellOccurrences.join(','),
+    isVisualAssetFile,
+    isSvgFile,
+    showRawSvgSource
+  ])
 
-  // Synchronize external content updates (e.g. disk reload, AI diff accept, conflict resolution) into CodeMirror
+  // Synchronize external content updates into CodeMirror
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
@@ -261,18 +696,7 @@ export const MarkdownEditorWorkspace: React.FC<{
     }
   }
 
-  const jumpToConflictLine = (lineNumber: number) => {
-    const view = viewRef.current
-    if (!view) return
-    const line = view.state.doc.line(Math.min(lineNumber, view.state.doc.lines))
-    view.dispatch({
-      selection: { anchor: line.from },
-      effects: EditorView.scrollIntoView(line.from, { y: 'center' })
-    })
-    view.focus()
-  }
-
-  const parsedFrontmatter = extractFrontmatter(content)
+  const assetProtocolUrl = `klartext-asset://${encodeURIComponent(rootId)}/${relativePath.replace(/^\.\//, '')}`
 
   return (
     <div className="relative flex-1 flex flex-col h-full overflow-hidden bg-panel">
@@ -294,7 +718,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               <button
                 key={h.index}
                 type="button"
-                onClick={() => jumpToConflictLine(h.startLine)}
+                onClick={() => jumpToLine(h.startLine)}
                 className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent"
               >
                 Jump to Conflict #{idx + 1} (L{h.startLine})
@@ -328,274 +752,247 @@ export const MarkdownEditorWorkspace: React.FC<{
         </div>
       )}
 
-      {/* Collapsible Structured YAML Frontmatter Property Bar */}
-      {parsedFrontmatter.frontmatter && (
-        <div className="px-6 py-1.5 bg-app border-b border-subtle text-xs flex items-center justify-between">
-          <div className="flex items-center gap-3 overflow-x-auto">
-            <span className="font-semibold text-muted uppercase tracking-wider text-[10px]">
-              Frontmatter
-            </span>
-            {Object.entries(parsedFrontmatter.frontmatter).map(([k, v]) => (
-              <span
-                key={k}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
-              >
-                <strong className="text-muted">{k}:</strong> {String(v)}
-              </span>
-            ))}
-          </div>
-          <button
-            type="button"
-            data-testid="toggle-frontmatter-editor"
-            onClick={() => setShowFrontmatterEditor((v) => !v)}
-            className="text-accent hover:underline ml-2 shrink-0"
-          >
-            {showFrontmatterEditor ? 'Hide Properties' : 'Edit Properties'}
-          </button>
-        </div>
-      )}
-
-      {showFrontmatterEditor && parsedFrontmatter.frontmatter && (
+      {/* Asset / Image / Diagram Dedicated Header Bar when viewing an asset file */}
+      {isVisualAssetFile ? (
         <div
-          data-testid="frontmatter-property-panel"
-          className="px-6 py-3 bg-secondary border-b border-subtle grid grid-cols-2 gap-2 text-xs"
+          data-testid="svg-file-toolbar"
+          className="flex items-center justify-between px-4 py-1.5 bg-panel border-b border-subtle text-xs"
         >
-          {Object.entries(parsedFrontmatter.frontmatter).map(([key, val]) => (
-            <div key={key} className="flex items-center gap-2">
-              <label className="w-24 font-medium text-muted truncate">{key}</label>
-              <input
-                type="text"
-                value={Array.isArray(val) ? val.join(', ') : String(val ?? '')}
-                onChange={(e) => {
-                  const nextFm = {
-                    ...parsedFrontmatter.frontmatter!,
-                    [key]: e.target.value
-                  }
-                  onChangeContent(updateFrontmatterInMarkdown(content, nextFm))
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-primary">
+              {isSvgFile
+                ? 'SVG Vector Preview:'
+                : isRasterImageAsset
+                  ? 'Image Asset Viewer:'
+                  : isPdfAsset
+                    ? 'PDF Document Viewer:'
+                    : 'Mermaid Diagram Asset:'}
+            </span>
+            <code className="font-mono text-muted">{relativePath}</code>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {(isSvgFile || isRasterImageAsset) && (
+              <>
+                <button
+                  type="button"
+                  data-tooltip="Zoom Out"
+                  onClick={() => setAssetZoom((z) => Math.max(25, z - 25))}
+                  className="p-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-2 py-0.5 font-mono text-[11px] text-muted">
+                  {assetZoom}%
+                </span>
+                <button
+                  type="button"
+                  data-tooltip="Zoom In"
+                  onClick={() => setAssetZoom((z) => Math.min(300, z + 25))}
+                  className="p-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  data-tooltip="Reset Zoom (100%)"
+                  onClick={() => setAssetZoom(100)}
+                  className="p-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+            {isSvgFile && (
+              <button
+                type="button"
+                data-testid="toggle-svg-raw-source-btn"
+                onClick={() => setShowRawSvgSource((v) => !v)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+              >
+                {showRawSvgSource ? (
+                  <>
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Show SVG Image</span>
+                  </>
+                ) : (
+                  <>
+                    <FileCode className="w-3.5 h-3.5" />
+                    <span>View Raw SVG Code</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Compact Editor Action & Formatting Strip for Markdown files (can be hidden via View menu) */
+        formattingToolbarVisible && (
+          <div
+            className="flex items-center justify-between px-4 py-1 bg-panel border-b border-subtle text-xs"
+            data-testid="editor-formatting-bar"
+          >
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                data-tooltip="Bold (⌘B)"
+                aria-label="Bold"
+                data-testid="fmt-bold"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('bold')
                 }}
-                className="flex-1 px-2 py-1 rounded bg-panel border border-subtle text-primary"
-              />
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Italic (⌘I)"
+                aria-label="Italic"
+                data-testid="fmt-italic"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('italic')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Italic className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Strikethrough"
+                aria-label="Strikethrough"
+                data-testid="fmt-strike"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('strikethrough')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Strikethrough className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Inline Code"
+                aria-label="Inline Code"
+                data-testid="fmt-code"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('code')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Code className="w-3.5 h-3.5" />
+              </button>
+              <span className="h-4 w-px bg-subtle mx-1" />
+              <button
+                type="button"
+                data-tooltip="Heading 1"
+                aria-label="Heading 1"
+                data-testid="fmt-h1"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('h1')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Heading1 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Heading 2"
+                aria-label="Heading 2"
+                data-testid="fmt-h2"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('h2')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Heading2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Insert Table"
+                aria-label="Insert Table"
+                data-testid="fmt-table"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('table')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Task List"
+                aria-label="Task List"
+                data-testid="fmt-task"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('task')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Bulleted List"
+                aria-label="Bulleted List"
+                data-testid="fmt-bullet"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('bullet')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Insert Link"
+                aria-label="Insert Link"
+                data-testid="fmt-link"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('link')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <LinkIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Insert Image"
+                aria-label="Insert Image"
+                data-testid="fmt-image"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('image')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+              </button>
+              <span className="h-4 w-px bg-subtle mx-1" />
+
+              {/* Visual Mermaid Diagram Builder Icon Button (Insert Mermaid & Excalidraw removed per user request) */}
+              <button
+                type="button"
+                data-tooltip="Visual Diagram Builder"
+                aria-label="Visual Mermaid Diagram Builder"
+                data-testid="open-visual-mermaid-builder-btn"
+                onClick={() => setMermaidBuilderTarget({})}
+                className="p-1.5 rounded hover:bg-secondary text-accent"
+              >
+                <Workflow className="w-3.5 h-3.5" />
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
+        )
       )}
-
-      {/* Compact Editor Action & Formatting Strip */}
-      <div
-        className="flex items-center justify-between px-4 py-1 bg-panel border-b border-subtle text-xs"
-        data-testid="editor-formatting-bar"
-      >
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            title="Bold (Cmd/Ctrl+B)"
-            aria-label="Bold"
-            data-testid="fmt-bold"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('bold')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <Bold className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Italic (Cmd/Ctrl+I)"
-            aria-label="Italic"
-            data-testid="fmt-italic"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('italic')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <Italic className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Strikethrough"
-            aria-label="Strikethrough"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('strikethrough')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <Strikethrough className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Inline Code"
-            aria-label="Inline Code"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('code')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <Code className="w-3.5 h-3.5" />
-          </button>
-          <span className="h-4 w-px bg-subtle mx-1" />
-          <button
-            type="button"
-            title="Heading 1"
-            aria-label="Heading 1"
-            data-testid="fmt-h1"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('h1')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <Heading1 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Heading 2"
-            aria-label="Heading 2"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('h2')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <Heading2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Insert Table"
-            aria-label="Insert Table"
-            data-testid="fmt-table"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('table')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Task List"
-            aria-label="Task List"
-            data-testid="fmt-task"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('task')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <CheckSquare className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Bulleted List"
-            aria-label="Bulleted List"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('bullet')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Insert Link"
-            aria-label="Insert Link"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('link')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <LinkIcon className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Insert Image"
-            aria-label="Insert Image"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('image')
-            }}
-            className="p-1.5 rounded hover:bg-secondary text-primary"
-          >
-            <ImageIcon className="w-3.5 h-3.5" />
-          </button>
-          <span className="h-4 w-px bg-subtle mx-1" />
-          <button
-            type="button"
-            data-testid="insert-mermaid-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('mermaid')
-            }}
-            className="px-2 py-1 rounded hover:bg-secondary text-primary font-medium"
-          >
-            + Mermaid
-          </button>
-          <button
-            type="button"
-            data-testid="open-excalidraw-btn"
-            onClick={() => onOpenExcalidrawModal('assets/drawings/architecture.excalidraw.svg')}
-            className="px-2 py-1 rounded hover:bg-secondary text-primary font-medium"
-          >
-            + Excalidraw (.excalidraw.svg)
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            data-testid="copy-rich-html-btn"
-            onClick={async () => {
-              if (!rendered) return
-              try {
-                await navigator.clipboard?.writeText(rendered.html)
-                setCopiedRichHtml(true)
-                setTimeout(() => setCopiedRichHtml(false), 1500)
-              } catch {
-                // Ignore clipboard error in headless test
-              }
-            }}
-            className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-muted hover:text-primary"
-          >
-            {copiedRichHtml ? 'Copied HTML!' : 'Copy Rich HTML'}
-          </button>
-
-          {aiEnabled && (
-            <>
-              <button
-                type="button"
-                data-testid="toggle-inline-ai-prompt-btn"
-                onClick={() => setShowInlineAIPrompt((v) => !v)}
-                className="px-2 py-1 rounded bg-secondary hover:border-accent border border-subtle text-primary"
-              >
-                Inline Draft (⌘J)
-              </button>
-              <button
-                type="button"
-                data-testid="ai-quick-improve-btn"
-                onClick={() => {
-                  const sel = viewRef.current
-                    ? viewRef.current.state.sliceDoc(
-                        viewRef.current.state.selection.main.from,
-                        viewRef.current.state.selection.main.to
-                      )
-                    : ''
-                  onTriggerAIQuickAction('improve', sel || content)
-                }}
-                className="flex items-center gap-1 px-2 py-1 rounded bg-secondary hover:border-accent border border-subtle text-primary"
-              >
-                <Sparkles className="w-3 h-3 text-accent" />
-                <span>AI Improve (SV/EN)</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
 
       {/* Inline AI Creation & Drafting Bar (Cmd/Ctrl + J) */}
       {showInlineAIPrompt && aiEnabled && (
@@ -638,54 +1035,313 @@ export const MarkdownEditorWorkspace: React.FC<{
         </div>
       )}
 
-      {/* Floating Selection Toolbar */}
+      {/* Right-Click Spellcheck Suggestion Context Menu (with Word Explanations, Synonyms, Ignore Word & Ignore All, no red text) */}
+      {spellContextMenu && (
+        <div
+          data-testid="spellcheck-context-menu"
+          style={{
+            top: Math.max(8, Math.min(window.innerHeight - 360, spellContextMenu.clientY)),
+            left: Math.max(8, Math.min(window.innerWidth - 300, spellContextMenu.clientX))
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="fixed z-50 w-72 rounded-md bg-panel border border-subtle shadow-xl py-1.5 text-xs max-h-[82vh] overflow-y-auto"
+        >
+          <div className="px-3 py-1 text-[10px] font-semibold uppercase text-primary border-b border-subtle flex items-center justify-between">
+            <span>Spelling: &ldquo;{spellContextMenu.word}&rdquo;</span>
+            <span className="text-muted">{spellcheckLanguages.join(', ')}</span>
+          </div>
+
+          <div className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase text-muted">
+            Suggested Corrections
+          </div>
+          {spellContextMenu.detailedSuggestions.length > 0 ? (
+            spellContextMenu.detailedSuggestions.map((item) => (
+              <button
+                key={item.word}
+                type="button"
+                data-testid={`spellcheck-suggestion-${item.word}`}
+                onClick={() => {
+                  const view = viewRef.current
+                  if (view) {
+                    view.dispatch({
+                      changes: {
+                        from: spellContextMenu.from,
+                        to: spellContextMenu.to,
+                        insert: item.word
+                      }
+                    })
+                  }
+                  setSpellContextMenu(null)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex flex-col gap-0.5"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-semibold text-primary">{item.word}</span>
+                  <span className="text-[10px] text-accent">Replace</span>
+                </div>
+                <span className="text-[10px] text-muted leading-snug">
+                  {item.explanation}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-1.5 text-muted italic">No close suggestions found</div>
+          )}
+
+          {spellContextMenu.synonyms.length > 0 && (
+            <>
+              <div className="my-1 border-t border-subtle" />
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-muted">
+                Alternatives &amp; Synonyms
+              </div>
+              {spellContextMenu.synonyms.map((syn) => (
+                <button
+                  key={syn.word}
+                  type="button"
+                  data-testid={`spellcheck-synonym-${syn.word}`}
+                  onClick={() => {
+                    const view = viewRef.current
+                    if (view) {
+                      view.dispatch({
+                        changes: {
+                          from: spellContextMenu.from,
+                          to: spellContextMenu.to,
+                          insert: syn.word
+                        }
+                      })
+                    }
+                    setSpellContextMenu(null)
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex flex-col gap-0.5"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-medium text-primary">{syn.word}</span>
+                    <span className="text-[10px] text-muted">Use Synonym</span>
+                  </div>
+                  <span className="text-[10px] text-muted leading-snug">
+                    {syn.explanation}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
+
+          <div className="my-1 border-t border-subtle" />
+
+          <button
+            type="button"
+            data-testid="spellcheck-ignore-word-btn"
+            onClick={() => {
+              const occKey = `${spellContextMenu.from}:${spellContextMenu.to}:${spellContextMenu.word.toLowerCase()}`
+              setIgnoredSpellOccurrences((prev) =>
+                prev.includes(occKey) ? prev : [...prev, occKey]
+              )
+              setSpellContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary font-medium"
+          >
+            Ignore Misspelled Word
+          </button>
+
+          <button
+            type="button"
+            data-testid="spellcheck-ignore-all-btn"
+            onClick={() => {
+              const lower = spellContextMenu.word.toLowerCase()
+              setSessionIgnoredWords((prev) =>
+                prev.includes(lower) ? prev : [...prev, lower]
+              )
+              onAddWordToDictionary?.(spellContextMenu.word)
+              setSpellContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary font-medium"
+          >
+            Ignore All (&ldquo;{spellContextMenu.word}&rdquo;)
+          </button>
+
+          {onChangeSpellcheckLanguage && (
+            <div className="px-3 py-1.5 border-t border-subtle mt-1">
+              <div className="text-[10px] text-muted mb-1">Language:</div>
+              <div className="flex flex-wrap gap-1">
+                {(Object.keys(SPELL_LANGUAGE_LABELS) as SupportedSpellLanguage[]).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => {
+                      onChangeSpellcheckLanguage(lang)
+                      setSpellContextMenu(null)
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                      spellcheckLanguages.includes(lang)
+                        ? 'bg-accent text-white border-accent'
+                        : 'bg-app border-subtle text-muted'
+                    }`}
+                  >
+                    {lang.split('-')[0].toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Floating Selection Toolbar (Positioned directly above/below selected text with full formatting items matching top bar) */}
       {selectionCoords && floatingToolbarEnabled && (
         <div
           data-testid="floating-selection-toolbar"
-          style={{ top: selectionCoords.top, left: selectionCoords.left }}
-          className="absolute z-30 flex items-center gap-1 px-2 py-1 rounded-md bg-panel border border-subtle shadow-md text-xs"
+          style={{
+            position: 'fixed',
+            top: `${selectionCoords.top}px`,
+            left: `${selectionCoords.left}px`
+          }}
+          className="z-40 flex items-center gap-0.5 px-2 py-1 rounded-md bg-panel border border-subtle shadow-lg text-xs"
         >
           <button
             type="button"
+            data-tooltip="Bold"
             data-testid="floating-bold-btn"
             onMouseDown={(e) => {
               e.preventDefault()
               executeFormat('bold')
             }}
-            className="px-1.5 py-0.5 rounded hover:bg-secondary font-bold"
+            className="p-1 rounded hover:bg-secondary text-primary"
           >
-            B
+            <Bold className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
+            data-tooltip="Italic"
             data-testid="floating-italic-btn"
             onMouseDown={(e) => {
               e.preventDefault()
               executeFormat('italic')
             }}
-            className="px-1.5 py-0.5 rounded hover:bg-secondary italic"
+            className="p-1 rounded hover:bg-secondary text-primary"
           >
-            I
+            <Italic className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
+            data-tooltip="Strikethrough"
+            data-testid="floating-strike-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('strikethrough')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Strikethrough className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Inline Code"
+            data-testid="floating-code-btn"
             onMouseDown={(e) => {
               e.preventDefault()
               executeFormat('code')
             }}
-            className="px-1.5 py-0.5 rounded hover:bg-secondary font-mono"
+            className="p-1 rounded hover:bg-secondary text-primary"
           >
-            {'</>'}
+            <Code className="w-3.5 h-3.5" />
+          </button>
+          <span className="h-3.5 w-px bg-subtle mx-0.5" />
+          <button
+            type="button"
+            data-tooltip="Heading 1"
+            data-testid="floating-h1-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('h1')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Heading1 className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
+            data-tooltip="Heading 2"
+            data-testid="floating-h2-btn"
             onMouseDown={(e) => {
               e.preventDefault()
               executeFormat('h2')
             }}
-            className="px-1.5 py-0.5 rounded hover:bg-secondary font-semibold"
+            className="p-1 rounded hover:bg-secondary text-primary"
           >
-            H2
+            <Heading2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Insert Table"
+            data-testid="floating-table-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('table')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <TableIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Task List"
+            data-testid="floating-task-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('task')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Bulleted List"
+            data-testid="floating-bullet-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('bullet')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Insert Link"
+            data-testid="floating-link-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('link')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <LinkIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Insert Image"
+            data-testid="floating-image-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('image')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Visual Diagram Builder"
+            aria-label="Visual Diagram Builder"
+            data-testid="floating-mermaid-builder-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setMermaidBuilderTarget({})
+            }}
+            className="p-1 rounded hover:bg-secondary text-accent"
+          >
+            <Workflow className="w-3.5 h-3.5" />
           </button>
           {aiEnabled && (
             <>
@@ -703,124 +1359,210 @@ export const MarkdownEditorWorkspace: React.FC<{
               </button>
               <button
                 type="button"
+                data-tooltip="Translate"
+                aria-label="Translate"
                 data-testid="floating-ai-translate-sv"
                 onMouseDown={(e) => {
                   e.preventDefault()
                   onTriggerAIQuickAction('translate-en-sv', selectionCoords.selectedText)
                 }}
-                className="px-2 py-0.5 rounded bg-secondary text-primary"
+                className="p-1 rounded bg-secondary text-primary hover:border-accent"
               >
-                SV ↔ EN
+                <Languages className="w-3.5 h-3.5" />
               </button>
             </>
           )}
         </div>
       )}
 
-      {/* Main Editor + Optional Split/Inline Diagram Area */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Editor / Visual Asset Viewer / Split Preview Area */}
+      {isVisualAssetFile && !(isSvgFile && showRawSvgSource) ? (
         <div
-          className={`${
-            editMode === 'split' ? 'w-1/2 border-r border-subtle' : 'w-full'
-          } h-full flex flex-col overflow-y-auto`}
-          onScroll={(e) => {
-            if (editMode === 'split' && previewContainerRef.current) {
-              const target = e.currentTarget
-              const ratio =
-                target.scrollTop / Math.max(1, target.scrollHeight - target.clientHeight)
-              const prev = previewContainerRef.current
-              prev.scrollTop = ratio * (prev.scrollHeight - prev.clientHeight)
-            }
-          }}
+          data-testid="svg-visual-preview-pane"
+          className="flex-1 flex flex-col items-center justify-center p-8 overflow-auto bg-app/50"
         >
-          <div
-            ref={editorContainerRef}
-            data-testid="codemirror-editor-container"
-            className="flex-1 min-h-[280px]"
-          />
-
-          {/* Inline Rich Mode embedded Mermaid & Excalidraw interactive widgets */}
-          {editMode === 'inline' && rendered && (
-            <div className="px-8 pb-8 max-w-4xl mx-auto w-full space-y-3">
-              {rendered.mermaidBlocks.map((block) => (
-                <MermaidDiagramWidget
-                  key={block.index}
-                  code={block.code}
-                  theme={theme}
-                  onUpdateCode={(newMermaidCode) => {
-                    const updatedDoc = content.replace(block.code, newMermaidCode)
-                    onChangeContent(updatedDoc)
-                  }}
-                />
-              ))}
-
-              {rendered.assetReferences
-                .filter((ref) => ref.isExcalidrawSvg)
-                .map((ref) => (
-                  <div
-                    key={ref.normalizedPath}
-                    data-testid="inline-excalidraw-card"
-                    className="p-3 rounded-md border border-subtle bg-secondary flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <span className="font-semibold text-primary">
-                        Embedded Excalidraw Drawing:
-                      </span>{' '}
-                      <code className="font-mono text-muted">{ref.normalizedPath}</code>
-                    </div>
-                    <button
-                      type="button"
-                      data-testid="edit-inline-excalidraw-btn"
-                      onClick={() => onOpenExcalidrawModal(ref.normalizedPath)}
-                      className="px-2.5 py-1 rounded bg-accent text-white font-medium"
-                    >
-                      Edit Drawing (.excalidraw.svg)
-                    </button>
-                  </div>
-                ))}
+          {isSvgFile ? (
+            <div
+              style={{ transform: `scale(${assetZoom / 100})`, transformOrigin: 'center center' }}
+              className="max-w-4xl w-full p-6 rounded-lg border border-subtle bg-white shadow-sm flex items-center justify-center overflow-auto transition-transform"
+              dangerouslySetInnerHTML={{
+                __html: content.trim().startsWith('<')
+                  ? sanitizeSvgContent(content)
+                  : `<img src="${content.startsWith('data:') ? content : assetProtocolUrl}" alt="${relativePath}" class="max-w-full h-auto" />`
+              }}
+            />
+          ) : isRasterImageAsset ? (
+            <div
+              data-testid="raster-asset-preview-pane"
+              className="p-6 rounded-lg border border-subtle bg-panel shadow-sm flex flex-col items-center gap-3 overflow-auto max-w-full"
+            >
+              <img
+                src={content.startsWith('data:') ? content : assetProtocolUrl}
+                alt={relativePath}
+                style={{ width: `${assetZoom}%`, maxWidth: `${assetZoom * 7}px` }}
+                className="rounded border border-subtle object-contain"
+              />
+              <span className="text-xs font-mono text-muted">{relativePath}</span>
+            </div>
+          ) : isPdfAsset ? (
+            <iframe
+              title={relativePath}
+              src={content.startsWith('data:') ? content : assetProtocolUrl}
+              className="w-full h-full rounded-lg border border-subtle bg-white"
+            />
+          ) : (
+            <div className="max-w-4xl w-full">
+              <MermaidDiagramWidget
+                code={content}
+                theme={theme}
+                onOpenVisualBuilder={(currentCode) =>
+                  setMermaidBuilderTarget({ initialCode: currentCode })
+                }
+              />
             </div>
           )}
         </div>
-
-        {/* Split Mode Rendered Preview Pane */}
-        {editMode === 'split' && (
+      ) : (
+        <div ref={splitContainerRef} className="flex-1 flex overflow-hidden relative editor-paper-surface">
           <div
-            ref={previewContainerRef}
-            data-testid="markdown-split-preview"
-            className="w-1/2 h-full overflow-y-auto p-8 bg-panel"
-            onClick={(e) => {
-              const target = e.target as HTMLElement
-              const anchor = target.closest('a')
-              if (anchor) {
-                const wikiAttr = anchor.getAttribute('data-wikilink')
-                if (wikiAttr) {
-                  e.preventDefault()
-                  onNavigateWikiLink(decodeURIComponent(wikiAttr))
-                }
+            ref={editorScrollWrapperRef}
+            style={{ width: editMode === 'split' ? `${splitPercent}%` : '100%' }}
+            className={`h-full flex flex-col overflow-y-auto overflow-x-auto editor-paper-surface ${
+              !wordWrap ? 'cm-editor-infinite-wrap' : ''
+            }`}
+            onScroll={(e) => {
+              if (editMode === 'split' && previewContainerRef.current) {
+                const target = e.currentTarget
+                const ratio =
+                  target.scrollTop / Math.max(1, target.scrollHeight - target.clientHeight)
+                const prev = previewContainerRef.current
+                prev.scrollTop = ratio * (prev.scrollHeight - prev.clientHeight)
               }
             }}
           >
-            {rendered && (
-              <>
-                <div
-                  className="klartext-preview-body"
-                  dangerouslySetInnerHTML={{ __html: rendered.html }}
-                />
-                {rendered.mermaidBlocks.map((block) => (
-                  <MermaidDiagramWidget
-                    key={block.index}
-                    code={block.code}
-                    theme={theme}
-                    onUpdateCode={(newMermaidCode) => {
-                      onChangeContent(content.replace(block.code, newMermaidCode))
-                    }}
-                  />
-                ))}
-              </>
-            )}
+            <div
+              ref={editorContainerRef}
+              data-testid="codemirror-editor-container"
+              className="flex-grow flex-shrink-0 flex flex-col min-h-full min-w-full editor-paper-surface"
+            />
           </div>
-        )}
-      </div>
+
+          {/* Draggable Vertical Resizer Handle in Split Mode */}
+          {editMode === 'split' && (
+            <div
+              data-testid="split-resizer-handle"
+              title="Drag to resize Split View"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                isDraggingSplitRef.current = true
+              }}
+              className="w-1.5 h-full cursor-col-resize bg-subtle hover:bg-accent transition-colors shrink-0 z-20"
+            />
+          )}
+
+          {/* Split Mode Rendered Preview Pane */}
+          {editMode === 'split' && (
+            <div
+              ref={previewContainerRef}
+              data-testid="markdown-split-preview"
+              style={{ width: `${100 - splitPercent}%` }}
+              className="h-full overflow-y-auto p-8 editor-paper-surface"
+              onMouseUp={() => {
+                // Bidirectional selection: selecting text in the right preview selects matching text in left CodeMirror
+                const sel = window.getSelection()?.toString().trim()
+                if (sel && sel.length >= 2 && viewRef.current) {
+                  const docText = viewRef.current.state.doc.toString()
+                  const idx = docText.toLowerCase().indexOf(sel.toLowerCase())
+                  if (idx !== -1) {
+                    viewRef.current.dispatch({
+                      selection: { anchor: idx, head: idx + sel.length },
+                      effects: EditorView.scrollIntoView(idx, { y: 'center' })
+                    })
+                  }
+                }
+              }}
+              onClick={(e) => {
+                const target = e.target as HTMLElement
+                const anchor = target.closest('a')
+                if (anchor) {
+                  e.preventDefault()
+                  const wikiAttr = anchor.getAttribute('data-wikilink')
+                  if (wikiAttr) {
+                    onNavigateLink(decodeURIComponent(wikiAttr), true)
+                    return
+                  }
+                  const href = anchor.getAttribute('href') || ''
+                  if (href.startsWith('#')) {
+                    const slug = href.slice(1).toLowerCase()
+                    const matchHeading = rendered?.headings.find(
+                      (h) => h.id.toLowerCase() === slug || h.text.toLowerCase() === slug
+                    )
+                    if (matchHeading) {
+                      jumpToLine(matchHeading.line)
+                    }
+                    return
+                  }
+                  if (href) {
+                    onNavigateLink(href, false)
+                  }
+                }
+              }}
+            >
+              {rendered && (
+                <>
+                  <div
+                    className="klartext-preview-body"
+                    dangerouslySetInnerHTML={{ __html: rendered.html }}
+                  />
+                  {rendered.mermaidBlocks.map((block) => (
+                    <MermaidDiagramWidget
+                      key={block.index}
+                      code={block.code}
+                      theme={theme}
+                      onUpdateCode={(newMermaidCode) => {
+                        onChangeContent(content.replace(block.code, newMermaidCode))
+                      }}
+                    />
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Visual Mermaid Diagram Builder Modal */}
+      {mermaidBuilderTarget && (
+        <VisualMermaidBuilderModal
+          initialCode={mermaidBuilderTarget.initialCode}
+          theme={theme}
+          onClose={() => setMermaidBuilderTarget(null)}
+          onInsertOrUpdateMermaid={(generatedMermaid) => {
+            const view = viewRef.current
+            const fenced = `\`\`\`mermaid\n${generatedMermaid}\n\`\`\``
+            if (
+              view &&
+              typeof mermaidBuilderTarget.blockFrom === 'number' &&
+              typeof mermaidBuilderTarget.blockTo === 'number'
+            ) {
+              view.dispatch({
+                changes: {
+                  from: mermaidBuilderTarget.blockFrom,
+                  to: mermaidBuilderTarget.blockTo,
+                  insert: fenced
+                }
+              })
+            } else if (view) {
+              const pos = view.state.selection.main.to
+              view.dispatch({
+                changes: { from: pos, to: pos, insert: `\n${fenced}\n` }
+              })
+            } else {
+              onChangeContent(`${content}\n\n${fenced}\n`)
+            }
+          }}
+        />
+      )}
 
       {/* 3-Way Merge Conflict Diff Modal */}
       {threeWayModalHunk !== null && conflictHunks[threeWayModalHunk] && (

@@ -9,6 +9,7 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import rehypeKatex from 'rehype-katex'
 import rehypeStringify from 'rehype-stringify'
 import yaml from 'yaml'
+import { highlightCodeToHtml } from './syntax-highlight'
 
 export interface HeadingItem {
   depth: number
@@ -365,6 +366,21 @@ export async function renderMarkdownDocument(
     .replace(/<(script|iframe|object|embed|applet|meta|link)\b[^>]*\/?>/gi, '')
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/(href|src)\s*=\s*["']\s*(javascript|vbscript|data:text\/html|file):[^"']*["']/gi, '$1="#"')
+
+  // Apply color-coded syntax highlighting to fenced <pre><code> blocks
+  html = html.replace(
+    /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g,
+    (_m, lang, encodedCode) => {
+      const decoded = String(encodedCode)
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#x27;/g, "'")
+        .replace(/&amp;/g, '&')
+      const highlighted = highlightCodeToHtml(decoded, lang || '')
+      return `<pre class="klartext-codeblock"><code class="language-${lang || 'text'}">${highlighted}</code></pre>`
+    }
+  )
 
   const plainWords = body
     .replace(/```[\s\S]*?```/g, ' ')

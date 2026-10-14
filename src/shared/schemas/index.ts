@@ -60,14 +60,33 @@ export const PerRootConfigSchema = z.object({
 })
 export type PerRootConfig = z.infer<typeof PerRootConfigSchema>
 
+export const HeadingStyleOverrideSchema = z.object({
+  fontFamily: z.string().optional(),
+  fontSizeEm: z.number().min(0.8).max(4.0).optional(),
+  color: z.string().optional()
+})
+export type HeadingStyleOverride = z.infer<typeof HeadingStyleOverrideSchema>
+
 export const TypographySettingsSchema = z.object({
   bodyFontFamily: z.string().default('Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'),
+  bodyColor: z.string().default(''),
   monoFontFamily: z.string().default('"JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace'),
+  codeFontSizePx: z.number().min(10).max(24).default(14),
   fontSizePx: z.number().min(12).max(24).default(16),
   lineHeight: z.number().min(1.3).max(2.0).default(1.65),
   maxLineWidthCh: z.number().min(60).max(200).default(82),
   fullWidth: z.boolean().default(false),
-  typewriterScrolling: z.boolean().default(false)
+  typewriterScrolling: z.boolean().default(false),
+  headings: z
+    .object({
+      h1: HeadingStyleOverrideSchema.default({ fontSizeEm: 1.85 }),
+      h2: HeadingStyleOverrideSchema.default({ fontSizeEm: 1.45 }),
+      h3: HeadingStyleOverrideSchema.default({ fontSizeEm: 1.2 }),
+      h4: HeadingStyleOverrideSchema.default({ fontSizeEm: 1.08 }),
+      h5: HeadingStyleOverrideSchema.default({ fontSizeEm: 1.0 }),
+      h6: HeadingStyleOverrideSchema.default({ fontSizeEm: 0.92 })
+    })
+    .default({})
 })
 export type TypographySettings = z.infer<typeof TypographySettingsSchema>
 
@@ -87,15 +106,52 @@ export const AppSettingsSchema = z.object({
   accentColorOverride: z.string().optional(),
   defaultEditMode: EditModeSchema.default('inline'),
   floatingToolbarEnabled: z.boolean().default(true),
+  formattingToolbarVisible: z.boolean().default(false),
+  frontmatterPanelVisible: z.boolean().default(false),
+  showOutlineTab: z.boolean().default(true),
+  showBacklinksTab: z.boolean().default(true),
+  spellcheckEnabled: z.boolean().default(true),
+  spellcheckLanguages: z.array(z.string()).default(['en-US', 'sv-SE']),
+  customDictionaryWords: z.array(z.string()).default([]),
+  showLineNumbers: z.boolean().default(false),
+  wordWrap: z.boolean().default(true),
+  lightPaperInDarkMode: z.boolean().default(false),
   autosaveDelayMs: z.number().min(200).max(60000).default(1000),
   allowRawHtml: z.boolean().default(false),
   autoUpdateCheck: z.boolean().default(false),
   leftSidebarOpen: z.boolean().default(true),
   leftSidebarWidth: z.number().min(160).max(600).default(260),
+  leftSidebarTab: z
+    .enum(['explorer', 'search', 'outline', 'backlinks', 'git'])
+    .default('explorer'),
+  frontmatterSidebarWidth: z.number().min(160).max(600).default(288),
   rightSidebarOpen: z.boolean().default(false),
   rightSidebarWidth: z.number().min(160).max(600).default(320),
+  lastActiveRightPanel: z.enum(['frontmatter', 'ai']).default('frontmatter'),
+  splitViewPercent: z.number().min(20).max(80).default(50),
   statusBarVisible: z.boolean().default(true),
+  sidebarControlBarVisible: z.boolean().default(true),
+  pageTabsPosition: z.enum(['editor', 'top-menu']).default('editor'),
   zenMode: z.boolean().default(false),
+  openTabs: z
+    .array(
+      z.object({
+        rootId: z.string(),
+        relativePath: z.string()
+      })
+    )
+    .default([]),
+  activeTabKey: z.string().nullable().optional(),
+  windowBounds: z
+    .object({
+      x: z.number().optional(),
+      y: z.number().optional(),
+      width: z.number().min(400).default(1360),
+      height: z.number().min(300).default(860),
+      isMaximized: z.boolean().default(false),
+      isFullScreen: z.boolean().default(false)
+    })
+    .optional(),
   typography: TypographySettingsSchema.default({}),
   ai: AISettingsSchema.default({}),
   keybindings: z.record(z.string(), z.string()).default({})

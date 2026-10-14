@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 260" width="100%" height="260">
+  <metadata>
+    <klartext-excalidraw-scene encoding="base64">eyJ0eXBlIjoiZXhjYWxpZHJhdyIsInZlcnNpb24iOjIsInNvdXJjZSI6Imh0dHBzOi8va2xhcnRleHQubG9jYWwiLCJlbGVtZW50cyI6W3siaWQiOiJub2RlLXVpIiwidHlwZSI6InJlY3RhbmdsZSIsIngiOjQwLCJ5Ijo3MCwid2lkdGgiOjE3MCwiaGVpZ2h0Ijo4MCwic3Ryb2tlQ29sb3IiOiIjNDI2Qjc5IiwiYmFja2dyb3VuZENvbG9yIjoiI0VFRjFGMyIsInRleHQiOiJSZW5kZXJlciAoQ002KSJ9LHsiaWQiOiJub2RlLWlwYyIsInR5cGUiOiJlbGxpcHNlIiwieCI6MjQ1LCJ5Ijo3MCwid2lkdGgiOjE1MCwiaGVpZ2h0Ijo4MCwic3Ryb2tlQ29sb3IiOiIjM0I3QTU3IiwiYmFja2dyb3VuZENvbG9yIjoiI0ZGRkZGRiIsInRleHQiOiJab2QgQ29udGV4dEJyaWRnZSJ9LHsiaWQiOiJub2RlLW1haW4iLCJ0eXBlIjoicmVjdGFuZ2xlIiwieCI6NDMwLCJ5Ijo3MCwid2lkdGgiOjE3MCwiaGVpZ2h0Ijo4MCwic3Ryb2tlQ29sb3IiOiIjQjg4NjBCIiwiYmFja2dyb3VuZENvbG9yIjoiI0VFRjFGMyIsInRleHQiOiJNYWluIFByb2Nlc3MgJiBBSSJ9XSwiYXBwU3RhdGUiOnsidmlld0JhY2tncm91bmRDb2xvciI6IiNGRkZGRkYiLCJ0aGVtZSI6ImxpZ2h0In19</klartext-excalidraw-scene>
+  </metadata>
+  <rect width="100%" height="100%" rx="8" fill="#FFFFFF" />
+  <g data-element-id="node-ui">
+    <rect x="40" y="70" width="170" height="80" rx="6" fill="#EEF1F3" stroke="#426B79" stroke-width="2" />
+    <text x="125" y="115" text-anchor="middle" fill="#426B79" font-family="Inter, sans-serif" font-size="13">Renderer (CM6)</text>
+  </g>
+  <g data-element-id="node-ipc">
+    <ellipse cx="320" cy="110" rx="75" ry="40" fill="#FFFFFF" stroke="#3B7A57" stroke-width="2" />
+    <text x="320" y="115" text-anchor="middle" fill="#3B7A57" font-family="Inter, sans-serif" font-size="13">Zod ContextBridge</text>
+  </g>
+  <g data-element-id="node-main">
+    <rect x="430" y="70" width="170" height="80" rx="6" fill="#EEF1F3" stroke="#B8860B" stroke-width="2" />
+    <text x="515" y="115" text-anchor="middle" fill="#B8860B" font-family="Inter, sans-serif" font-size="13">Main Process &amp; AI</text>
+  </g>
+</svg>

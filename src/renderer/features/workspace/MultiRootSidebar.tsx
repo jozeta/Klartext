@@ -1,20 +1,32 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
+  Folder,
   FolderPlus,
+  FolderInput,
   FilePlus,
   Trash2,
   GitBranch,
   RefreshCw,
-  Check,
   AlertTriangle,
   Search as SearchIcon,
   ArrowRightLeft,
   ChevronRight,
   ChevronDown,
-  FileText
+  FileText,
+  Edit3,
+  Copy,
+  ClipboardPaste,
+  Check,
+  Code2,
+  Eye,
+  Columns,
+  Command,
+  List,
+  Link2
 } from 'lucide-react'
 import type {
   BacklinkItem,
+  EditMode,
   FileTreeNode,
   GitRepoStatus,
   SearchFileResult,
@@ -27,6 +39,14 @@ export type LeftSidebarTab = 'explorer' | 'search' | 'outline' | 'backlinks' | '
 export const MultiRootSidebar: React.FC<{
   activeTab: LeftSidebarTab
   onSelectTab: (tab: LeftSidebarTab) => void
+  onCollapseSidebar?: () => void
+  showOutlineTab?: boolean
+  showBacklinksTab?: boolean
+  sidebarControlBarVisible?: boolean
+  editMode?: EditMode
+  onChangeEditMode?: (mode: EditMode) => void
+  onOpenCommandPalette?: () => void
+  onOpenQuickSwitcher?: () => void
   roots: WorkspaceRoot[]
   treesByRoot: Record<string, FileTreeNode[]>
   gitStatuses: Record<string, GitRepoStatus>
@@ -34,10 +54,17 @@ export const MultiRootSidebar: React.FC<{
   headings: HeadingItem[]
   backlinks: BacklinkItem[]
   onOpenDocument: (rootId: string, relativePath: string) => void
+  onNavigateToLine: (rootId: string, relativePath: string, lineNumber: number) => void
   onAddRootDialog: () => void
   onAddRootByPath: (folderPath: string, name?: string) => void
   onRemoveRoot: (rootId: string) => void
-  onCreateFileInRoot: (rootId: string, relativePath: string) => void
+  onCreateFileInRoot: (rootId: string, relativePath: string) => Promise<void> | void
+  onDeleteFileInRoot?: (rootId: string, relativePath: string) => Promise<void> | void
+  onRenameFileInRoot?: (
+    rootId: string,
+    oldRelativePath: string,
+    newRelativePath: string
+  ) => Promise<void> | void
   onMoveFileCrossRoot: (
     sourceRootId: string,
     sourceRelativePath: string,
@@ -55,6 +82,13 @@ export const MultiRootSidebar: React.FC<{
 }> = ({
   activeTab,
   onSelectTab,
+  showOutlineTab = true,
+  showBacklinksTab = true,
+  sidebarControlBarVisible = true,
+  editMode = 'inline',
+  onChangeEditMode,
+  onOpenCommandPalette,
+  onOpenQuickSwitcher,
   roots,
   treesByRoot,
   gitStatuses,
@@ -62,10 +96,13 @@ export const MultiRootSidebar: React.FC<{
   headings,
   backlinks,
   onOpenDocument,
+  onNavigateToLine,
   onAddRootDialog,
   onAddRootByPath,
   onRemoveRoot,
   onCreateFileInRoot,
+  onDeleteFileInRoot,
+  onRenameFileInRoot,
   onMoveFileCrossRoot,
   onSyncAllRepos,
   onRefreshGit,
@@ -74,12 +111,35 @@ export const MultiRootSidebar: React.FC<{
   onAbortMergeRepo
 }) => {
   const [collapsedRoots, setCollapsedRoots] = useState<Record<string, boolean>>({})
-  const [newFileRootId, setNewFileRootId] = useState<string | null>(null)
-  const [newFileName, setNewFileName] = useState('')
+  const [collapsedDirs, setCollapsedDirs] = useState<Record<string, boolean>>({})
   const [customRootPath, setCustomRootPath] = useState('')
   const [showAddPathInput, setShowAddPathInput] = useState(false)
 
-  // Search state
+  // Inline file rename state (triggered immediately when creating Untitled.md or double-clicking)
+  const [renamingItem, setRenamingItem] = useState<{
+    rootId: string
+    relativePath: string
+    draftName: string
+  } | null>(null)
+  const renameInputRef = useRef<HTMLInputElement | null>(null)
+
+  // File Explorer Right-Click Context Menu & Copy/Paste Clipboard
+  const [fileContextMenu, setFileContextMenu] = useState<{
+    x: number
+    y: number
+    rootId: string
+    relativePath: string
+    name: string
+    isDirectory: boolean
+  } | null>(null)
+
+  const [copiedFileClipboard, setCopiedFileClipboard] = useState<{
+    rootId: string
+    relativePath: string
+    name: string
+  } | null>(null)
+
+  // Search state (Instant search-as-you-type)
   const [searchQuery, setSearchQuery] = useState('')
   const [replaceText, setReplaceText] = useState('')
   const [selectedSearchRoot, setSelectedSearchRoot] = useState<string>('ALL')
@@ -90,14 +150,32 @@ export const MultiRootSidebar: React.FC<{
   // Git commit messages per root
   const [commitMessages, setCommitMessages] = useState<Record<string, string>>({})
 
-  const handleRunSearch = async () => {
-    if (!searchQuery.trim()) {
+  useEffect(() => {
+    const closeMenu = () => setFileContextMenu(null)
+    window.addEventListener('click', closeMenu)
+    return () => window.removeEventListener('click', closeMenu)
+  }, [])
+
+  useEffect(() => {
+    if (renamingItem && renameInputRef.current) {
+      renameInputRef.current.focus()
+      const dotIdx = renamingItem.draftName.lastIndexOf('.')
+      if (dotIdx > 0) {
+        renameInputRef.current.setSelectionRange(0, dotIdx)
+      } else {
+        renameInputRef.current.select()
+      }
+    }
+  }, [renamingItem?.rootId, renamingItem?.relativePath])
+
+  const runSearchQuery = async (q: string, rootScope: string) => {
+    if (!q.trim()) {
       setSearchResults([])
       return
     }
     const res = await window.klartext.searchWorkspace({
-      query: searchQuery,
-      rootIds: selectedSearchRoot === 'ALL' ? undefined : [selectedSearchRoot]
+      query: q,
+      rootIds: rootScope === 'ALL' ? undefined : [rootScope]
     })
     setSearchResults(res)
     const initialChecks: Record<string, boolean> = {}
@@ -106,6 +184,14 @@ export const MultiRootSidebar: React.FC<{
     }
     setCheckedReplaceFiles(initialChecks)
   }
+
+  // Live instant search-as-you-type whenever searchQuery or selectedSearchRoot changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      runSearchQuery(searchQuery, selectedSearchRoot)
+    }, 60)
+    return () => clearTimeout(timer)
+  }, [searchQuery, selectedSearchRoot])
 
   const handleExecuteReplace = async () => {
     const confirmedFiles = searchResults
@@ -124,25 +210,134 @@ export const MultiRootSidebar: React.FC<{
     setReplaceSummary(
       `Replaced ${res.totalReplacements} occurrence(s) across ${res.replacedFilesCount} file(s).`
     )
-    await handleRunSearch()
+    await runSearchQuery(searchQuery, selectedSearchRoot)
+  }
+
+  const commitInlineRename = async () => {
+    if (!renamingItem) return
+    const { rootId, relativePath, draftName } = renamingItem
+    setRenamingItem(null)
+    const cleanDraft = draftName.trim()
+    if (!cleanDraft) return
+    const finalFileName = cleanDraft.includes('.') ? cleanDraft : `${cleanDraft}.md`
+    const dirParts = relativePath.split('/')
+    dirParts.pop()
+    const newRelPath = dirParts.length > 0 ? `${dirParts.join('/')}/${finalFileName}` : finalFileName
+    if (newRelPath === relativePath) {
+      onOpenDocument(rootId, relativePath)
+      return
+    }
+    if (onRenameFileInRoot) {
+      await onRenameFileInRoot(rootId, relativePath, newRelPath)
+    }
+  }
+
+  const handleCreateUntitledFile = async (rootId: string, parentDir = '') => {
+    const existingNodes = treesByRoot[rootId] || []
+    const existingNames = new Set(existingNodes.map((n) => n.name.toLowerCase()))
+    let candidateName = 'Untitled.md'
+    let counter = 1
+    while (existingNames.has(candidateName.toLowerCase())) {
+      candidateName = `Untitled-${counter}.md`
+      counter++
+    }
+    const candidateRel = parentDir ? `${parentDir}/${candidateName}` : candidateName
+    await onCreateFileInRoot(rootId, candidateRel)
+    setCollapsedRoots((p) => ({ ...p, [rootId]: false }))
+    setRenamingItem({
+      rootId,
+      relativePath: candidateRel,
+      draftName: candidateName
+    })
+  }
+
+  const handleCreateNewSubfolder = async (rootId: string) => {
+    const existingNodes = treesByRoot[rootId] || []
+    const existingNames = new Set(existingNodes.map((n) => n.name.toLowerCase()))
+    let folderName = 'New-Folder'
+    let counter = 1
+    while (existingNames.has(folderName.toLowerCase())) {
+      folderName = `New-Folder-${counter}`
+      counter++
+    }
+    const newDocRel = `${folderName}/Untitled.md`
+    await onCreateFileInRoot(rootId, newDocRel)
+    setCollapsedRoots((p) => ({ ...p, [rootId]: false }))
+    setRenamingItem({
+      rootId,
+      relativePath: newDocRel,
+      draftName: 'Untitled.md'
+    })
+  }
+
+  const handlePasteCopiedFile = async (targetRootId: string, targetDir = '') => {
+    if (!copiedFileClipboard) return
+    try {
+      const sourceDoc = await window.klartext.readDocument(
+        copiedFileClipboard.rootId,
+        copiedFileClipboard.relativePath
+      )
+      const dotIdx = copiedFileClipboard.name.lastIndexOf('.')
+      const base =
+        dotIdx > 0 ? copiedFileClipboard.name.slice(0, dotIdx) : copiedFileClipboard.name
+      const ext = dotIdx > 0 ? copiedFileClipboard.name.slice(dotIdx) : '.md'
+      const pastedName = `${base}-copy${ext}`
+      const pastedRelPath = targetDir ? `${targetDir}/${pastedName}` : pastedName
+      await onCreateFileInRoot(targetRootId, pastedRelPath)
+      await window.klartext.writeDocument(targetRootId, pastedRelPath, sourceDoc.content)
+      onOpenDocument(targetRootId, pastedRelPath)
+    } catch {
+      // Ignore if binary or unreadable
+    }
+  }
+
+  const handleDeleteTreeFile = async (rootId: string, relativePath: string) => {
+    if (onDeleteFileInRoot) {
+      await onDeleteFileInRoot(rootId, relativePath)
+    } else {
+      await window.klartext.deleteDocument(rootId, relativePath)
+    }
   }
 
   const renderTreeNodes = (rootId: string, nodes: FileTreeNode[]) => {
     return nodes.map((node) => {
       if (node.isDirectory) {
+        const dirKey = `${rootId}/${node.relativePath}`
+        const isDirCollapsed = Boolean(collapsedDirs[dirKey])
         return (
-          <div key={`${rootId}/${node.relativePath}`} className="pl-2.5">
-            <div className="flex items-center gap-1.5 py-1 text-xs font-medium text-muted">
-              <ChevronDown className="w-3 h-3" />
+          <div key={dirKey} className="pl-2.5">
+            <div
+              onClick={() => setCollapsedDirs((p) => ({ ...p, [dirKey]: !p[dirKey] }))}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setFileContextMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  rootId,
+                  relativePath: node.relativePath,
+                  name: node.name,
+                  isDirectory: true
+                })
+              }}
+              className="flex items-center gap-1.5 py-1 text-xs font-medium text-muted hover:text-primary cursor-pointer"
+            >
+              {isDirCollapsed ? (
+                <ChevronRight className="w-3 h-3" />
+              ) : (
+                <ChevronDown className="w-3 h-3" />
+              )}
               <span>{node.name}</span>
             </div>
-            {node.children && renderTreeNodes(rootId, node.children)}
+            {!isDirCollapsed && node.children && renderTreeNodes(rootId, node.children)}
           </div>
         )
       }
 
       const isActive =
         activeDoc?.rootId === rootId && activeDoc?.relativePath === node.relativePath
+      const isRenaming =
+        renamingItem?.rootId === rootId && renamingItem?.relativePath === node.relativePath
       const otherRoots = roots.filter((r) => r.id !== rootId)
 
       return (
@@ -154,13 +349,60 @@ export const MultiRootSidebar: React.FC<{
               ? 'bg-secondary text-accent font-medium'
               : 'text-primary hover:bg-secondary/60'
           }`}
-          onClick={() => onOpenDocument(rootId, node.relativePath)}
+          onClick={() => {
+            if (!isRenaming) onOpenDocument(rootId, node.relativePath)
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setRenamingItem({
+              rootId,
+              relativePath: node.relativePath,
+              draftName: node.name
+            })
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setFileContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              rootId,
+              relativePath: node.relativePath,
+              name: node.name,
+              isDirectory: false
+            })
+          }}
         >
-          <div className="flex items-center gap-1.5 truncate">
+          <div className="flex items-center gap-1.5 truncate flex-1">
             <FileText className="w-3.5 h-3.5 shrink-0 text-muted" />
-            <span className="truncate">{node.name}</span>
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                type="text"
+                data-testid={`inline-rename-input-${rootId}`}
+                value={renamingItem.draftName}
+                onChange={(e) =>
+                  setRenamingItem((prev) =>
+                    prev ? { ...prev, draftName: e.target.value } : null
+                  )
+                }
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    commitInlineRename()
+                  } else if (e.key === 'Escape') {
+                    setRenamingItem(null)
+                  }
+                }}
+                onBlur={() => commitInlineRename()}
+                className="flex-1 px-1.5 py-0.5 rounded bg-panel border border-accent text-primary text-xs focus:outline-none"
+              />
+            ) : (
+              <span className="truncate">{node.name}</span>
+            )}
           </div>
-          {otherRoots.length > 0 && (
+          {!isRenaming && otherRoots.length > 0 && (
             <button
               type="button"
               title={`Move ${node.name} to ${otherRoots[0].name} (with assets)`}
@@ -180,38 +422,51 @@ export const MultiRootSidebar: React.FC<{
     })
   }
 
+  const visibleTabs = (
+    [
+      {
+        id: 'explorer',
+        label: 'Files',
+        icon: <Folder className="w-3.5 h-3.5" />,
+        visible: true
+      },
+      {
+        id: 'search',
+        label: 'Search',
+        icon: <SearchIcon className="w-3.5 h-3.5" />,
+        visible: true
+      },
+      {
+        id: 'outline',
+        label: 'Outline',
+        icon: <List className="w-3.5 h-3.5" />,
+        visible: showOutlineTab
+      },
+      {
+        id: 'backlinks',
+        label: 'Links',
+        icon: <Link2 className="w-3.5 h-3.5" />,
+        visible: showBacklinksTab
+      },
+      {
+        id: 'git',
+        label: 'Git',
+        icon: <GitBranch className="w-3.5 h-3.5" />,
+        visible: true
+      }
+    ] as Array<{
+      id: LeftSidebarTab
+      label: string
+      icon: React.ReactNode
+      visible: boolean
+    }>
+  ).filter((t) => t.visible)
+
   return (
     <aside
       data-testid="left-sidebar"
-      className="h-full flex flex-col bg-app border-r border-subtle select-none overflow-hidden"
+      className="h-full flex flex-col bg-app border-r border-subtle select-none overflow-hidden relative"
     >
-      {/* Sidebar Mode Switcher Strip */}
-      <div className="flex items-center justify-between px-2 py-1.5 border-b border-subtle bg-panel text-xs">
-        {(
-          [
-            { id: 'explorer', label: 'Files' },
-            { id: 'search', label: 'Search' },
-            { id: 'outline', label: 'Outline' },
-            { id: 'backlinks', label: 'Links' },
-            { id: 'git', label: 'Git' }
-          ] as Array<{ id: LeftSidebarTab; label: string }>
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            data-testid={`sidebar-tab-${tab.id}`}
-            onClick={() => onSelectTab(tab.id)}
-            className={`px-2 py-1 rounded font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-secondary text-accent'
-                : 'text-muted hover:text-primary'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {/* TAB 1: MULTI-ROOT FILE EXPLORER */}
       {activeTab === 'explorer' && (
         <div className="flex-1 flex flex-col overflow-y-auto p-2 space-y-2">
@@ -222,19 +477,19 @@ export const MultiRootSidebar: React.FC<{
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                title="Add Folder by Path"
+                title="Mount Root Folder by Path"
                 data-testid="toggle-add-root-path-btn"
                 onClick={() => setShowAddPathInput((v) => !v)}
-                className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[11px] hover:border-accent"
+                className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
               >
-                + Path
+                <FolderInput className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 title="Open Folder Dialog"
                 data-testid="add-folder-dialog-btn"
                 onClick={onAddRootDialog}
-                className="p-1 rounded hover:bg-secondary text-primary"
+                className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
               </button>
@@ -311,15 +566,21 @@ export const MultiRootSidebar: React.FC<{
                     </span>
                     <button
                       type="button"
-                      title="New Markdown File in Root"
+                      title="Create New File (Untitled.md)"
                       data-testid={`new-file-btn-${root.id}`}
-                      onClick={() => {
-                        setNewFileRootId(root.id)
-                        setNewFileName('Untitled.md')
-                      }}
+                      onClick={() => handleCreateUntitledFile(root.id)}
                       className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
                     >
                       <FilePlus className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Create New Subfolder"
+                      data-testid={`new-folder-btn-${root.id}`}
+                      onClick={() => handleCreateNewSubfolder(root.id)}
+                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
                     </button>
                     {roots.length > 1 && (
                       <button
@@ -334,34 +595,6 @@ export const MultiRootSidebar: React.FC<{
                     )}
                   </div>
                 </div>
-
-                {newFileRootId === root.id && (
-                  <div className="p-2 bg-app border-b border-subtle flex items-center gap-1 text-xs">
-                    <input
-                      type="text"
-                      data-testid={`new-file-input-${root.id}`}
-                      value={newFileName}
-                      onChange={(e) => setNewFileName(e.target.value)}
-                      className="flex-1 px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
-                    />
-                    <button
-                      type="button"
-                      data-testid={`confirm-new-file-btn-${root.id}`}
-                      onClick={() => {
-                        if (newFileName.trim()) {
-                          const rel = newFileName.endsWith('.md')
-                            ? newFileName.trim()
-                            : `${newFileName.trim()}.md`
-                          onCreateFileInRoot(root.id, rel)
-                          setNewFileRootId(null)
-                        }
-                      }}
-                      className="px-2 py-0.5 rounded bg-accent text-white"
-                    >
-                      Create
-                    </button>
-                  </div>
-                )}
 
                 {!isCollapsed && (
                   <div className="p-1.5 space-y-0.5">
@@ -378,7 +611,108 @@ export const MultiRootSidebar: React.FC<{
         </div>
       )}
 
-      {/* TAB 2: MULTI-ROOT SEARCH & REPLACE */}
+      {/* Right-Click File Context Menu (Rename, Copy, Paste, Delete) */}
+      {fileContextMenu && (
+        <div
+          data-testid="file-tree-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${Math.min(window.innerWidth - 180, fileContextMenu.x)}px`,
+            top: `${Math.min(window.innerHeight - 160, fileContextMenu.y)}px`
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="z-50 w-44 rounded-md bg-panel border border-subtle shadow-xl py-1 text-xs"
+        >
+          <div className="px-2.5 py-1 border-b border-subtle text-[10px] font-mono text-muted truncate">
+            {fileContextMenu.name}
+          </div>
+          {!fileContextMenu.isDirectory && (
+            <button
+              type="button"
+              data-testid="context-menu-rename"
+              onClick={() => {
+                setRenamingItem({
+                  rootId: fileContextMenu.rootId,
+                  relativePath: fileContextMenu.relativePath,
+                  draftName: fileContextMenu.name
+                })
+                setFileContextMenu(null)
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-muted" />
+              <span>Rename</span>
+            </button>
+          )}
+          {!fileContextMenu.isDirectory && (
+            <button
+              type="button"
+              data-testid="context-menu-copy"
+              onClick={() => {
+                setCopiedFileClipboard({
+                  rootId: fileContextMenu.rootId,
+                  relativePath: fileContextMenu.relativePath,
+                  name: fileContextMenu.name
+                })
+                setFileContextMenu(null)
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+            >
+              <Copy className="w-3.5 h-3.5 text-muted" />
+              <span>Copy</span>
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid="context-menu-paste"
+            disabled={!copiedFileClipboard}
+            onClick={() => {
+              const targetDir = fileContextMenu.isDirectory
+                ? fileContextMenu.relativePath
+                : fileContextMenu.relativePath.includes('/')
+                  ? fileContextMenu.relativePath.slice(
+                      0,
+                      fileContextMenu.relativePath.lastIndexOf('/')
+                    )
+                  : ''
+              handlePasteCopiedFile(fileContextMenu.rootId, targetDir)
+              setFileContextMenu(null)
+            }}
+            className={`w-full text-left px-3 py-1.5 flex items-center gap-2 ${
+              copiedFileClipboard
+                ? 'hover:bg-secondary text-primary'
+                : 'text-muted/50 cursor-not-allowed'
+            }`}
+          >
+            <ClipboardPaste className="w-3.5 h-3.5 text-muted" />
+            <span>
+              Paste{copiedFileClipboard ? ` (${copiedFileClipboard.name})` : ''}
+            </span>
+          </button>
+          {!fileContextMenu.isDirectory && (
+            <>
+              <div className="my-1 border-t border-subtle" />
+              <button
+                type="button"
+                data-testid="context-menu-delete"
+                onClick={() => {
+                  handleDeleteTreeFile(
+                    fileContextMenu.rootId,
+                    fileContextMenu.relativePath
+                  )
+                  setFileContextMenu(null)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-muted" />
+                <span>Delete</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: MULTI-ROOT INSTANT SEARCH & REPLACE (Search-As-You-Type, no manual search button) */}
       {activeTab === 'search' && (
         <div className="flex-1 flex flex-col overflow-y-auto p-3 space-y-2.5 text-xs">
           <div className="space-y-1.5">
@@ -401,24 +735,16 @@ export const MultiRootSidebar: React.FC<{
           </div>
 
           <div className="space-y-1.5">
-            <div className="flex gap-1">
+            <div className="relative flex items-center">
+              <SearchIcon className="w-3.5 h-3.5 text-muted absolute left-2.5 pointer-events-none" />
               <input
                 type="text"
                 data-testid="global-search-input"
-                placeholder="Search across roots..."
+                placeholder="Type to search instantly across roots..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRunSearch()}
-                className="flex-1 px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                className="w-full pl-8 pr-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
               />
-              <button
-                type="button"
-                data-testid="global-search-run-btn"
-                onClick={handleRunSearch}
-                className="px-2.5 py-1 rounded bg-accent text-white font-medium"
-              >
-                <SearchIcon className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             <div className="flex gap-1">
@@ -476,18 +802,28 @@ export const MultiRootSidebar: React.FC<{
                       </span>
                       <span
                         className="truncate cursor-pointer hover:underline"
-                        onClick={() => onOpenDocument(fileHit.rootId, fileHit.relativePath)}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          onNavigateToLine(
+                            fileHit.rootId,
+                            fileHit.relativePath,
+                            fileHit.matches[0]?.lineNumber || 1
+                          )
+                        }}
                       >
                         {fileHit.relativePath}
                       </span>
                     </label>
                     <span className="text-[10px] text-muted">{fileHit.matches.length}</span>
                   </div>
-                  {fileHit.matches.slice(0, 3).map((m, idx) => (
+                  {fileHit.matches.slice(0, 6).map((m, idx) => (
                     <div
                       key={idx}
-                      onClick={() => onOpenDocument(fileHit.rootId, fileHit.relativePath)}
-                      className="pl-4 text-[11px] font-mono text-muted truncate cursor-pointer hover:text-primary"
+                      data-testid={`search-match-line-${fileHit.rootId}-${fileHit.relativePath}-${m.lineNumber}`}
+                      onClick={() =>
+                        onNavigateToLine(fileHit.rootId, fileHit.relativePath, m.lineNumber)
+                      }
+                      className="pl-4 py-0.5 rounded text-[11px] font-mono text-muted truncate cursor-pointer hover:bg-secondary hover:text-primary"
                     >
                       L{m.lineNumber}: {m.lineText}
                     </div>
@@ -507,12 +843,21 @@ export const MultiRootSidebar: React.FC<{
           </div>
           {headings.map((h) => (
             <div
-              key={h.id}
+              key={`${h.id}-${h.line}`}
+              data-testid={`outline-heading-line-${h.line}`}
+              onClick={() => {
+                if (activeDoc) {
+                  onNavigateToLine(activeDoc.rootId, activeDoc.relativePath, h.line)
+                }
+              }}
               style={{ paddingLeft: `${(h.depth - 1) * 10}px` }}
-              className="py-1 px-2 rounded hover:bg-secondary cursor-pointer text-primary truncate"
+              className="py-1 px-2 rounded hover:bg-secondary cursor-pointer text-primary truncate flex items-center justify-between"
             >
-              <span className="text-muted mr-1.5 font-mono text-[10px]">H{h.depth}</span>
-              {h.text}
+              <div className="truncate">
+                <span className="text-muted mr-1.5 font-mono text-[10px]">H{h.depth}</span>
+                <span>{h.text}</span>
+              </div>
+              <span className="text-[10px] font-mono text-muted ml-2">L{h.line}</span>
             </div>
           ))}
         </div>
@@ -530,7 +875,9 @@ export const MultiRootSidebar: React.FC<{
             backlinks.map((bl, idx) => (
               <div
                 key={idx}
-                onClick={() => onOpenDocument(bl.sourceRootId, bl.sourceRelativePath)}
+                onClick={() =>
+                  onNavigateToLine(bl.sourceRootId, bl.sourceRelativePath, bl.lineNumber)
+                }
                 className="p-2 rounded bg-panel border border-subtle cursor-pointer hover:border-accent space-y-1"
               >
                 <div className="flex items-center justify-between">
@@ -713,6 +1060,117 @@ export const MultiRootSidebar: React.FC<{
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Bottom Left-Window Control Strip (Sidebar Tab Icons on the left + Source, Inline Rich, Split, Command Palette, Quick Open on the right — positioned directly above Root: and Local Workspace) */}
+      {sidebarControlBarVisible !== false && (
+        <div
+          data-testid="left-sidebar-bottom-controls"
+          className="px-1.5 py-1.5 bg-panel border-t border-subtle flex items-center justify-between gap-1 shrink-0"
+        >
+          {/* Left side: Sidebar Tab Icons (Files, Search, Outline, Links, Git) */}
+          <div
+            className="flex items-center bg-secondary p-0.5 rounded border border-subtle gap-0.5"
+            data-testid="sidebar-tab-switcher"
+          >
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                data-tooltip={tab.label}
+                data-tooltip-pos="top"
+                aria-label={tab.label}
+                data-testid={`sidebar-tab-${tab.id}`}
+                onClick={() => onSelectTab(tab.id)}
+                className={`p-1 rounded transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-panel text-accent shadow-sm'
+                    : 'text-muted hover:text-primary'
+                }`}
+              >
+                {tab.icon}
+              </button>
+            ))}
+          </div>
+
+          {/* Right side: Edit Mode Switcher (Code, Inline Rich, Split) + Command Palette & Quick Open */}
+          <div className="flex items-center gap-1">
+            <div
+              className="flex items-center bg-secondary p-0.5 rounded border border-subtle gap-0.5"
+              data-testid="edit-mode-switcher"
+            >
+              <button
+                type="button"
+                data-tooltip="Source Mode (⌘1)"
+                data-tooltip-pos="top"
+                aria-label="Source Mode"
+                data-testid="mode-btn-source"
+                onClick={() => onChangeEditMode?.('source')}
+                className={`p-1 rounded transition-colors ${
+                  editMode === 'source'
+                    ? 'bg-panel text-accent shadow-sm'
+                    : 'text-muted hover:text-primary'
+                }`}
+              >
+                <Code2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Inline Rich Mode (⌘2)"
+                data-tooltip-pos="top"
+                aria-label="Inline Rich Mode"
+                data-testid="mode-btn-inline"
+                onClick={() => onChangeEditMode?.('inline')}
+                className={`p-1 rounded transition-colors ${
+                  editMode === 'inline'
+                    ? 'bg-panel text-accent shadow-sm'
+                    : 'text-muted hover:text-primary'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Split View Mode (⌘3)"
+                data-tooltip-pos="top"
+                aria-label="Split View Mode"
+                data-testid="mode-btn-split"
+                onClick={() => onChangeEditMode?.('split')}
+                className={`p-1 rounded transition-colors ${
+                  editMode === 'split'
+                    ? 'bg-panel text-accent shadow-sm'
+                    : 'text-muted hover:text-primary'
+                }`}
+              >
+                <Columns className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              data-tooltip="Command Palette (⌘K)"
+              data-tooltip-pos="top"
+              aria-label="Command Palette"
+              data-testid="open-command-palette-btn"
+              onClick={() => onOpenCommandPalette?.()}
+              className="p-1 rounded bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
+            >
+              <Command className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              data-tooltip="Quick Open File (⌘P)"
+              data-tooltip-pos="top"
+              aria-label="Quick Open"
+              data-testid="open-quick-switcher-btn"
+              onClick={() => onOpenQuickSwitcher?.()}
+              className="p-1 rounded bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
+            >
+              <SearchIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
     </aside>

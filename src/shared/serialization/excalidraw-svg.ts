@@ -1,6 +1,6 @@
 export interface ExcalidrawElementItem {
   id: string
-  type: 'rectangle' | 'ellipse' | 'arrow' | 'text'
+  type: 'rectangle' | 'ellipse' | 'diamond' | 'arrow' | 'text'
   x: number
   y: number
   width: number
@@ -99,27 +99,35 @@ export function serializeExcalidrawSvg(scene: ExcalidrawSceneData): string {
 
   const shapesSvg = scene.elements
     .map((el) => {
+      const cx = el.x + el.width / 2
+      const cy = el.y + el.height / 2
       if (el.type === 'ellipse') {
-        const cx = el.x + el.width / 2
-        const cy = el.y + el.height / 2
         return `<g data-element-id="${escapeXml(el.id)}">
           <ellipse cx="${cx}" cy="${cy}" rx="${Math.abs(el.width / 2)}" ry="${Math.abs(el.height / 2)}" fill="${escapeXml(el.backgroundColor)}" stroke="${escapeXml(el.strokeColor)}" stroke-width="2" />
           ${el.text ? `<text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="${escapeXml(el.strokeColor)}" font-family="Inter, sans-serif" font-size="13">${escapeXml(el.text)}</text>` : ''}
         </g>`
       }
-      if (el.type === 'arrow') {
+      if (el.type === 'diamond') {
+        const pts = `${cx},${el.y} ${el.x + el.width},${cy} ${cx},${el.y + el.height} ${el.x},${cy}`
         return `<g data-element-id="${escapeXml(el.id)}">
-          <line x1="${el.x}" y1="${el.y}" x2="${el.x + el.width}" y2="${el.y + el.height}" stroke="${escapeXml(el.strokeColor)}" stroke-width="2" />
+          <polygon points="${pts}" fill="${escapeXml(el.backgroundColor)}" stroke="${escapeXml(el.strokeColor)}" stroke-width="2" />
+          ${el.text ? `<text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="${escapeXml(el.strokeColor)}" font-family="Inter, sans-serif" font-size="13">${escapeXml(el.text)}</text>` : ''}
+        </g>`
+      }
+      if (el.type === 'arrow') {
+        const x2 = el.x + el.width
+        const y2 = el.y + el.height
+        return `<g data-element-id="${escapeXml(el.id)}">
+          <line x1="${el.x}" y1="${el.y}" x2="${x2}" y2="${y2}" stroke="${escapeXml(el.strokeColor)}" stroke-width="2.5" marker-end="url(#klartext-arrow)" />
+          ${el.text ? `<text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="${escapeXml(el.strokeColor)}" font-family="Inter, sans-serif" font-size="12">${escapeXml(el.text)}</text>` : ''}
         </g>`
       }
       if (el.type === 'text') {
         return `<g data-element-id="${escapeXml(el.id)}">
-          <text x="${el.x}" y="${el.y + 16}" fill="${escapeXml(el.strokeColor)}" font-family="Inter, sans-serif" font-size="14">${escapeXml(el.text || '')}</text>
+          <text x="${el.x}" y="${el.y + 18}" fill="${escapeXml(el.strokeColor)}" font-family="Inter, sans-serif" font-size="15" font-weight="500">${escapeXml(el.text || '')}</text>
         </g>`
       }
       // rectangle default
-      const cx = el.x + el.width / 2
-      const cy = el.y + el.height / 2
       return `<g data-element-id="${escapeXml(el.id)}">
         <rect x="${el.x}" y="${el.y}" width="${Math.max(10, el.width)}" height="${Math.max(10, el.height)}" rx="6" fill="${escapeXml(el.backgroundColor)}" stroke="${escapeXml(el.strokeColor)}" stroke-width="2" />
         ${el.text ? `<text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="${escapeXml(el.strokeColor)}" font-family="Inter, sans-serif" font-size="13">${escapeXml(el.text)}</text>` : ''}
@@ -128,7 +136,12 @@ export function serializeExcalidrawSvg(scene: ExcalidrawSceneData): string {
     .join('\n  ')
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 260" width="100%" height="260">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" width="100%" height="360">
+  <defs>
+    <marker id="klartext-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#426B79" />
+    </marker>
+  </defs>
   <metadata>
     <${EXCALIDRAW_METADATA_TAG} encoding="base64">${encodedBase64}</${EXCALIDRAW_METADATA_TAG}>
   </metadata>

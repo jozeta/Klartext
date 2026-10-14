@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 280" width="760" height="280">
+  <rect width="760" height="280" rx="12" fill="#EEF1F3" stroke="#D5DCE2" stroke-width="2" />
+  <rect x="24" y="24" width="180" height="232" rx="8" fill="#FFFFFF" stroke="#D5DCE2" stroke-width="1.5" />
+  <rect x="40" y="44" width="110" height="12" rx="4" fill="#426B79" />
+  <rect x="40" y="70" width="140" height="8" rx="4" fill="#9AA6B2" />
+  <rect x="40" y="88" width="125" height="8" rx="4" fill="#9AA6B2" />
+  <rect x="40" y="106" width="148" height="8" rx="4" fill="#3B7A57" />
+  <rect x="40" y="124" width="115" height="8" rx="4" fill="#9AA6B2" />
+  <rect x="220" y="24" width="320" height="232" rx="8" fill="#FFFFFF" stroke="#D5DCE2" stroke-width="1.5" />
+  <text x="244" y="60" font-family="Inter, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#20272D">Technical Nordic Design</text>
+  <text x="244" y="88" font-family="Inter, -apple-system, sans-serif" font-size="12" fill="#5C6873">Local-first Markdown, KaTeX, Mermaid &amp; Git</text>
+  <rect x="244" y="108" width="272" height="56" rx="6" fill="#F5F6F7" stroke="#426B79" stroke-width="1.5" />
+  <text x="260" y="132" font-family="JetBrains Mono, monospace" font-size="11" fill="#426B79">flowchart LR</text>
+  <text x="260" y="150" font-family="JetBrains Mono, monospace" font-size="11" fill="#3B7A57">  Editor --&gt; LivePreview</text>
+  <rect x="244" y="180" width="128" height="52" rx="6" fill="#EEF5F0" stroke="#3B7A57" stroke-width="1.5" />
+  <text x="308" y="210" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="#3B7A57">Multi-Root Ready</text>
+  <rect x="388" y="180" width="128" height="52" rx="6" fill="#EEF3F6" stroke="#426B79" stroke-width="1.5" />
+  <text x="452" y="210" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="#426B79">Local AI (SV/EN)</text>
+  <rect x="556" y="24" width="180" height="232" rx="8" fill="#FFFFFF" stroke="#D5DCE2" stroke-width="1.5" />
+  <text x="574" y="54" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#20272D">Frontmatter</text>
+  <rect x="574" y="70" width="144" height="24" rx="4" fill="#F5F6F7" stroke="#D5DCE2" />
+  <rect x="574" y="106" width="144" height="24" rx="4" fill="#F5F6F7" stroke="#D5DCE2" />
+  <rect x="574" y="142" width="144" height="24" rx="4" fill="#F5F6F7" stroke="#D5DCE2" />
+</svg>

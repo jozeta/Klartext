@@ -1,9 +1,20 @@
+# Dependencies
 node_modules/
+
+# Build & Packaging Outputs
 out/
 dist/
+release/
+
+# Test & Coverage Artifacts
 coverage/
 test-results/
 playwright-report/
+
+# OS & Editor Metadata
 .DS_Store
+Thumbs.db
 *.log
-node_modules
+*.tsbuildinfo
+.env
+.env.*
