@@ -165,7 +165,10 @@ export function registerAllIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.WORKSPACE_OPEN_IN_FINDER, async (_e, rawInput) => {
     const { rootId } = z.object({ rootId: z.string().min(1) }).parse(rawInput)
-    const root = registry.getRootOrThrow(rootId)
+    const root = registry.getState().roots.find((r) => r.id === rootId)
+    if (!root) {
+      throw new Error(`Unknown rootId: ${rootId}`)
+    }
     const err = await shell.openPath(root.path)
     if (err) {
       throw new Error(err)
