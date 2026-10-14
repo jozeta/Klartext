@@ -17,7 +17,10 @@ export default defineConfig({
       'rehype-stringify',
       'chokidar',
       'yaml',
-      'zod'
+      'zod',
+      'katex',
+      'simple-git',
+      'dompurify'
     ] })],
     resolve: {
       alias: {

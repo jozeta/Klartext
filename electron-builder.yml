@@ -4,11 +4,9 @@ directories:
   buildResources: build
   output: dist
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,vitest.config.ts,playwright.config.ts}'
+  - out/**/*
+  - package.json
+  - '!**/node_modules/**/*'
 asarUnpack:
   - resources/**
 win:
@@ -32,6 +30,10 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  electronLanguages:
+    - en
+    - en_GB
+    - sv
   target:
     - target: dir
       arch:
