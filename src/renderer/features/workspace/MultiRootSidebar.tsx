@@ -547,7 +547,6 @@ export const MultiRootSidebar: React.FC<{
                       setCollapsedRoots((p) => ({ ...p, [root.id]: !p[root.id] }))
                     }
                     className="flex items-center gap-1 font-semibold text-primary truncate"
-                    title={root.path}
                   >
                     {isCollapsed ? (
                       <ChevronRight className="w-3.5 h-3.5 shrink-0" />
@@ -560,7 +559,6 @@ export const MultiRootSidebar: React.FC<{
                   <div className="flex items-center gap-1 shrink-0">
                     <span
                       data-testid={`root-git-badge-${root.id}`}
-                      title={root.path}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
                         setHoveredRootBadge({
