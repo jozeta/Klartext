@@ -1839,6 +1839,13 @@ export const App: React.FC = () => {
                 }}
                 onRemoveRoot={async (rootId) => {
                   await window.klartext.removeRoot(rootId)
+                  setTabs((prev) => {
+                    const remaining = prev.filter((t) => t.rootId !== rootId)
+                    if (activeTabKey && activeTabKey.startsWith(`${rootId}::`)) {
+                      setActiveTabKey(remaining[0]?.key || null)
+                    }
+                    return remaining
+                  })
                   await refreshWorkspaceAndTrees()
                 }}
                 onCreateFileInRoot={async (rootId, relativePath) => {

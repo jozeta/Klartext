@@ -166,7 +166,9 @@ function createWindow(
 app.whenReady().then(() => {
   const userDataDir = process.env.KLARTEXT_USER_DATA_DIR || app.getPath('userData')
   const registry = new MultiRootRegistry(userDataDir)
-  createDefaultStarterWorkspace(registry, userDataDir)
+  if (process.env.KLARTEXT_SEED_STARTER === '1') {
+    createDefaultStarterWorkspace(registry, userDataDir)
+  }
 
   const assetService = new AssetAndDocumentService(registry)
   const recoveryService = new RecoveryService(userDataDir)

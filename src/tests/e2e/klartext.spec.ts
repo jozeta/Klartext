@@ -42,7 +42,8 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       args: [path.resolve(__dirname, '../../../out/main/index.js')],
       env: {
         ...process.env,
-        KLARTEXT_USER_DATA_DIR: userDataDir
+        KLARTEXT_USER_DATA_DIR: userDataDir,
+        KLARTEXT_SEED_STARTER: '1'
       }
     })
 

@@ -529,6 +529,12 @@ export const MultiRootSidebar: React.FC<{
             </div>
           )}
 
+          {roots.length === 0 && (
+            <div className="px-3 py-6 text-center text-xs text-muted rounded-md border border-dashed border-subtle bg-panel/50">
+              No folders mounted yet. Use the folder icons above or <span className="font-medium text-primary">File → Open Folder…</span> to add a folder.
+            </div>
+          )}
+
           {roots.map((root) => {
             const isCollapsed = Boolean(collapsedRoots[root.id])
             const gitStatus = gitStatuses[root.id]
@@ -605,17 +611,15 @@ export const MultiRootSidebar: React.FC<{
                     >
                       <FolderPlus className="w-3.5 h-3.5" />
                     </button>
-                    {roots.length > 1 && (
-                      <button
-                        type="button"
-                        title="Remove Root from Workspace"
-                        data-testid={`remove-root-btn-${root.id}`}
-                        onClick={() => onRemoveRoot(root.id)}
-                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      title="Remove Root from Workspace"
+                      data-testid={`remove-root-btn-${root.id}`}
+                      onClick={() => onRemoveRoot(root.id)}
+                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
