@@ -51,6 +51,12 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await expect(page.getByTestId('klartext-app-shell')).toBeVisible()
       await expect(page.getByTestId('top-titlebar')).toBeVisible()
 
+      // Hover over the Local/Git badge left of Create New File icon and verify root folder path is displayed
+      const starterBadge = page.getByTestId('root-git-badge-root-starter')
+      await expect(starterBadge).toHaveAttribute('title', /Starter-Workspace/)
+      await starterBadge.hover()
+      await expect(page.getByTestId('root-path-tooltip')).toContainText('Starter-Workspace')
+
       // Scenario 1: Mount two additional root folders & save/reopen .klartext-workspace manifest
       await page.getByTestId('toggle-add-root-path-btn').click()
       await page.getByTestId('add-root-path-input').fill(rootBDir)

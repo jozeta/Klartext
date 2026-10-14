@@ -114,6 +114,12 @@ export const MultiRootSidebar: React.FC<{
   const [collapsedDirs, setCollapsedDirs] = useState<Record<string, boolean>>({})
   const [customRootPath, setCustomRootPath] = useState('')
   const [showAddPathInput, setShowAddPathInput] = useState(false)
+  const [hoveredRootBadge, setHoveredRootBadge] = useState<{
+    rootId: string
+    path: string
+    x: number
+    y: number
+  } | null>(null)
 
   // Inline file rename state (triggered immediately when creating Untitled.md or double-clicking)
   const [renamingItem, setRenamingItem] = useState<{
@@ -554,7 +560,22 @@ export const MultiRootSidebar: React.FC<{
                   <div className="flex items-center gap-1 shrink-0">
                     <span
                       data-testid={`root-git-badge-${root.id}`}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border border-subtle ${
+                      title={root.path}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        setHoveredRootBadge({
+                          rootId: root.id,
+                          path: root.path,
+                          x: rect.left,
+                          y: rect.bottom + 6
+                        })
+                      }}
+                      onMouseLeave={() =>
+                        setHoveredRootBadge((prev) =>
+                          prev?.rootId === root.id ? null : prev
+                        )
+                      }
+                      className={`text-[10px] px-1.5 py-0.5 rounded border border-subtle cursor-default ${
                         gitStatus?.state === 'Merge Conflict'
                           ? 'text-danger font-semibold'
                           : 'text-muted'
@@ -608,6 +629,21 @@ export const MultiRootSidebar: React.FC<{
               </div>
             )
           })}
+        </div>
+      )}
+
+      {hoveredRootBadge && (
+        <div
+          data-testid="root-path-tooltip"
+          style={{
+            position: 'fixed',
+            left: `${Math.max(8, Math.min(window.innerWidth - 340, hoveredRootBadge.x))}px`,
+            top: `${hoveredRootBadge.y}px`,
+            zIndex: 120
+          }}
+          className="pointer-events-none px-2 py-1 rounded bg-app border border-subtle shadow-lg text-[11px] font-mono text-primary whitespace-nowrap"
+        >
+          {hoveredRootBadge.path}
         </div>
       )}
 
