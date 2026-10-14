@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
   WORKSPACE_SAVE_MANIFEST: 'workspace:save-manifest',
   WORKSPACE_LOAD_MANIFEST: 'workspace:load-manifest',
   WORKSPACE_LIST_FILES: 'workspace:list-files',
+  WORKSPACE_OPEN_IN_FINDER: 'workspace:open-in-finder',
 
   // Documents & File Operations
   DOC_READ: 'doc:read',

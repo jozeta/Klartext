@@ -559,6 +559,10 @@ export const MultiRootSidebar: React.FC<{
                   <div className="flex items-center gap-1 shrink-0">
                     <span
                       data-testid={`root-git-badge-${root.id}`}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        void window.klartext?.openRootInFinder?.(root.id)
+                      }}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
                         setHoveredRootBadge({
@@ -573,7 +577,7 @@ export const MultiRootSidebar: React.FC<{
                           prev?.rootId === root.id ? null : prev
                         )
                       }
-                      className={`text-[10px] px-1.5 py-0.5 rounded border border-subtle cursor-default ${
+                      className={`text-[10px] px-1.5 py-0.5 rounded border border-subtle cursor-pointer select-none ${
                         gitStatus?.state === 'Merge Conflict'
                           ? 'text-danger font-semibold'
                           : 'text-muted'

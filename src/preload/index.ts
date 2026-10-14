@@ -41,6 +41,8 @@ export const klartextApi = {
     ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LOAD_MANIFEST, { filePath, trusted }),
   listFilesForRoot: (rootId: string, dirRelPath?: string): Promise<FileTreeNode[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LIST_FILES, { rootId, dirRelPath }),
+  openRootInFinder: (rootId: string): Promise<{ ok: boolean; path: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_OPEN_IN_FINDER, { rootId }),
 
   // Document I/O
   readDocument: (

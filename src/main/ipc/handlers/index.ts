@@ -163,6 +163,16 @@ export function registerAllIpcHandlers(
     return registry.listFilesForRoot(rootId, dirRelPath || '')
   })
 
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_OPEN_IN_FINDER, async (_e, rawInput) => {
+    const { rootId } = z.object({ rootId: z.string().min(1) }).parse(rawInput)
+    const root = registry.getRootOrThrow(rootId)
+    const err = await shell.openPath(root.path)
+    if (err) {
+      throw new Error(err)
+    }
+    return { ok: true, path: root.path }
+  })
+
   // Documents
   const getBinaryAssetMime = (relPath: string): string | null => {
     const lower = relPath.toLowerCase()
