@@ -1,25 +1,23 @@
 ---
-title: Excalidraw Vector Drawings & Per-Root Assets
+title: Vector Assets & Per-Root Images
 author: Design Engineering
 category: Assets
 tags:
-  - excalidraw
   - svg
   - assets
+  - images
 ---
 
-# Excalidraw Vector Drawings & Per-Root Assets
+# Vector Assets & Per-Root Images
 
-Klartext stores pasted images and interactive `.excalidraw.svg` vector drawings strictly inside the active root's `assets/` folder.
+Klartext stores pasted and dropped images and vector graphics strictly inside the active root's `assets/` folder (`<ActiveRoot>/assets/images/`).
 
-## Embedded Interactive `.excalidraw.svg` Drawing
+## Interactive Image Resizing & Inspection
 
-Click **Edit in Excalidraw Studio** on the card below (or click the file in `assets/drawings/architecture.excalidraw.svg` in the sidebar) to open the vector studio:
-
-![System Architecture Drawing](../assets/drawings/architecture.excalidraw.svg)
+In **Live Inline Rich Mode**, click any embedded image to reveal its selection frame and drag the right-edge resize handle to adjust its width directly in your Markdown document.
 
 ## Local SVG Illustration in `assets/images/`
 
-You can also view any image directly from the `assets/images/` folder in the left sidebar or embed it in Markdown:
+You can view any image directly from the `assets/images/` folder in the left sidebar or embed it in Markdown:
 
 ![Technical Nordic Workspace Preview](../assets/images/nordic-workspace-preview.svg)

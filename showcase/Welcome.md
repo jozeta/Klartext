@@ -13,7 +13,7 @@ tags:
 
 # Welcome to Klartext
 
-Klartext is a fast, local-first Markdown editor with **Multi-Root Workspaces**, **Concurrent Multi-Repository Git**, **Excalidraw & Mermaid diagrams**, and **Optional Local AI** (English & Svenska).
+Klartext is a fast, local-first Markdown editor with **Multi-Root Workspaces**, **Concurrent Multi-Repository Git**, **Interactive Mermaid & Visual Diagrams**, and **Optional Local AI** (English & Svenska).
 
 > [!TIP] Progressive Complexity
 > Press `Cmd/Ctrl + K` to open the Command Palette, `Cmd/Ctrl + P` for Quick File Switcher, or `Cmd/Ctrl + Shift + F` for Zen Mode.
@@ -24,7 +24,7 @@ Klartext is a fast, local-first Markdown editor with **Multi-Root Workspaces**, 
 | :--- | :--- | :--- |
 | Live Inline Rich Editing | CodeMirror 6 Decorations | Active |
 | Mathematical Expressions | KaTeX ($E = mc^2$) | Active |
-| Interactive Diagrams | Mermaid + `.excalidraw.svg` | Active |
+| Interactive Diagrams | Mermaid + Visual Diagram Builder | Active |
 | Multi-Repo Git Sync | Concurrent `simple-git` | Active |
 | Local AI Assistant | Loopback Ollama / LM Studio | Active |
 

@@ -10,5 +10,5 @@
 | **YAML Frontmatter** | `---\nkey: value\n---` | Lossless YAML serialization | `remark-frontmatter` + collapsible property editor |
 | **Callouts** | `> [!NOTE]`, `> [!WARNING]`, etc. | Byte-for-byte | Preprocessor callout container + Nordic accent border |
 | **WikiLinks** | `[[Page]]`, `[[Page\|Alias]]`, `[[Root:Page]]` | Byte-for-byte | Resolved within active root; cross-root badge warning |
-| **Mermaid Diagrams** | ```` ```mermaid ```` code fences | Source fence is single source of truth | `MermaidDiagramWidget` (`securityLevel: 'strict'`) |
-| **Excalidraw** | `![Title](assets/drawings/x.excalidraw.svg)` | Embedded JSON inside `<metadata>` of valid `.svg` | `serializeExcalidrawSvg` / `extractExcalidrawSceneFromSvgOrJson` |
+| **Mermaid & Visual Diagrams** | ```` ```mermaid ```` code fences | Source fence is single source of truth | `MermaidDiagramWidget` (`securityLevel: 'strict'`) + `VisualMermaidBuilderModal` |
+| **Root-Scoped Images & SVGs** | `![Alt](assets/images/file.svg)` | Standard Markdown image or HTML `<img width="...">` | Served via `klartext-asset://<rootId>/` with interactive resize handles |

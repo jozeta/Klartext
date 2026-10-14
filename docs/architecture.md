@@ -5,7 +5,7 @@
 Klartext enforces strict separation between three Electron processes:
 
 1. **Sandboxed Renderer Process (`src/renderer/`):**
-   - Runs React 18, CodeMirror 6 (`EditorState` / `EditorView`), Mermaid strict SVG rendering, and the Excalidraw `.excalidraw.svg` editor.
+   - Runs React 18, CodeMirror 6 (`EditorState` / `EditorView`), Mermaid strict SVG rendering, and the interactive 2D Visual Diagram Builder.
    - Configured with `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true`.
    - Zero direct access to Node.js `fs`, `child_process`, or external network sockets.
 
@@ -16,7 +16,7 @@ Klartext enforces strict separation between three Electron processes:
 3. **Electron Main Process (`src/main/`):**
    - Validates every incoming IPC payload with Zod schemas (`src/shared/schemas/index.ts`).
    - Enforces canonical path confinement across all mounted root directories via `MultiRootPathGuard` (`src/main/security/path-guard.ts`).
-   - Serves local root-scoped images and `.excalidraw.svg` drawings via the custom `klartext-asset://<rootId>/<relativePath>` protocol.
+   - Serves local root-scoped images and vector assets via the custom `klartext-asset://<rootId>/<relativePath>` protocol.
    - Orchestrates `MultiRootWatcher`, `MultiRepoManager`, `RecoveryService`, `SettingsAndCredentialService`, `ExportService`, and `LocalAIOrchestrator`.
 
 ## 2. Multi-Root & Multi-Repo State Model

@@ -13,7 +13,7 @@ Covers:
 - Sensitive system directory rejection (`/etc`, `~/.ssh`) in `.klartext-workspace` manifests.
 - Symlink escape blocking outside mounted roots.
 - SSRF loopback enforcement on Local AI endpoints.
-- YAML frontmatter, GFM table alignment, `.excalidraw.svg` round-trip metadata serialization, Git conflict hunk resolution, and Hardware Advisor tier calculation.
+- YAML frontmatter, GFM table alignment, vector SVG metadata serialization, Git conflict hunk resolution, and Hardware Advisor tier calculation.
 
 ## 2. Integration Tests (`src/tests/integration/`)
 Run with:

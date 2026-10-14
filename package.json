@@ -1,7 +1,7 @@
 {
   "name": "klartext",
   "version": "1.0.0",
-  "description": "Klartext — Fast, local-first, multi-root & multi-repo Markdown editor with Technical Nordic design, inline Excalidraw/Mermaid, and optional local AI",
+  "description": "Klartext — Fast, local-first, multi-root & multi-repo Markdown editor with Technical Nordic design, interactive Mermaid & Visual Diagram Builder, and optional local AI",
   "main": "./out/main/index.js",
   "author": "Klartext Contributors",
   "license": "MIT",
