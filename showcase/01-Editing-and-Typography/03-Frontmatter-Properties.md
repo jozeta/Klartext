@@ -1,6 +1,6 @@
 ---
 title: Frontmatter Properties Showcase
-author: Johan Zetterström
+author: Klartext Team
 date: 2026-10-14
 status: Approved
 version: 1.0.0
