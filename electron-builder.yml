@@ -1,0 +1,56 @@
+appId: com.klartext.app
+productName: Klartext
+directories:
+  buildResources: build
+  output: dist
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,vitest.config.ts,playwright.config.ts}'
+asarUnpack:
+  - resources/**
+win:
+  executableName: Klartext
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+linux:
+  target:
+    - AppImage
+    - deb
+  maintainer: klartext.local
+  category: Utility
+fileAssociations:
+  - ext: md
+    name: Markdown Document
+    role: Editor
+  - ext: markdown
+    name: Markdown Document
+    role: Editor
+  - ext: klartext-workspace
+    name: Klartext Multi-Root Workspace
+    role: Editor

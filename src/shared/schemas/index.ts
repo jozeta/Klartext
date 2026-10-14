@@ -1,0 +1,219 @@
+import { z } from 'zod'
+
+export const EditModeSchema = z.enum(['source', 'inline', 'split'])
+export type EditMode = z.infer<typeof EditModeSchema>
+
+export const ThemeModeSchema = z.enum(['light', 'dark', 'system'])
+export type ThemeMode = z.infer<typeof ThemeModeSchema>
+
+export const GitPullStrategySchema = z.enum(['rebase', 'merge'])
+export type GitPullStrategy = z.infer<typeof GitPullStrategySchema>
+
+export const GitAutoSyncModeSchema = z.enum([
+  'manual',
+  'auto-fetch',
+  'auto-pull-clean',
+  'auto-commit-sync'
+])
+export type GitAutoSyncMode = z.infer<typeof GitAutoSyncModeSchema>
+
+export const GitSyncPolicySchema = z.object({
+  autoFetch: z.boolean().default(true),
+  fetchIntervalSec: z.number().int().min(15).max(86400).default(180),
+  pullStrategy: GitPullStrategySchema.default('rebase'),
+  autoSyncMode: GitAutoSyncModeSchema.default('auto-fetch')
+})
+export type GitSyncPolicy = z.infer<typeof GitSyncPolicySchema>
+
+export const WorkspaceRootSchema = z.object({
+  id: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/),
+  name: z.string().min(1).max(200),
+  path: z.string().min(1),
+  assetDir: z.string().min(1).default('assets').refine((val) => !val.includes('..'), {
+    message: 'assetDir must not contain path traversal segments'
+  }),
+  gitSyncPolicy: GitSyncPolicySchema.optional()
+})
+export type WorkspaceRoot = z.infer<typeof WorkspaceRootSchema>
+
+export const WorkspaceManifestSchema = z.object({
+  version: z.literal(1),
+  name: z.string().min(1).max(200),
+  roots: z.array(WorkspaceRootSchema),
+  settings: z
+    .object({
+      defaultEditMode: EditModeSchema.default('inline'),
+      theme: ThemeModeSchema.default('system')
+    })
+    .optional()
+})
+export type WorkspaceManifest = z.infer<typeof WorkspaceManifestSchema>
+
+export const PerRootConfigSchema = z.object({
+  assetDir: z
+    .string()
+    .min(1)
+    .refine((val) => !val.includes('..'))
+    .optional(),
+  defaultEditMode: EditModeSchema.optional(),
+  lintingEnabled: z.boolean().optional()
+})
+export type PerRootConfig = z.infer<typeof PerRootConfigSchema>
+
+export const TypographySettingsSchema = z.object({
+  bodyFontFamily: z.string().default('Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'),
+  monoFontFamily: z.string().default('"JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace'),
+  fontSizePx: z.number().min(12).max(24).default(16),
+  lineHeight: z.number().min(1.3).max(2.0).default(1.65),
+  maxLineWidthCh: z.number().min(60).max(200).default(82),
+  fullWidth: z.boolean().default(false),
+  typewriterScrolling: z.boolean().default(false)
+})
+export type TypographySettings = z.infer<typeof TypographySettingsSchema>
+
+export const AISettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  provider: z.enum(['ollama', 'openai-compatible']).default('ollama'),
+  endpoint: z.string().url().default('http://127.0.0.1:11434'),
+  allowNonLoopback: z.boolean().default(false),
+  activeModel: z.string().default('gemma4:12b'),
+  fastModel: z.string().optional(),
+  keepAlive: z.string().default('5m')
+})
+export type AISettings = z.infer<typeof AISettingsSchema>
+
+export const AppSettingsSchema = z.object({
+  theme: ThemeModeSchema.default('system'),
+  accentColorOverride: z.string().optional(),
+  defaultEditMode: EditModeSchema.default('inline'),
+  floatingToolbarEnabled: z.boolean().default(true),
+  autosaveDelayMs: z.number().min(200).max(60000).default(1000),
+  allowRawHtml: z.boolean().default(false),
+  autoUpdateCheck: z.boolean().default(false),
+  leftSidebarOpen: z.boolean().default(true),
+  leftSidebarWidth: z.number().min(160).max(600).default(260),
+  rightSidebarOpen: z.boolean().default(false),
+  rightSidebarWidth: z.number().min(160).max(600).default(320),
+  statusBarVisible: z.boolean().default(true),
+  zenMode: z.boolean().default(false),
+  typography: TypographySettingsSchema.default({}),
+  ai: AISettingsSchema.default({}),
+  keybindings: z.record(z.string(), z.string()).default({})
+})
+export type AppSettings = z.infer<typeof AppSettingsSchema>
+
+// IPC Request Schemas
+export const RootScopedPathSchema = z.object({
+  rootId: z.string().min(1),
+  relativePath: z.string().min(1)
+})
+
+export const DocWriteRequestSchema = z.object({
+  rootId: z.string().min(1),
+  relativePath: z.string().min(1),
+  content: z.string()
+})
+
+export const DocRenameRequestSchema = z.object({
+  rootId: z.string().min(1),
+  oldRelativePath: z.string().min(1),
+  newRelativePath: z.string().min(1)
+})
+
+export const CrossRootMoveRequestSchema = z.object({
+  sourceRootId: z.string().min(1),
+  sourceRelativePath: z.string().min(1),
+  targetRootId: z.string().min(1),
+  targetRelativePath: z.string().min(1),
+  migrateAssets: z.boolean().default(true)
+})
+
+export const AssetSaveRequestSchema = z.object({
+  rootId: z.string().min(1),
+  documentRelativePath: z.string().default(''),
+  fileName: z.string().min(1),
+  mimeType: z.string().min(1),
+  base64Data: z.string().min(1),
+  category: z.enum(['images', 'attachments', 'drawings']).default('images')
+})
+
+export const ExcalidrawSaveRequestSchema = z.object({
+  rootId: z.string().min(1),
+  relativePath: z.string().min(1),
+  sceneJson: z.string().min(2),
+  svgString: z.string().min(10)
+})
+
+export const SearchQueryRequestSchema = z.object({
+  query: z.string().min(1),
+  rootIds: z.array(z.string()).optional(),
+  caseSensitive: z.boolean().default(false),
+  wholeWord: z.boolean().default(false),
+  isRegex: z.boolean().default(false),
+  includeGlob: z.string().optional(),
+  excludeGlob: z.string().optional()
+})
+
+export const SearchReplaceRequestSchema = z.object({
+  search: SearchQueryRequestSchema,
+  replacement: z.string(),
+  confirmedFiles: z.array(
+    z.object({
+      rootId: z.string().min(1),
+      relativePath: z.string().min(1)
+    })
+  )
+})
+
+export const GitActionRequestSchema = z.object({
+  rootId: z.string().min(1),
+  files: z.array(z.string()).optional(),
+  message: z.string().optional(),
+  branch: z.string().optional(),
+  createBranch: z.boolean().optional(),
+  strategy: GitPullStrategySchema.optional()
+})
+
+export const GitConflictResolveRequestSchema = z.object({
+  rootId: z.string().min(1),
+  relativePath: z.string().min(1),
+  hunkIndex: z.number().int().min(0).optional(),
+  resolution: z.enum(['current', 'incoming', 'both', 'custom']),
+  customContent: z.string().optional()
+})
+
+export const AIStreamRequestSchema = z.object({
+  requestId: z.string().min(1),
+  action: z.enum([
+    'draft',
+    'improve',
+    'grammar',
+    'tone',
+    'translate-sv-en',
+    'translate-en-sv',
+    'format-table',
+    'format-list',
+    'mermaid',
+    'summarize',
+    'custom'
+  ]),
+  prompt: z.string().default(''),
+  selectedText: z.string().default(''),
+  tone: z.enum(['technical', 'concise', 'executive', 'friendly']).optional(),
+  modelOverride: z.string().optional()
+})
+
+export const AIRagQueryRequestSchema = z.object({
+  question: z.string().min(1),
+  rootIds: z.array(z.string()).optional(),
+  modelOverride: z.string().optional()
+})
+
+export const ExportRequestSchema = z.object({
+  rootId: z.string().min(1),
+  relativePath: z.string().min(1),
+  markdown: z.string(),
+  title: z.string().default('Document'),
+  inlineAssets: z.boolean().default(true),
+  targetFilePath: z.string().optional()
+})

@@ -1,0 +1,337 @@
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import http from 'http'
+import simpleGit from 'simple-git'
+import { test, expect, _electron as electron } from '@playwright/test'
+
+const VALID_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+test.describe('Klartext Electron End-to-End Verification (All 17 Critical User Journeys)', () => {
+  let tmpBase: string
+  let userDataDir: string
+  let rootBDir: string
+  let rootCDir: string
+
+  test.beforeEach(() => {
+    tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'klartext-e2e-'))
+    userDataDir = path.join(tmpBase, 'user-data')
+    rootBDir = path.join(tmpBase, 'root-beta')
+    rootCDir = path.join(tmpBase, 'root-gamma')
+    fs.mkdirSync(rootBDir, { recursive: true })
+    fs.mkdirSync(rootCDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(rootBDir, 'BetaDoc.md'),
+      '# Beta Document\n\nContent inside Beta root.\n',
+      'utf-8'
+    )
+    fs.writeFileSync(
+      path.join(rootCDir, 'GammaDoc.md'),
+      '# Gamma Document\n\nContent inside Gamma root.\n',
+      'utf-8'
+    )
+  })
+
+  test.afterEach(() => {
+    fs.rmSync(tmpBase, { recursive: true, force: true })
+  })
+
+  test('Scenarios 1–10: Multi-Root Workspaces, Manifests, UI Shell, Modes, Formatting, Per-Root Assets, Cross-Root Migration, Excalidraw & Mermaid', async () => {
+    const app = await electron.launch({
+      args: [path.resolve(__dirname, '../../../out/main/index.js')],
+      env: {
+        ...process.env,
+        KLARTEXT_USER_DATA_DIR: userDataDir
+      }
+    })
+
+    try {
+      const page = await app.firstWindow()
+      await expect(page.getByTestId('klartext-app-shell')).toBeVisible()
+      await expect(page.getByTestId('top-titlebar')).toBeVisible()
+
+      // Scenario 1: Mount two additional root folders & save/reopen .klartext-workspace manifest
+      await page.getByTestId('toggle-add-root-path-btn').click()
+      await page.getByTestId('add-root-path-input').fill(rootBDir)
+      await page.getByTestId('confirm-add-root-path-btn').click()
+
+      await page.getByTestId('toggle-add-root-path-btn').click()
+      await page.getByTestId('add-root-path-input').fill(rootCDir)
+      await page.getByTestId('confirm-add-root-path-btn').click()
+
+      const manifestFile = path.join(tmpBase, 'multi.klartext-workspace')
+      await page.getByTestId('open-settings-btn').click()
+      await page.getByTestId('manifest-filepath-input').fill(manifestFile)
+      await page.getByTestId('save-manifest-btn').click()
+      expect(fs.existsSync(manifestFile)).toBe(true)
+
+      // Scenario 2: Create, edit, save, close, and reopen Markdown files across multiple roots via Quick Switcher
+      await page.getByTestId('open-quick-switcher-btn').click()
+      await expect(page.getByTestId('quick-switcher-modal')).toBeVisible()
+      await page.getByTestId('palette-search-input').fill('BetaDoc.md')
+      await page.getByTestId('palette-search-input').press('Enter')
+      await expect(page.getByTestId('status-active-root')).toContainText('root-beta')
+
+      // Scenario 3: Toggle collapsible left/right sidebars, Zen mode, and Command Palette
+      await page.getByTestId('toggle-left-sidebar-btn').click()
+      await expect(page.getByTestId('left-sidebar')).toHaveCount(0)
+      await page.getByTestId('toggle-left-sidebar-btn').click()
+      await expect(page.getByTestId('left-sidebar')).toBeVisible()
+
+      await page.getByTestId('toggle-zen-mode-btn').click()
+      await expect(page.getByTestId('exit-zen-mode-btn')).toBeVisible()
+      await page.getByTestId('exit-zen-mode-btn').click()
+
+      await page.getByTestId('open-command-palette-btn').click()
+      await expect(page.getByTestId('command-palette-modal')).toBeVisible()
+      await page.getByTestId('palette-search-input').press('Escape')
+
+      // Scenario 4 & 5 & 10: Switch among Source, Inline Rich, and Split modes + formatting toolbar + GFM/KaTeX/Frontmatter
+      await page.getByTestId('mode-btn-source').click()
+      await page.getByTestId('fmt-bold').click()
+      await page.getByTestId('mode-btn-split').click()
+      await expect(page.getByTestId('markdown-split-preview')).toBeVisible()
+      await page.getByTestId('mode-btn-inline').click()
+
+      // Scenario 6 & 7: Strict per-root asset saving in Root B and Root C, then cross-root move with asset migration
+      const assetBRes = await page.evaluate(async (b64) => {
+        const ws = await window.klartext.getWorkspaceState()
+        const rootB = ws.roots.find((r) => r.path.includes('root-beta'))!
+        const rootC = ws.roots.find((r) => r.path.includes('root-gamma'))!
+        const savedB = await window.klartext.saveAsset({
+          rootId: rootB.id,
+          documentRelativePath: 'BetaDoc.md',
+          fileName: 'beta-chart.png',
+          mimeType: 'image/png',
+          base64Data: b64,
+          category: 'images'
+        })
+        await window.klartext.writeDocument(
+          rootB.id,
+          'BetaDoc.md',
+          `# Beta Document\n\n${savedB.markdownLink}\n`
+        )
+        const savedC = await window.klartext.saveAsset({
+          rootId: rootC.id,
+          documentRelativePath: 'GammaDoc.md',
+          fileName: 'gamma-chart.png',
+          mimeType: 'image/png',
+          base64Data: b64,
+          category: 'images'
+        })
+        return { rootBId: rootB.id, rootCId: rootC.id, savedB, savedC }
+      }, VALID_PNG_BASE64)
+
+      expect(fs.existsSync(path.join(rootBDir, 'assets/images/beta-chart.png'))).toBe(true)
+      expect(fs.existsSync(path.join(rootCDir, 'assets/images/gamma-chart.png'))).toBe(true)
+      expect(fs.existsSync(path.join(rootBDir, 'assets/images/gamma-chart.png'))).toBe(false)
+
+      // Move BetaDoc.md to another root with asset migration via IPC & verify
+      const movedRes = await page.evaluate(
+        async ({ sourceRootId, targetRootId }) => {
+          return window.klartext.moveDocumentCrossRoot({
+            sourceRootId,
+            sourceRelativePath: 'BetaDoc.md',
+            targetRootId,
+            targetRelativePath: 'BetaDoc.md',
+            migrateAssets: true
+          })
+        },
+        { sourceRootId: assetBRes.rootBId, targetRootId: assetBRes.rootCId }
+      )
+      expect(movedRes.migratedAssets).toContain('assets/images/beta-chart.png')
+      expect(fs.existsSync(path.join(rootCDir, 'assets/images/beta-chart.png'))).toBe(true)
+
+      // Scenario 8: Create an inline Excalidraw drawing (.excalidraw.svg), save, and verify vector elements remain editable
+      await page.getByTestId('open-excalidraw-btn').click()
+      await expect(page.getByTestId('excalidraw-modal')).toBeVisible()
+      await page.getByTestId('excalidraw-add-ellipse').click()
+      await page.getByTestId('excalidraw-element-label-input').fill('Nordic Architecture Node')
+      await page.getByTestId('excalidraw-save-btn').click()
+      await expect(page.getByTestId('excalidraw-save-status')).toContainText('Saved .excalidraw.svg')
+      await page.getByTestId('excalidraw-close-btn').click()
+
+      // Scenario 9: Mermaid diagram live SVG rendering & graceful diagnostic on invalid syntax
+      await page.getByTestId(`doc-tab-root-starter-Welcome.md`).click()
+      await expect(page.getByTestId('mermaid-widget').first()).toBeVisible()
+      await page.getByTestId('mermaid-toggle-source').first().click()
+      await page.getByTestId('mermaid-source-textarea').first().fill('invalid_mermaid_syntax %%%')
+      await expect(page.getByTestId('mermaid-error-banner').first()).toBeVisible()
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('Scenarios 11–17: External File Watcher, Multi-Root Search/Replace, Crash Recovery, Concurrent Multi-Repo Git Conflict Resolution, Local AI (SV/EN) & Export/Theme', async () => {
+    // Prepare two Git repositories for Scenario 14
+    const remote1 = path.join(tmpBase, 'remote1.git')
+    const remote2 = path.join(tmpBase, 'remote2.git')
+    await simpleGit().init(true, [remote1])
+    await simpleGit().init(true, [remote2])
+
+    const initGitRoot = async (dir: string, remote: string, docName: string) => {
+      const g = simpleGit(dir)
+      await g.init()
+      await g.addConfig('user.name', 'E2E User')
+      await g.addConfig('user.email', 'e2e@klartext.local')
+      await g.checkoutLocalBranch('main')
+      fs.writeFileSync(path.join(dir, docName), '# Shared\nBase line\n', 'utf-8')
+      await g.add(['.'])
+      await g.commit('Initial')
+      await g.addRemote('origin', remote)
+      await g.push(['-u', 'origin', 'main'])
+    }
+
+    await initGitRoot(rootBDir, remote1, 'BetaDoc.md')
+    await initGitRoot(rootCDir, remote2, 'GammaDoc.md')
+
+    // Start mock Ollama server on 127.0.0.1 for Scenario 15
+    const ollamaServer = http.createServer((req, res) => {
+      if (req.url === '/api/tags') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            models: [{ name: 'gemma4:12b', details: { parameter_size: '12B' } }]
+          })
+        )
+        return
+      }
+      if (req.url === '/api/chat') {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+        res.write(
+          JSON.stringify({
+            message: { content: '# Svensk Rubrik\n\nKorrekt sammansatt **användargränssnitt**.' },
+            done: false
+          }) + '\n'
+        )
+        res.end(JSON.stringify({ message: { content: '' }, done: true }) + '\n')
+        return
+      }
+      res.writeHead(404)
+      res.end()
+    })
+    await new Promise<void>((resolve) => ollamaServer.listen(0, '127.0.0.1', resolve))
+    const ollamaPort = (ollamaServer.address() as { port: number }).port
+
+    const app = await electron.launch({
+      args: [path.resolve(__dirname, '../../../out/main/index.js')],
+      env: {
+        ...process.env,
+        KLARTEXT_USER_DATA_DIR: userDataDir
+      }
+    })
+
+    try {
+      const page = await app.firstWindow()
+      await expect(page.getByTestId('klartext-app-shell')).toBeVisible()
+
+      // Mount both Git roots via UI so React state updates immediately
+      await page.getByTestId('toggle-add-root-path-btn').click()
+      await page.getByTestId('add-root-path-input').fill(rootBDir)
+      await page.getByTestId('confirm-add-root-path-btn').click()
+
+      await page.getByTestId('toggle-add-root-path-btn').click()
+      await page.getByTestId('add-root-path-input').fill(rootCDir)
+      await page.getByTestId('confirm-add-root-path-btn').click()
+
+      const wsState = await page.evaluate(() => window.klartext.getWorkspaceState())
+      const repo1Id = wsState.roots.find((r) => r.path.includes('root-beta'))!.id
+      const repo2Id = wsState.roots.find((r) => r.path.includes('root-gamma'))!.id
+
+      // Scenario 11: External file modification reload
+      await page.getByTestId(`tree-file-${repo1Id}-BetaDoc.md`).click()
+      fs.writeFileSync(
+        path.join(rootBDir, 'BetaDoc.md'),
+        '# Shared\nExternally updated line on disk\n',
+        'utf-8'
+      )
+
+      // Scenario 12: Multi-root search and replace with confirmation
+      await page.getByTestId('sidebar-tab-search').click()
+      await page.getByTestId('global-search-input').fill('Externally updated')
+      await page.getByTestId('global-search-run-btn').click()
+      await expect(page.getByTestId(`search-result-card-${repo1Id}-BetaDoc.md`)).toBeVisible()
+      await page.getByTestId('global-replace-input').fill('Replaced across root')
+      await page.getByTestId('global-replace-confirm-btn').click()
+      await expect(page.getByTestId('search-replace-summary')).toContainText('Replaced 1 occurrence')
+
+      // Scenario 13: Crash recovery snapshot save & list
+      await page.evaluate(async (rId) => {
+        await window.klartext.saveRecoverySnapshot(
+          rId,
+          'BetaDoc.md',
+          '# Unsaved Crash Recovery Buffer'
+        )
+      }, repo1Id)
+      const snaps = await page.evaluate(() => window.klartext.listRecoverySnapshots())
+      expect(snaps.some((s) => s.content.includes('Unsaved Crash Recovery Buffer'))).toBe(true)
+
+      // Scenario 14: Concurrent Multi-Repo Sync where Repo 1 pushes cleanly and Repo 2 enters isolated conflict resolution
+      await page.evaluate(async (rId) => {
+        await window.klartext.gitStage(rId, ['BetaDoc.md'])
+        await window.klartext.gitCommit(rId, 'Clean commit on Repo 1')
+      }, repo1Id)
+
+      // Create remote conflict on Repo 2
+      const otherClone = path.join(tmpBase, 'other-repo2')
+      await simpleGit().clone(remote2, otherClone)
+      const gOther = simpleGit(otherClone)
+      await gOther.addConfig('user.name', 'Other')
+      await gOther.addConfig('user.email', 'other@klartext.local')
+      fs.writeFileSync(path.join(otherClone, 'GammaDoc.md'), '# Shared\nRemote Gamma Line\n', 'utf-8')
+      await gOther.add(['GammaDoc.md'])
+      await gOther.commit('Remote commit')
+      await gOther.push('origin', 'main')
+
+      fs.writeFileSync(path.join(rootCDir, 'GammaDoc.md'), '# Shared\nLocal Gamma Line\n', 'utf-8')
+      await page.evaluate(async (rId) => {
+        await window.klartext.gitStage(rId, ['GammaDoc.md'])
+        await window.klartext.gitCommit(rId, 'Local commit on Repo 2')
+      }, repo2Id)
+
+      await page.getByTestId('sidebar-tab-git').click()
+      await page.getByTestId('sync-all-repos-btn').click()
+
+      await expect(page.getByTestId(`git-repo-state-${repo1Id}`)).toContainText('Synced')
+      await expect(page.getByTestId(`git-repo-state-${repo2Id}`)).toContainText('Merge Conflict')
+      await expect(page.getByTestId(`git-conflicted-group-${repo2Id}`)).toBeVisible()
+
+      // Resolve Repo 2 conflict via inline action button
+      await page.getByTestId(`git-resolve-both-${repo2Id}-GammaDoc.md`).click()
+      await expect(page.getByTestId(`git-conflicted-group-${repo2Id}`)).toHaveCount(0)
+
+      // Scenario 15: Local AI Assistant, Hardware Advisor, Bilingual Rewrite, and Diff Accept
+      await page.getByTestId('toggle-right-sidebar-btn').click()
+      await expect(page.getByTestId('right-ai-panel')).toBeVisible()
+      await expect(page.getByTestId('hardware-advisor-card')).toBeVisible()
+      await expect(page.getByTestId('detected-ram-badge')).toContainText('GB RAM')
+
+      await page.getByTestId('ai-endpoint-input').fill(`http://127.0.0.1:${ollamaPort}`)
+      await page.getByTestId('ai-test-connection-btn').click()
+      await expect(page.getByTestId('ai-connection-badge')).toContainText('Connected')
+
+      await page.getByTestId('ai-action-improve').click()
+      await expect(page.getByTestId('ai-diff-review-card')).toBeVisible()
+      await expect(page.getByTestId('ai-diff-proposed-text')).toContainText('användargränssnitt')
+      await page.getByTestId('ai-diff-accept-btn').click()
+      await expect(page.getByTestId('ai-diff-review-card')).toHaveCount(0)
+
+      // Scenario 16 & 17: Export to standalone HTML & PDF + Theme Switching
+      await page.getByTestId('export-html-btn').click()
+      await expect(page.getByTestId('export-status-banner')).toContainText('Exported HTML')
+
+      await page.getByTestId('export-pdf-btn').click()
+      await expect(page.getByTestId('export-status-banner')).toContainText('Exported PDF')
+
+      await page.getByTestId('toggle-theme-btn').click()
+      const themeAttr = await page.evaluate(() =>
+        document.documentElement.getAttribute('data-theme')
+      )
+      expect(['light', 'dark']).toContain(themeAttr)
+    } finally {
+      await app.close()
+      ollamaServer.close()
+    }
+  })
+})

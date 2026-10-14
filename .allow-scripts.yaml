@@ -1,0 +1,48 @@
+version: '2'
+packages:
+  '@biomejs/biome':
+    allow: false
+  '@cypress/fsevents':
+    allow: false
+  '@electron/get':
+    allow: true
+  '@parcel/watcher':
+    allow: false
+  '@playwright/browser-chromium':
+    allow: false
+  '@swc/core':
+    allow: false
+  'core-js':
+    allow: false
+  'cpu-features':
+    allow: false
+  'cypress':
+    allow: false
+  'electron':
+    allow: true
+  'esbuild':
+    allow: true
+  'fsevents':
+    allow: false
+  'husky':
+    allow: false
+  'msgpackr-extract':
+    allow: false
+  'nx':
+    allow: false
+  'playwright':
+    allow: false
+  'protobufjs':
+    allow: false
+  'puppeteer':
+    allow: false
+  'sharp':
+    allow: false
+  'sodium-native':
+    allow: false
+  'sqlite3':
+    allow: false
+  'unrs-resolver':
+    allow: false
+  'vue-demi':
+    allow: false
