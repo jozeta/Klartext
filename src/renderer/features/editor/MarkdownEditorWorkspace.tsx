@@ -292,7 +292,6 @@ export const MarkdownEditorWorkspace: React.FC<{
   wordWrap: boolean
   marginMode?: EditorMarginMode
   focusMode?: boolean
-  typewriterScrolling?: boolean
   workspaceDocuments?: WorkspaceDocEntry[]
   spellcheckEnabled?: boolean
   spellcheckLanguages?: string[]
@@ -335,7 +334,6 @@ export const MarkdownEditorWorkspace: React.FC<{
   wordWrap,
   marginMode = 'medium',
   focusMode = false,
-  typewriterScrolling = false,
   workspaceDocuments = [],
   spellcheckEnabled = true,
   spellcheckLanguages = ['en-US', 'sv-SE'],
@@ -365,8 +363,6 @@ export const MarkdownEditorWorkspace: React.FC<{
   const lastHandledTextInsertNonceRef = useRef<number | null>(null)
   const workspaceDocumentsRef = useRef<WorkspaceDocEntry[]>(workspaceDocuments)
   workspaceDocumentsRef.current = workspaceDocuments
-  const typewriterScrollingRef = useRef<boolean>(typewriterScrolling)
-  typewriterScrollingRef.current = typewriterScrolling
 
   const [rendered, setRendered] = useState<RenderedMarkdownResult | null>(null)
   const renderedRef = useRef<RenderedMarkdownResult | null>(null)
@@ -1557,21 +1553,6 @@ export const MarkdownEditorWorkspace: React.FC<{
               }
             } else {
               setSlashMenuState(null)
-            }
-
-            // 4.1 Typewriter Scrolling: keep active cursor line centered vertically
-            if (typewriterScrollingRef.current && update.view.hasFocus) {
-              const scroller = editorScrollWrapperRef.current
-              const coords = update.view.coordsAtPos(sel.head)
-              if (scroller && coords) {
-                const scrollerRect = scroller.getBoundingClientRect()
-                const lineCenterY = (coords.top + coords.bottom) / 2
-                const targetCenterY = scrollerRect.top + scrollerRect.height / 2
-                const delta = lineCenterY - targetCenterY
-                if (Math.abs(delta) > 18) {
-                  scroller.scrollTop += delta
-                }
-              }
             }
           }
 
@@ -3379,7 +3360,6 @@ export const MarkdownEditorWorkspace: React.FC<{
             data-margin-mode={marginMode}
             data-dynamic-margin-px={marginConfig.marginPx}
             data-focus-mode={focusMode ? 'true' : 'false'}
-            data-typewriter-mode={typewriterScrolling ? 'true' : 'false'}
             style={
               {
                 width: editMode === 'split' ? `${splitPercent}%` : '100%',
@@ -3406,7 +3386,6 @@ export const MarkdownEditorWorkspace: React.FC<{
               data-margin-mode={marginMode}
               data-dynamic-margin-px={marginConfig.marginPx}
               data-focus-mode={focusMode ? 'true' : 'false'}
-              data-typewriter-mode={typewriterScrolling ? 'true' : 'false'}
               style={
                 {
                   '--editor-margin-x': `${marginConfig.marginPx}px`,

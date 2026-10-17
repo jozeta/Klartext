@@ -665,9 +665,3 @@ body[data-portal-tooltips='true'] [data-tooltip]::after {
 [data-focus-mode='true'] .cm-activeLine {
   background-color: transparent !important;
 }
-
-/* Typewriter Scrolling: allow top and bottom lines to center vertically */
-[data-typewriter-mode='true'] .cm-scroller {
-  padding-top: 38vh !important;
-  padding-bottom: 38vh !important;
-}

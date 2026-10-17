@@ -17,6 +17,10 @@ import {
   type ExcalidrawElementItem,
   type ExcalidrawSceneData
 } from '../../../shared/serialization/excalidraw-svg'
+import {
+  DIAGRAM_PALETTE_ITEMS,
+  StructuredMermaidVisualBuilder
+} from './MermaidVisualParsers'
 
 let mermaidModulePromise: Promise<typeof import('mermaid').default> | null = null
 let lastMermaidConfigKey: string | null = null
@@ -1111,7 +1115,7 @@ export const VisualMermaidBuilderModal: React.FC<{
     handleCodeEditorChange(updated)
   }
 
-  const addNode = (shape: VisualMermaidNodeShape) => {
+  const addNode = (shape: VisualMermaidNodeShape, customX?: number, customY?: number) => {
     const nextIdx = nodes.length + 1
     const id = `N${Date.now().toString(36).slice(-3).toUpperCase()}${nextIdx}`
     const defaultLabels: Record<VisualMermaidNodeShape, string> = {
@@ -1127,8 +1131,8 @@ export const VisualMermaidBuilderModal: React.FC<{
       id,
       label: defaultLabels[shape],
       shape,
-      x: 50 + col * 210,
-      y: 50 + row * 105
+      x: customX !== undefined ? Math.max(16, Math.round(customX)) : 50 + col * 210,
+      y: customY !== undefined ? Math.max(16, Math.round(customY)) : 50 + row * 105
     }
     setIsCodeManuallyEdited(false)
     setActivePresetId('flowchart')
@@ -1211,10 +1215,10 @@ export const VisualMermaidBuilderModal: React.FC<{
           <div className="flex items-center gap-2">
             <GitCommit className="w-4 h-4 text-accent" />
             <span className="font-semibold text-sm text-primary">
-              Mermaid Live Diagram Studio & Visual Builder
+              Mermaid Live Diagram Studio &amp; Graphical Drag-and-Drop Builder
             </span>
             <span className="text-xs px-2 py-0.5 rounded bg-panel border border-subtle text-muted">
-              19 Diagram Types • Visual 2D Canvas + Live Code & Pan/Zoom Preview
+              19 Popular Diagram Types • Graphical Drag &amp; Drop GUI + Live Preview
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -1253,7 +1257,7 @@ export const VisualMermaidBuilderModal: React.FC<{
           </div>
         </div>
 
-        {/* Sample Diagrams / Diagram Type Gallery Bar (like mermaid.live Sample Diagrams) */}
+        {/* Diagram Type Gallery Bar */}
         <div
           data-testid="mermaid-preset-gallery"
           className="flex items-center gap-1.5 px-4 py-2 bg-secondary/40 border-b border-subtle overflow-x-auto shrink-0 text-xs"
@@ -1282,99 +1286,154 @@ export const VisualMermaidBuilderModal: React.FC<{
           })}
         </div>
 
-        {/* Shape & Arrow Drawing Toolbar (Always available for adding shapes or quick-inserting syntax snippets) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-app border-b border-subtle text-xs shrink-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-muted font-medium mr-1">Add Shape:</span>
-            <button
-              type="button"
-              data-testid="mermaid-add-rect"
-              onClick={() => addNode('rect')}
-              className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
-            >
-              + Process [Rect]
-            </button>
-            <button
-              type="button"
-              data-testid="mermaid-add-round"
-              onClick={() => addNode('round')}
-              className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
-            >
-              + Rounded (Step)
-            </button>
-            <button
-              type="button"
-              data-testid="mermaid-add-diamond"
-              onClick={() => addNode('diamond')}
-              className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
-            >
-              + Decision {'{Diamond}'}
-            </button>
-            <button
-              type="button"
-              data-testid="mermaid-add-cylinder"
-              onClick={() => addNode('cylinder')}
-              className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
-            >
-              + Database [(Cylinder)]
-            </button>
-            <button
-              type="button"
-              data-testid="mermaid-add-circle"
-              onClick={() => addNode('circle')}
-              className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
-            >
-              + Circle ((Node))
-            </button>
-          </div>
+        {/* Context-Aware Drag-and-Drop Building Block Palette Toolbar */}
+        <div
+          data-testid="mermaid-draggable-palette"
+          className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-app border-b border-subtle text-xs shrink-0"
+        >
+          {isFlowchartMode ? (
+            <>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-muted font-medium mr-1">
+                  Drag or Click Shape:
+                </span>
+                {(
+                  [
+                    { shape: 'rect', testId: 'mermaid-add-rect', label: '+ Process [Rect]' },
+                    { shape: 'round', testId: 'mermaid-add-round', label: '+ Rounded (Step)' },
+                    { shape: 'diamond', testId: 'mermaid-add-diamond', label: '+ Decision {Diamond}' },
+                    {
+                      shape: 'cylinder',
+                      testId: 'mermaid-add-cylinder',
+                      label: '+ Database [(Cylinder)]'
+                    },
+                    { shape: 'circle', testId: 'mermaid-add-circle', label: '+ Circle ((Node))' }
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.shape}
+                    type="button"
+                    draggable
+                    data-testid={item.testId}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/klartext-mermaid-shape', item.shape)
+                    }}
+                    onClick={() => addNode(item.shape)}
+                    title="Click to add or drag onto the 2D canvas"
+                    className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary cursor-grab active:cursor-grabbing"
+                  >
+                    ⋮⋮ {item.label}
+                  </button>
+                ))}
+              </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-muted">Arrow Type:</label>
-            <select
-              value={edgeStyleToCreate}
-              onChange={(e) => setEdgeStyleToCreate(e.target.value as VisualMermaidEdgeStyle)}
-              className="px-2 py-1 rounded bg-panel border border-subtle text-primary"
-            >
-              <option value="-->">Solid Arrow (--&gt;)</option>
-              <option value="-.->">Dashed Arrow (-.-&gt;)</option>
-              <option value="==>">Thick Arrow (==&gt;)</option>
-            </select>
+              <div className="flex items-center gap-2">
+                <label className="text-muted">Arrow Type:</label>
+                <select
+                  value={edgeStyleToCreate}
+                  onChange={(e) => setEdgeStyleToCreate(e.target.value as VisualMermaidEdgeStyle)}
+                  className="px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                >
+                  <option value="-->">Solid Arrow (--&gt;)</option>
+                  <option value="-.->">Dashed Arrow (-.-&gt;)</option>
+                  <option value="==>">Thick Arrow (==&gt;)</option>
+                </select>
 
-            <button
-              type="button"
-              data-testid="mermaid-connect-mode-btn"
-              onClick={() => {
-                if (connectSourceId) {
-                  setConnectSourceId(null)
-                } else if (selectedNodeId) {
-                  setConnectSourceId(selectedNodeId)
-                } else if (nodes[0]) {
-                  setConnectSourceId(nodes[0].id)
-                }
-              }}
-              className={`px-2.5 py-1 rounded border font-medium ${
-                connectSourceId
-                  ? 'bg-accent text-white border-accent'
-                  : 'bg-panel border-subtle text-primary hover:border-accent'
-              }`}
-            >
-              {connectSourceId
-                ? `Click Target Node to Connect from ${connectSourceId}...`
-                : 'Connect Selected Node →'}
-            </button>
+                <button
+                  type="button"
+                  data-testid="mermaid-connect-mode-btn"
+                  onClick={() => {
+                    if (connectSourceId) {
+                      setConnectSourceId(null)
+                    } else if (selectedNodeId) {
+                      setConnectSourceId(selectedNodeId)
+                    } else if (nodes[0]) {
+                      setConnectSourceId(nodes[0].id)
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded border font-medium ${
+                    connectSourceId
+                      ? 'bg-accent text-white border-accent'
+                      : 'bg-panel border-subtle text-primary hover:border-accent'
+                  }`}
+                >
+                  {connectSourceId
+                    ? `Click Target Node to Connect from ${connectSourceId}...`
+                    : 'Connect Selected Node →'}
+                </button>
 
-            <select
-              value={direction}
-              onChange={(e) => {
-                setIsCodeManuallyEdited(false)
-                setDirection(e.target.value as 'LR' | 'TD')
-              }}
-              className="px-2 py-1 rounded bg-panel border border-subtle text-primary"
-            >
-              <option value="LR">Left → Right (LR)</option>
-              <option value="TD">Top → Down (TD)</option>
-            </select>
-          </div>
+                <select
+                  value={direction}
+                  onChange={(e) => {
+                    setIsCodeManuallyEdited(false)
+                    setDirection(e.target.value as 'LR' | 'TD')
+                  }}
+                  className="px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                >
+                  <option value="LR">Left → Right (LR)</option>
+                  <option value="TD">Top → Down (TD)</option>
+                </select>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-muted font-medium mr-1">
+                  Drag onto Builder or Click to Add ({currentPreset.label}):
+                </span>
+                {(DIAGRAM_PALETTE_ITEMS[activePresetId] || []).map((pal) => (
+                  <button
+                    key={pal.id}
+                    type="button"
+                    draggable
+                    data-testid={`mermaid-palette-${pal.id}`}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(
+                        'text/klartext-mermaid-palette',
+                        pal.defaultPayload
+                      )
+                    }}
+                    onClick={() => {
+                      const targetEl = document.querySelector(
+                        `[data-testid^="mermaid-visual-"][data-testid$="-builder"]`
+                      )
+                      if (targetEl) {
+                        const dt = new DataTransfer()
+                        dt.setData('text/klartext-mermaid-palette', pal.defaultPayload)
+                        const dropEvt = new DragEvent('drop', {
+                          bubbles: true,
+                          cancelable: true,
+                          dataTransfer: dt
+                        })
+                        targetEl.dispatchEvent(dropEvt)
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary font-medium flex items-center gap-1 cursor-grab active:cursor-grabbing"
+                    title="Drag and drop onto the visual builder below, or click to add"
+                  >
+                    <span>⋮⋮ {pal.badge}</span>
+                    <span>{pal.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div
+                data-testid="mermaid-quick-snippets"
+                className="flex items-center gap-1.5 flex-wrap"
+              >
+                <span className="text-muted font-medium">Snippets:</span>
+                {currentPreset.snippets.map((s, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => appendSnippetToCode(s.snippet)}
+                    className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Selected Node/Edge Inspector OR Context-Aware Diagram Type Quick Builder */}
@@ -1513,18 +1572,9 @@ export const VisualMermaidBuilderModal: React.FC<{
                   + Append Bit Field
                 </button>
               </div>
-              <div className="flex items-center gap-1.5">
-                {currentPreset.snippets.map((s, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => appendSnippetToCode(s.snippet)}
-                    className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+              <span className="text-muted text-[11px]">
+                Tip: Drag &amp; drop bit-field blocks below to reorder or change bit widths!
+              </span>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 w-full">
@@ -1532,39 +1582,43 @@ export const VisualMermaidBuilderModal: React.FC<{
                 <strong className="text-primary">{currentPreset.label}:</strong>{' '}
                 {currentPreset.description}
               </span>
-              <div
-                data-testid="mermaid-quick-snippets"
-                className="flex items-center gap-1.5 flex-wrap"
-              >
-                <span className="text-muted font-medium">Quick Snippets:</span>
-                {currentPreset.snippets.map((s, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => appendSnippetToCode(s.snippet)}
-                    className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+              <span className="text-accent font-medium text-[11px]">
+                Drag &amp; drop items in the graphical builder below to reorder or edit visually
+              </span>
             </div>
           )}
         </div>
 
-        {/* Main Studio Workspace: Left (Visual 2D Canvas + Editable Mermaid Code) & Right (Interactive Pan/Zoom/Grid Live Preview) */}
+        {/* Main Studio Workspace: Left (Graphical Drag-and-Drop Builder + Synced Code) & Right (Interactive Pan/Zoom/Grid Live Preview) */}
         <div className="grid grid-cols-12 gap-4 p-4 bg-app overflow-hidden flex-1 min-h-0">
           <div className="col-span-6 flex flex-col space-y-2.5 min-h-0 h-full">
-            {isFlowchartMode && (
+            {isFlowchartMode ? (
               <div className="flex flex-col space-y-1.5 flex-1 min-h-[180px]">
                 <div className="text-[11px] font-semibold uppercase text-muted flex items-center justify-between shrink-0">
-                  <span>Interactive 2D Visual Canvas (Drag Nodes or Connect Arrows)</span>
+                  <span>
+                    Interactive 2D Visual Canvas (Drop Shapes Here, Drag Nodes, or Drag ● Port to Connect)
+                  </span>
                   <span className="font-mono text-[10px]">
                     {canvasWidth} × {canvasHeight}px
                   </span>
                 </div>
                 <div
                   data-testid="mermaid-visual-canvas-scroll"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const shape = e.dataTransfer.getData(
+                      'text/klartext-mermaid-shape'
+                    ) as VisualMermaidNodeShape
+                    if (shape && svgRef.current) {
+                      const rect = svgRef.current.getBoundingClientRect()
+                      const scaleX = canvasWidth / Math.max(1, rect.width)
+                      const scaleY = canvasHeight / Math.max(1, rect.height)
+                      const dropX = (e.clientX - rect.left) * scaleX - 65
+                      const dropY = (e.clientY - rect.top) * scaleY - 26
+                      addNode(shape, dropX, dropY)
+                    }
+                  }}
                   className="flex-1 overflow-auto bg-panel border border-subtle rounded shadow-sm min-h-0"
                 >
                   <svg
@@ -1664,6 +1718,12 @@ export const VisualMermaidBuilderModal: React.FC<{
                             }
                             handleNodeClick(node.id)
                           }}
+                          onMouseUp={(e) => {
+                            if (connectSourceId && connectSourceId !== node.id) {
+                              e.stopPropagation()
+                              handleNodeClick(node.id)
+                            }
+                          }}
                           className="cursor-move"
                         >
                           {node.shape === 'diamond' ? (
@@ -1723,20 +1783,40 @@ export const VisualMermaidBuilderModal: React.FC<{
                           >
                             {node.label}
                           </text>
+                          {/* Right-edge Connector Port Handle: Click or Drag to connect to another node */}
+                          <circle
+                            cx={node.x + w}
+                            cy={node.y + h / 2}
+                            r={6}
+                            fill={isConnectOrigin ? '#B8860B' : '#3B7A57'}
+                            stroke="#FFFFFF"
+                            strokeWidth={1.5}
+                            onMouseDown={(e) => {
+                              e.stopPropagation()
+                              draggingNodeRef.current = null
+                              setConnectSourceId(node.id)
+                            }}
+                            className="cursor-crosshair"
+                          >
+                            <title>Click or drag to connect an arrow from {node.label}</title>
+                          </circle>
                         </g>
                       )
                     })}
                   </svg>
                 </div>
               </div>
+            ) : (
+              <StructuredMermaidVisualBuilder
+                diagramType={activePresetId}
+                code={effectiveMermaidCode}
+                theme={theme}
+                onChangeCode={handleCodeEditorChange}
+              />
             )}
 
-            {/* Live Mermaid Code Editor (Supports all Mermaid syntax, frontmatter, and directives) */}
-            <div
-              className={`flex flex-col space-y-1.5 ${
-                isFlowchartMode ? 'h-44 shrink-0' : 'flex-1 min-h-0'
-              }`}
-            >
+            {/* Compact Two-Way Synced Mermaid Code Editor */}
+            <div className="flex flex-col space-y-1.5 h-32 shrink-0">
               <div className="flex items-center justify-between text-[11px] font-semibold uppercase text-muted shrink-0">
                 <span>Mermaid Code Editor (Live Two-Way Sync)</span>
                 <span className="font-mono text-[10px] text-accent">
@@ -1749,7 +1829,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                 onChange={(e) => handleCodeEditorChange(e.target.value)}
                 spellCheck={false}
                 placeholder="Write or paste any Mermaid diagram syntax here..."
-                className="flex-1 w-full p-2.5 rounded bg-panel border border-subtle font-mono text-xs text-primary focus:outline-none focus:border-accent resize-none leading-relaxed"
+                className="flex-1 w-full p-2 rounded bg-panel border border-subtle font-mono text-xs text-primary focus:outline-none focus:border-accent resize-none leading-relaxed"
               />
               {/* Keep pre element with data-testid="mermaid-builder-generated-code" for full test & accessibility compatibility */}
               <pre

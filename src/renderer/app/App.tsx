@@ -24,7 +24,9 @@ import {
   FileText,
   BookOpen,
   Keyboard,
-  Trash2
+  Trash2,
+  Calendar,
+  CheckSquare
 } from '../components/icons/untitled-icons'
 import type {
   AppSettings,
@@ -70,6 +72,10 @@ import {
 } from '../features/ai/LocalAIPanel'
 import { TemplatesPanel } from '../features/templates/TemplatesPanel'
 import { FrontmatterPropertiesPanel } from '../features/frontmatter/FrontmatterPropertiesPanel'
+import {
+  DailyNotesCalendarPanel,
+  GlobalTasksRightPanel
+} from '../features/productivity/RightProductivityPanels'
 import { HelpModal, type HelpModalTab } from '../components/help/HelpModal'
 import { ExcalidrawCanvasModal } from '../features/diagrams/DiagramWidgets'
 import {
@@ -127,7 +133,7 @@ export const App: React.FC = () => {
   const [editMode, setEditMode] = useState<EditMode>('inline')
   const [leftSidebarTab, setLeftSidebarTab] = useState<LeftSidebarTab>('explorer')
   const [lastActiveRightPanel, setLastActiveRightPanel] = useState<
-    'frontmatter' | 'ai' | 'templates' | 'help'
+    'frontmatter' | 'ai' | 'templates' | 'help' | 'calendar' | 'tasks'
   >('ai')
   const [selectedFolder, setSelectedFolder] = useState<{
     rootId: string
@@ -451,7 +457,15 @@ export const App: React.FC = () => {
   const [leftSidebarWidth, setLeftSidebarWidth] = useState<number>(260)
   const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(340)
   const activeSidebarDragRef = useRef<
-    'left' | 'frontmatter' | 'right' | 'templates' | 'help' | 'editor-windows' | null
+    | 'left'
+    | 'frontmatter'
+    | 'right'
+    | 'templates'
+    | 'help'
+    | 'calendar'
+    | 'tasks'
+    | 'editor-windows'
+    | null
   >(null)
   const editorMainContainerRef = useRef<HTMLElement | null>(null)
 
@@ -655,26 +669,50 @@ export const App: React.FC = () => {
       effective.rightSidebarOpen = false
       effective.templatesPanelVisible = false
       effective.helpPanelVisible = false
+      effective.calendarPanelVisible = false
+      effective.tasksPanelVisible = false
       effective.lastActiveRightPanel = 'frontmatter'
       setLastActiveRightPanel('frontmatter')
     } else if (effective.rightSidebarOpen === true) {
       effective.frontmatterPanelVisible = false
       effective.templatesPanelVisible = false
       effective.helpPanelVisible = false
+      effective.calendarPanelVisible = false
+      effective.tasksPanelVisible = false
       effective.lastActiveRightPanel = 'ai'
       setLastActiveRightPanel('ai')
     } else if (effective.templatesPanelVisible === true) {
       effective.frontmatterPanelVisible = false
       effective.rightSidebarOpen = false
       effective.helpPanelVisible = false
+      effective.calendarPanelVisible = false
+      effective.tasksPanelVisible = false
       effective.lastActiveRightPanel = 'templates'
       setLastActiveRightPanel('templates')
     } else if (effective.helpPanelVisible === true) {
       effective.frontmatterPanelVisible = false
       effective.rightSidebarOpen = false
       effective.templatesPanelVisible = false
+      effective.calendarPanelVisible = false
+      effective.tasksPanelVisible = false
       effective.lastActiveRightPanel = 'help'
       setLastActiveRightPanel('help')
+    } else if (effective.calendarPanelVisible === true) {
+      effective.frontmatterPanelVisible = false
+      effective.rightSidebarOpen = false
+      effective.templatesPanelVisible = false
+      effective.helpPanelVisible = false
+      effective.tasksPanelVisible = false
+      effective.lastActiveRightPanel = 'calendar'
+      setLastActiveRightPanel('calendar')
+    } else if (effective.tasksPanelVisible === true) {
+      effective.frontmatterPanelVisible = false
+      effective.rightSidebarOpen = false
+      effective.templatesPanelVisible = false
+      effective.helpPanelVisible = false
+      effective.calendarPanelVisible = false
+      effective.lastActiveRightPanel = 'tasks'
+      setLastActiveRightPanel('tasks')
     }
 
     setSettings((prev) => (prev ? { ...prev, ...effective } : prev))
@@ -1240,6 +1278,10 @@ export const App: React.FC = () => {
         setLastActiveRightPanel('templates')
       } else if (normalizedSettings.helpPanelVisible) {
         setLastActiveRightPanel('help')
+      } else if (normalizedSettings.calendarPanelVisible) {
+        setLastActiveRightPanel('calendar')
+      } else if (normalizedSettings.tasksPanelVisible) {
+        setLastActiveRightPanel('tasks')
       } else if (normalizedSettings.rightSidebarOpen) {
         setLastActiveRightPanel('ai')
       } else if (normalizedSettings.lastActiveRightPanel) {
@@ -3213,7 +3255,7 @@ export const App: React.FC = () => {
 
                   <div className="my-1 border-t border-subtle" />
                   <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    Writing Ergonomics &amp; Knowledge Graph
+                    Writing Ergonomics
                   </div>
 
                   <button
@@ -3231,38 +3273,6 @@ export const App: React.FC = () => {
                       {settings.focusMode ? '✓' : ''}
                     </span>
                     <span>Focus Mode (Dim Inactive Paragraphs)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-typewriter"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        typewriterScrolling: !settings.typewriterScrolling
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
-                  >
-                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
-                      {settings.typewriterScrolling ? '✓' : ''}
-                    </span>
-                    <span>Typewriter Scrolling (Keep Cursor Centered)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-open-graph"
-                    onClick={() => {
-                      setShowViewMenu(false)
-                      setShowGraphViewModal(true)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-accent font-medium flex items-center gap-2"
-                  >
-                    <span className="w-4 inline-flex items-center justify-center shrink-0">
-                      🕸️
-                    </span>
-                    <span>Interactive 2D Graph View...</span>
                   </button>
 
                   <button
@@ -3389,6 +3399,40 @@ export const App: React.FC = () => {
 
                   <button
                     type="button"
+                    data-testid="view-menu-toggle-calendar"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        calendarPanelVisible: !settings.calendarPanelVisible
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+                  >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.calendarPanelVisible ? '✓' : ''}
+                    </span>
+                    <span>Show Right Daily Notes &amp; Calendar Panel</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-tasks"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        tasksPanelVisible: !settings.tasksPanelVisible
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+                  >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.tasksPanelVisible ? '✓' : ''}
+                    </span>
+                    <span>Show Right Global Tasks Panel</span>
+                  </button>
+
+                  <button
+                    type="button"
                     data-testid="view-menu-toggle-help"
                     onClick={() => {
                       handleUpdateSettings({
@@ -3428,30 +3472,6 @@ export const App: React.FC = () => {
                       {settings.showOutlineTab !== false ? '✓' : ''}
                     </span>
                     <span>Show Outline in Sidebar</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-links"
-                    onClick={() => {
-                      const nextVal = settings.showBacklinksTab === false
-                      if (!nextVal && leftSidebarTab === 'backlinks') {
-                        setLeftSidebarTab('explorer')
-                        handleUpdateSettings({
-                          showBacklinksTab: nextVal,
-                          leftSidebarTab: 'explorer'
-                        })
-                      } else {
-                        handleUpdateSettings({ showBacklinksTab: nextVal })
-                      }
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
-                  >
-                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
-                      {settings.showBacklinksTab !== false ? '✓' : ''}
-                    </span>
-                    <span>Show Links in Sidebar</span>
                   </button>
 
                   <div className="my-1 border-t border-subtle" />
@@ -3752,7 +3772,9 @@ export const App: React.FC = () => {
                   settings.frontmatterPanelVisible ||
                   settings.rightSidebarOpen ||
                   settings.templatesPanelVisible ||
-                  settings.helpPanelVisible
+                  settings.helpPanelVisible ||
+                  settings.calendarPanelVisible ||
+                  settings.tasksPanelVisible
                 ) {
                   const lastPanel = settings.frontmatterPanelVisible
                     ? 'frontmatter'
@@ -3760,45 +3782,49 @@ export const App: React.FC = () => {
                       ? 'templates'
                       : settings.helpPanelVisible
                         ? 'help'
-                        : 'ai'
+                        : settings.calendarPanelVisible
+                          ? 'calendar'
+                          : settings.tasksPanelVisible
+                            ? 'tasks'
+                            : 'ai'
                   setLastActiveRightPanel(lastPanel)
                   handleUpdateSettings({
                     frontmatterPanelVisible: false,
                     rightSidebarOpen: false,
                     templatesPanelVisible: false,
                     helpPanelVisible: false,
+                    calendarPanelVisible: false,
+                    tasksPanelVisible: false,
                     lastActiveRightPanel: lastPanel
                   })
                 } else if (lastActiveRightPanel === 'frontmatter') {
                   handleUpdateSettings({
                     frontmatterPanelVisible: true,
-                    rightSidebarOpen: false,
-                    templatesPanelVisible: false,
-                    helpPanelVisible: false,
                     lastActiveRightPanel: 'frontmatter'
                   })
                 } else if (lastActiveRightPanel === 'templates') {
                   handleUpdateSettings({
                     templatesPanelVisible: true,
-                    frontmatterPanelVisible: false,
-                    rightSidebarOpen: false,
-                    helpPanelVisible: false,
                     lastActiveRightPanel: 'templates'
                   })
                 } else if (lastActiveRightPanel === 'help') {
                   handleUpdateSettings({
                     helpPanelVisible: true,
-                    frontmatterPanelVisible: false,
-                    rightSidebarOpen: false,
-                    templatesPanelVisible: false,
                     lastActiveRightPanel: 'help'
+                  })
+                } else if (lastActiveRightPanel === 'calendar') {
+                  handleUpdateSettings({
+                    calendarPanelVisible: true,
+                    lastActiveRightPanel: 'calendar'
+                  })
+                } else if (lastActiveRightPanel === 'tasks') {
+                  handleUpdateSettings({
+                    tasksPanelVisible: true,
+                    lastActiveRightPanel: 'tasks'
                   })
                 } else {
                   handleUpdateSettings({
                     rightSidebarOpen: true,
-                    frontmatterPanelVisible: false,
-                    templatesPanelVisible: false,
-                    helpPanelVisible: false,
                     lastActiveRightPanel: 'ai'
                   })
                 }
@@ -3807,7 +3833,9 @@ export const App: React.FC = () => {
                 settings.frontmatterPanelVisible ||
                 settings.rightSidebarOpen ||
                 settings.templatesPanelVisible ||
-                settings.helpPanelVisible
+                settings.helpPanelVisible ||
+                settings.calendarPanelVisible ||
+                settings.tasksPanelVisible
                   ? 'text-accent'
                   : 'text-muted hover:text-primary'
               }`}
@@ -3945,7 +3973,6 @@ export const App: React.FC = () => {
                 onOpenCommandPalette={() => setPaletteMode('commands')}
                 onOpenQuickSwitcher={() => setPaletteMode('files')}
                 showOutlineTab={settings.showOutlineTab !== false}
-                showBacklinksTab={settings.showBacklinksTab !== false}
                 roots={roots}
                 treesByRoot={treesByRoot}
                 gitStatuses={gitStatuses}
@@ -3970,6 +3997,7 @@ export const App: React.FC = () => {
                 workspaceSortOrder={settings.workspaceSortOrder || 'name-asc'}
                 workspaceFoldersOnTop={settings.workspaceFoldersOnTop !== false}
                 workspaceCustomOrder={settings.workspaceCustomOrder || {}}
+                workspaceOrder={settings.workspaceOrder || []}
                 stickyItems={settings.stickyItems || {}}
                 onUpdateWorkspaceSortOrder={(next) =>
                   handleUpdateSettings({ workspaceSortOrder: next })
@@ -3983,6 +4011,9 @@ export const App: React.FC = () => {
                       ? { workspaceCustomOrder: next, workspaceSortOrder: 'custom' }
                       : { workspaceCustomOrder: next }
                   )
+                }
+                onUpdateWorkspaceOrder={(next) =>
+                  handleUpdateSettings({ workspaceOrder: next })
                 }
                 onUpdateStickyItems={(next) =>
                   handleUpdateSettings({ stickyItems: next })
@@ -4004,13 +4035,9 @@ export const App: React.FC = () => {
                 availableTemplates={allAvailableTemplates}
                 onCreateNoteFromTemplateInFolder={createNoteFromTemplateInFolder}
                 headings={headings}
-                backlinks={backlinks}
-                unlinkedMentions={unlinkedMentions}
-                onLinkUnlinkedMention={handleLinkUnlinkedMention}
                 globalTasks={globalTasks}
                 onToggleGlobalTask={handleToggleGlobalTask}
                 onOpenDailyNote={handleOpenDailyNote}
-                onOpenGraphView={() => setShowGraphViewModal(true)}
                 onOpenDocument={openDocument}
                 onNavigateToLine={navigateToLine}
                 onAddRootDialog={async () => {
@@ -4516,7 +4543,6 @@ export const App: React.FC = () => {
                 wordWrap={settings.wordWrap !== false}
                 marginMode={settings.editorMarginMode || 'medium'}
                 focusMode={Boolean(settings.focusMode)}
-                typewriterScrolling={Boolean(settings.typewriterScrolling)}
                 workspaceDocuments={workspaceDocEntries}
                 spellcheckEnabled={settings.spellcheckEnabled !== false}
                 spellcheckLanguages={currentSpellLangs}
@@ -4763,7 +4789,6 @@ export const App: React.FC = () => {
                     wordWrap={settings.wordWrap !== false}
                     marginMode={settings.editorMarginMode || 'medium'}
                     focusMode={Boolean(settings.focusMode)}
-                    typewriterScrolling={Boolean(settings.typewriterScrolling)}
                     workspaceDocuments={workspaceDocEntries}
                     spellcheckEnabled={settings.spellcheckEnabled !== false}
                     spellcheckLanguages={currentSpellLangs}
@@ -4845,12 +4870,14 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {/* Right-Aligned Resizable Panels (Frontmatter, Templates, Local AI, Help & Reference) + Bottom Right-Panel Control Strip */}
+        {/* Right-Aligned Resizable Panels (Frontmatter, Templates, Local AI, Daily Notes & Calendar, Global Tasks, Help & Reference) + Bottom Right-Panel Control Strip */}
         {!settings.zenMode &&
           (settings.frontmatterPanelVisible ||
             settings.templatesPanelVisible ||
             settings.rightSidebarOpen ||
-            settings.helpPanelVisible) && (
+            settings.helpPanelVisible ||
+            settings.calendarPanelVisible ||
+            settings.tasksPanelVisible) && (
             <>
               <div
                 data-testid={
@@ -4860,7 +4887,11 @@ export const App: React.FC = () => {
                       ? 'templates-sidebar-resizer'
                       : settings.helpPanelVisible
                         ? 'help-sidebar-resizer'
-                        : 'right-sidebar-resizer'
+                        : settings.calendarPanelVisible
+                          ? 'calendar-sidebar-resizer'
+                          : settings.tasksPanelVisible
+                            ? 'tasks-sidebar-resizer'
+                            : 'right-sidebar-resizer'
                 }
                 title="Drag to resize Right Panel"
                 onMouseDown={(e) => {
@@ -4871,7 +4902,11 @@ export const App: React.FC = () => {
                       ? 'templates'
                       : settings.helpPanelVisible
                         ? 'help'
-                        : 'right'
+                        : settings.calendarPanelVisible
+                          ? 'calendar'
+                          : settings.tasksPanelVisible
+                            ? 'tasks'
+                            : 'right'
                 }}
                 className="w-1 h-full cursor-col-resize bg-transparent hover:bg-accent transition-colors shrink-0 z-20"
               />
@@ -4953,7 +4988,9 @@ export const App: React.FC = () => {
                   {settings.rightSidebarOpen &&
                     !settings.frontmatterPanelVisible &&
                     !settings.templatesPanelVisible &&
-                    !settings.helpPanelVisible && (
+                    !settings.helpPanelVisible &&
+                    !settings.calendarPanelVisible &&
+                    !settings.tasksPanelVisible && (
                       <LocalAIPanel
                         settings={settings}
                         roots={roots}
@@ -4989,10 +5026,50 @@ export const App: React.FC = () => {
                       />
                     )}
 
-                  {/* 4. Right-Side Help & Reference Panel (Formatting, Dynamic Variables <% %>, Shortcuts) */}
+                  {/* 4. Right-Side Daily Notes & Calendar Panel */}
+                  {settings.calendarPanelVisible &&
+                    !settings.frontmatterPanelVisible &&
+                    !settings.templatesPanelVisible &&
+                    !settings.rightSidebarOpen &&
+                    !settings.helpPanelVisible &&
+                    !settings.tasksPanelVisible && (
+                      <DailyNotesCalendarPanel
+                        dynamicCandidateDocuments={dynamicCandidateDocuments}
+                        onOpenDailyNote={(dateYmd) => {
+                          void handleOpenDailyNote(dateYmd)
+                        }}
+                        onOpenDocument={(rootId, relPath) => {
+                          void openDocument(rootId, relPath)
+                        }}
+                        onClose={() => handleUpdateSettings({ calendarPanelVisible: false })}
+                      />
+                    )}
+
+                  {/* 5. Right-Side Global Tasks Panel */}
+                  {settings.tasksPanelVisible &&
+                    !settings.frontmatterPanelVisible &&
+                    !settings.templatesPanelVisible &&
+                    !settings.rightSidebarOpen &&
+                    !settings.helpPanelVisible &&
+                    !settings.calendarPanelVisible && (
+                      <GlobalTasksRightPanel
+                        globalTasks={globalTasks}
+                        onToggleGlobalTask={(task) => {
+                          void handleToggleGlobalTask(task)
+                        }}
+                        onNavigateToLine={(rootId, relPath, lineNumber) => {
+                          void navigateToLine(rootId, relPath, lineNumber)
+                        }}
+                        onClose={() => handleUpdateSettings({ tasksPanelVisible: false })}
+                      />
+                    )}
+
+                  {/* 6. Right-Side Help & Reference Panel (Formatting, Dynamic Variables <% %>, Shortcuts) */}
                   {settings.helpPanelVisible &&
                     !settings.frontmatterPanelVisible &&
-                    !settings.templatesPanelVisible && (
+                    !settings.templatesPanelVisible &&
+                    !settings.calendarPanelVisible &&
+                    !settings.tasksPanelVisible && (
                       <HelpModal
                         initialTab={helpModalTab}
                         evaluationContext={templateEvaluationContext}
@@ -5072,6 +5149,42 @@ export const App: React.FC = () => {
 
                       <button
                         type="button"
+                        data-tooltip="Daily Notes & Calendar"
+                        data-tooltip-pos="top"
+                        aria-label="Daily Notes & Calendar"
+                        data-testid="right-panel-tab-calendar"
+                        onClick={() =>
+                          handleUpdateSettings({ calendarPanelVisible: true })
+                        }
+                        className={`p-1 rounded transition-colors ${
+                          settings.calendarPanelVisible
+                            ? 'bg-panel text-accent shadow-sm'
+                            : 'text-muted hover:text-primary'
+                        }`}
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        data-tooltip="Global Tasks"
+                        data-tooltip-pos="top"
+                        aria-label="Global Tasks"
+                        data-testid="right-panel-tab-tasks"
+                        onClick={() =>
+                          handleUpdateSettings({ tasksPanelVisible: true })
+                        }
+                        className={`p-1 rounded transition-colors ${
+                          settings.tasksPanelVisible
+                            ? 'bg-panel text-accent shadow-sm'
+                            : 'text-muted hover:text-primary'
+                        }`}
+                      >
+                        <CheckSquare className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
                         data-tooltip="Help & Reference"
                         data-tooltip-pos="top"
                         aria-label="Help & Reference"
@@ -5100,7 +5213,9 @@ export const App: React.FC = () => {
                           frontmatterPanelVisible: false,
                           templatesPanelVisible: false,
                           rightSidebarOpen: false,
-                          helpPanelVisible: false
+                          helpPanelVisible: false,
+                          calendarPanelVisible: false,
+                          tasksPanelVisible: false
                         })
                       }
                       className="p-1 rounded bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
@@ -5494,18 +5609,6 @@ export const App: React.FC = () => {
             setAiInstructionDialog(null)
           }}
           onClose={() => setAiInstructionDialog(null)}
-        />
-      )}
-
-      {showGraphViewModal && (
-        <KnowledgeGraphModal
-          open={showGraphViewModal}
-          documents={workspaceDocEntries}
-          activeDocKey={activeTab ? `${activeTab.rootId}::${activeTab.relativePath}` : null}
-          onSelectDocument={(rootId: string, relativePath: string) => {
-            void openDocument(rootId, relativePath)
-          }}
-          onClose={() => setShowGraphViewModal(false)}
         />
       )}
 

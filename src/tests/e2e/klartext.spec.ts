@@ -386,8 +386,15 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await expect(page.getByTestId('mermaid-preset-gallery')).toBeVisible()
       await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('Multi-Root Workspace')
 
-      // Switch to Packet (TCP) preset in Mermaid Live Studio and append a bit field
+      // Switch to Sequence, Kanban, Quadrant, and Packet (TCP) presets and verify their graphical drag-and-drop GUI builders
+      await page.getByTestId('mermaid-preset-sequence').click()
+      await expect(page.getByTestId('mermaid-visual-sequence-builder')).toBeVisible()
+      await page.getByTestId('mermaid-preset-kanban').click()
+      await expect(page.getByTestId('mermaid-visual-kanban-builder')).toBeVisible()
+      await page.getByTestId('mermaid-preset-quadrant').click()
+      await expect(page.getByTestId('mermaid-visual-quadrant-builder')).toBeVisible()
       await page.getByTestId('mermaid-preset-packet').click()
+      await expect(page.getByTestId('mermaid-visual-packet-builder')).toBeVisible()
       await expect(page.getByTestId('mermaid-packet-builder-bar')).toBeVisible()
       await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('title: "TCP Packet"')
       await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('0-15: "Source Port"')
@@ -855,24 +862,28 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('frontmatter-custom-add-btn').click()
       await expect(page.getByTestId('frontmatter-date-picker-btn-review_date')).toBeVisible()
 
-      // 5. Verify Knowledge Graph Modal (1.1), Focus Mode & Typewriter Scrolling (4.1), In-Doc Find Bar (4.3), Daily Calendar (3.1), and Global Tasks (3.2)
+      // 5. Verify Links & Mentions, Graph View, and Typewriter Scrolling are removed, while Focus Mode (4.1), In-Doc Find Bar (4.3), Daily Calendar (3.1), Global Tasks (3.2), and Workspace Drag-and-Drop Reordering work
+      await expect(page.getByTestId('sidebar-tab-backlinks')).toHaveCount(0)
+      await expect(page.getByTestId('open-graph-view-btn')).toHaveCount(0)
       await page.getByTestId('view-menu-btn').click()
+      await expect(page.getByTestId('view-menu-open-graph')).toHaveCount(0)
+      await expect(page.getByTestId('view-menu-toggle-links')).toHaveCount(0)
+      await expect(page.getByTestId('view-menu-toggle-typewriter')).toHaveCount(0)
       await expect(page.getByTestId('view-menu-toggle-focus-mode')).toBeVisible()
-      await expect(page.getByTestId('view-menu-toggle-typewriter')).toBeVisible()
-      await expect(page.getByTestId('view-menu-open-graph')).toBeVisible()
       await page.getByTestId('view-menu-toggle-focus-mode').click()
       await expect(page.getByTestId('codemirror-editor-container')).toHaveAttribute(
         'data-focus-mode',
         'true'
       )
 
-      await page.getByTestId('view-menu-btn').click()
-      await page.getByTestId('view-menu-open-graph').click()
-      await expect(page.getByTestId('graph-view-modal')).toBeVisible()
-      await page.getByTestId('graph-mode-local').click()
-      await page.getByTestId('graph-mode-global').click()
-      await page.getByTestId('close-graph-view-btn').click()
-      await expect(page.getByTestId('graph-view-modal')).toHaveCount(0)
+      // Verify Workspace Drag-and-Drop Reordering and vertical scroll container in Explorer
+      await page.getByTestId('sidebar-tab-explorer').click()
+      await expect(page.getByTestId('workspace-explorer-scroll-container')).toBeVisible()
+      await page.getByTestId(`workspace-root-header-${repo2Id}`).dispatchEvent('dragstart')
+      await page.getByTestId(`workspace-root-header-${repo1Id}`).dispatchEvent('dragover')
+      await page.getByTestId(`workspace-root-header-${repo1Id}`).dispatchEvent('drop')
+      await page.getByTestId(`workspace-root-header-${repo2Id}`).dispatchEvent('dragend')
+      await page.getByTestId('sidebar-tab-git').click()
 
       // Verify In-Document Find & Replace Bar (4.3)
       await page.getByTestId('edit-menu-btn').click()
@@ -881,18 +892,20 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('in-doc-find-close').click()
       await expect(page.getByTestId('in-doc-find-bar')).toHaveCount(0)
 
-      // Verify Daily Calendar (3.1) and Global Tasks (3.2) sidebar tabs, then return to git tab
-      await page.getByTestId('sidebar-tab-calendar').click()
+      // Verify Daily Calendar (3.1) and Global Tasks (3.2) in the Right Panel, then return to Frontmatter tab
+      await page.getByTestId('right-panel-tab-calendar').click()
       await expect(page.getByTestId('daily-calendar-panel')).toBeVisible()
-      await page.getByTestId('sidebar-tab-tasks').click()
+      await page.getByTestId('right-panel-tab-tasks').click()
       await expect(page.getByTestId('global-tasks-panel')).toBeVisible()
-      await page.getByTestId('sidebar-tab-git').click()
+      await page.getByTestId('right-panel-tab-frontmatter').click()
+      await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
 
-      // Verify all settings, panel visibility, sidebar tab, saved themes, and open tabs are persisted
+      // Verify all settings, panel visibility, sidebar tab, workspace order, saved themes, and open tabs are persisted
       const persistedSettings = await page.evaluate(() => window.klartext.getSettings())
       expect(persistedSettings.frontmatterPanelVisible).toBe(true)
       expect(persistedSettings.lastActiveRightPanel).toBe('frontmatter')
       expect(persistedSettings.leftSidebarTab).toBe('git')
+      expect(persistedSettings.workspaceOrder?.[0]).toBe(repo2Id)
       expect(persistedSettings.savedThemes?.some((t) => t.name === 'My Nordic Theme')).toBe(true)
       expect(
         persistedSettings.globalFrontmatterProperties?.some((p) => p.key === 'review_date')

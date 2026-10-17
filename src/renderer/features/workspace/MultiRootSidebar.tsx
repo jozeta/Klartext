@@ -78,10 +78,7 @@ export type LeftSidebarTab =
   | 'explorer'
   | 'search'
   | 'outline'
-  | 'backlinks'
   | 'git'
-  | 'calendar'
-  | 'tasks'
 
 export interface WorkspaceTreeSortOptions {
   sortOrder: WorkspaceSortOrder
@@ -243,6 +240,8 @@ export const MultiRootSidebar: React.FC<{
   collapsedDirs?: Record<string, boolean>
   onUpdateCollapsedRoots?: (next: Record<string, boolean>) => void
   onUpdateCollapsedDirs?: (next: Record<string, boolean>) => void
+  workspaceOrder?: string[]
+  onUpdateWorkspaceOrder?: (next: string[]) => void
   workspaceSortOrder?: WorkspaceSortOrder
   workspaceFoldersOnTop?: boolean
   workspaceCustomOrder?: Record<string, string[]>
@@ -266,7 +265,7 @@ export const MultiRootSidebar: React.FC<{
     templateContent: string
   ) => Promise<void> | void
   headings: HeadingItem[]
-  backlinks: BacklinkItem[]
+  backlinks?: BacklinkItem[]
   unlinkedMentions?: UnlinkedMentionItem[]
   onLinkUnlinkedMention?: (mention: UnlinkedMentionItem) => void
   onOpenGraphView?: () => void
@@ -311,7 +310,6 @@ export const MultiRootSidebar: React.FC<{
   activeTab,
   onSelectTab,
   showOutlineTab = true,
-  showBacklinksTab = true,
   sidebarControlBarVisible = true,
   editMode = 'inline',
   onChangeEditMode,
@@ -327,6 +325,8 @@ export const MultiRootSidebar: React.FC<{
   collapsedDirs: externalCollapsedDirs,
   onUpdateCollapsedRoots,
   onUpdateCollapsedDirs,
+  workspaceOrder: externalWorkspaceOrder,
+  onUpdateWorkspaceOrder,
   workspaceSortOrder: externalSortOrder,
   workspaceFoldersOnTop: externalFoldersOnTop,
   workspaceCustomOrder: externalCustomOrder,
@@ -342,13 +342,7 @@ export const MultiRootSidebar: React.FC<{
   availableTemplates = [],
   onCreateNoteFromTemplateInFolder,
   headings,
-  backlinks,
-  unlinkedMentions = [],
-  onLinkUnlinkedMention,
-  onOpenGraphView,
   onOpenDailyNote,
-  globalTasks = [],
-  onToggleGlobalTask,
   onOpenDocument,
   onNavigateToLine,
   onAddRootDialog: _onAddRootDialog,
@@ -377,10 +371,18 @@ export const MultiRootSidebar: React.FC<{
     rootId: string
     relativePath: string
   } | null>(null)
+  const [internalWorkspaceOrder, setInternalWorkspaceOrder] = useState<string[]>([])
   const [internalSortOrder, setInternalSortOrder] = useState<WorkspaceSortOrder>('name-asc')
   const [internalFoldersOnTop, setInternalFoldersOnTop] = useState<boolean>(true)
   const [internalCustomOrder, setInternalCustomOrder] = useState<Record<string, string[]>>({})
   const [internalStickyItems, setInternalStickyItems] = useState<Record<string, boolean>>({})
+
+  const workspaceOrder =
+    externalWorkspaceOrder !== undefined ? externalWorkspaceOrder : internalWorkspaceOrder
+  const setWorkspaceOrder = (next: string[]) => {
+    setInternalWorkspaceOrder(next)
+    onUpdateWorkspaceOrder?.(next)
+  }
 
   const sortOrder = externalSortOrder !== undefined ? externalSortOrder : internalSortOrder
   const setSortOrder = (next: WorkspaceSortOrder) => {
@@ -491,6 +493,10 @@ export const MultiRootSidebar: React.FC<{
     isDirectory: boolean
   } | null>(null)
   const [dragOverTargetKey, setDragOverTargetKey] = useState<string | null>(null)
+
+  // Drag-and-drop state for reordering top-level workspaces (both regular roots and dynamic workspaces)
+  const [draggedWorkspaceId, setDraggedWorkspaceId] = useState<string | null>(null)
+  const [dragOverWorkspaceId, setDragOverWorkspaceId] = useState<string | null>(null)
 
   const [copiedFileClipboard, setCopiedFileClipboard] = useState<{
     rootId: string
@@ -1287,15 +1293,52 @@ export const MultiRootSidebar: React.FC<{
     })
   }
 
-  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
-    const now = new Date()
-    return { year: now.getFullYear(), month: now.getMonth() }
+  const allWorkspaces: Array<
+    | { kind: 'root'; id: string; root: WorkspaceRoot }
+    | { kind: 'dynamic'; id: string; dynWs: DynamicWorkspaceDef }
+  > = [
+    ...roots.map((root) => ({ kind: 'root' as const, id: root.id, root })),
+    ...dynamicWorkspaces.map((dynWs) => ({ kind: 'dynamic' as const, id: dynWs.id, dynWs }))
+  ]
+
+  const orderedWorkspaces = [...allWorkspaces].sort((a, b) => {
+    const idxA = workspaceOrder.indexOf(a.id)
+    const idxB = workspaceOrder.indexOf(b.id)
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB
+    if (idxA !== -1) return -1
+    if (idxB !== -1) return 1
+    return 0
   })
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
-  )
-  const [taskStatusFilter, setTaskStatusFilter] = useState<'open' | 'completed' | 'all'>('open')
-  const [taskSearchQuery, setTaskSearchQuery] = useState('')
+
+  const resolveDraggedWorkspaceId = (e: React.DragEvent): string | null => {
+    if (draggedWorkspaceId) return draggedWorkspaceId
+    try {
+      const raw = e.dataTransfer?.getData('application/x-klartext-workspace')
+      if (raw) return raw
+    } catch {
+      // Ignore synthetic drag events
+    }
+    return null
+  }
+
+  const handleReorderWorkspace = (
+    sourceId: string,
+    targetId: string,
+    explicitPlacement?: 'before' | 'after'
+  ) => {
+    if (!sourceId || !targetId || sourceId === targetId) return
+    const currentIds = orderedWorkspaces.map((w) => w.id)
+    const origSourceIdx = currentIds.indexOf(sourceId)
+    const origTargetIdx = currentIds.indexOf(targetId)
+    if (origSourceIdx === -1 || origTargetIdx === -1) return
+    const placement: 'before' | 'after' =
+      explicitPlacement || (origSourceIdx > origTargetIdx ? 'before' : 'after')
+    const withoutSource = currentIds.filter((id) => id !== sourceId)
+    const targetIdx = withoutSource.indexOf(targetId)
+    const insertAt = placement === 'before' ? targetIdx : targetIdx + 1
+    withoutSource.splice(insertAt, 0, sourceId)
+    setWorkspaceOrder(withoutSource)
+  }
 
   const visibleTabs = (
     [
@@ -1318,24 +1361,6 @@ export const MultiRootSidebar: React.FC<{
         visible: showOutlineTab
       },
       {
-        id: 'backlinks',
-        label: 'Links & Mentions',
-        icon: <Link2 className="w-3.5 h-3.5" />,
-        visible: showBacklinksTab
-      },
-      {
-        id: 'calendar',
-        label: 'Daily Notes & Calendar',
-        icon: <Calendar className="w-3.5 h-3.5" />,
-        visible: true
-      },
-      {
-        id: 'tasks',
-        label: 'Global Tasks',
-        icon: <CheckSquare className="w-3.5 h-3.5" />,
-        visible: true
-      },
-      {
         id: 'git',
         label: 'Git',
         icon: <GitBranch className="w-3.5 h-3.5" />,
@@ -1356,8 +1381,11 @@ export const MultiRootSidebar: React.FC<{
     >
       {/* TAB 1: MULTI-ROOT FILE EXPLORER */}
       {activeTab === 'explorer' && (
-        <div className="flex-1 flex flex-col overflow-y-auto p-2 space-y-2">
-          <div className="flex items-center justify-between px-1 gap-1">
+        <div
+          data-testid="workspace-explorer-scroll-container"
+          className="flex-1 min-h-0 flex flex-col overflow-y-auto p-2 space-y-2"
+        >
+          <div className="shrink-0 flex items-center justify-between px-1 gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted truncate">
               Workspace Roots ({roots.length + dynamicWorkspaces.length})
             </span>
@@ -1372,23 +1400,13 @@ export const MultiRootSidebar: React.FC<{
                 <Calendar className="w-3 h-3 text-accent" />
                 <span>Daily</span>
               </button>
-              <button
-                type="button"
-                title="Open 2D Knowledge Graph"
-                data-testid="open-graph-view-btn"
-                onClick={() => onOpenGraphView?.()}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-[10px] font-medium text-primary"
-              >
-                <Compass className="w-3 h-3 text-accent" />
-                <span>Graph</span>
-              </button>
             </div>
           </div>
 
           {/* Workspace Sort Order Dropdown (Name A-Z, Name Z-A, Custom) + Folders on Top Checkbox */}
           <div
             data-testid="workspace-sort-controls"
-            className="flex items-center justify-between gap-2 px-1.5 py-1 rounded bg-panel border border-subtle text-[11px]"
+            className="shrink-0 flex items-center justify-between gap-2 px-1.5 py-1 rounded bg-panel border border-subtle text-[11px]"
           >
             <div className="flex items-center gap-1 min-w-0 flex-1">
               <ArrowUpDown className="w-3 h-3 text-muted shrink-0" />
@@ -1422,155 +1440,258 @@ export const MultiRootSidebar: React.FC<{
           </div>
 
           {roots.length === 0 && dynamicWorkspaces.length === 0 && (
-            <div className="px-3 py-6 text-center text-xs text-muted rounded-md border border-dashed border-subtle bg-panel/50">
+            <div className="shrink-0 px-3 py-6 text-center text-xs text-muted rounded-md border border-dashed border-subtle bg-panel/50">
               No folders mounted yet. Use <span className="font-medium text-primary">File → Open Folder…</span>, <span className="font-medium text-primary">File → Add Git Workspace…</span>, or <span className="font-medium text-primary">File → Create a New Dynamic Workspace…</span> to get started.
             </div>
           )}
 
-          {roots.map((root) => {
-            const isCollapsed = Boolean(collapsedRoots[root.id])
-            const gitStatus = gitStatuses[root.id]
-            const nodes = treesByRoot[root.id] || []
-            const activeSubfolderForRoot =
-              selectedFolder?.rootId === root.id && selectedFolder.relativePath
-                ? selectedFolder.relativePath
-                : ''
-            const rootDropKey = `${root.id}/__root__`
-            const isDragOverRoot = dragOverTargetKey === rootDropKey
+          {orderedWorkspaces.map((wsEntry) => {
+            if (wsEntry.kind === 'root') {
+              const root = wsEntry.root
+              const isCollapsed = Boolean(collapsedRoots[root.id])
+              const gitStatus = gitStatuses[root.id]
+              const nodes = treesByRoot[root.id] || []
+              const activeSubfolderForRoot =
+                selectedFolder?.rootId === root.id && selectedFolder.relativePath
+                  ? selectedFolder.relativePath
+                  : ''
+              const rootDropKey = `${root.id}/__root__`
+              const isDragOverRoot =
+                dragOverTargetKey === rootDropKey || dragOverWorkspaceId === root.id
 
-            return (
-              <div
-                key={root.id}
-                data-testid={`workspace-root-section-${root.id}`}
-                className={`rounded-md border bg-panel overflow-hidden transition-colors ${
-                  isDragOverRoot ? 'border-accent ring-1 ring-accent' : 'border-subtle'
-                }`}
-              >
+              return (
                 <div
-                  data-testid={`workspace-root-header-${root.id}`}
-                  onClick={() => setSelectedFolder({ rootId: root.id, relativePath: '' })}
-                  onDragOver={(e) => {
-                    e.preventDefault()
+                  key={root.id}
+                  data-testid={`workspace-root-section-${root.id}`}
+                  data-workspace-id={root.id}
+                  draggable
+                  onDragStart={(e) => {
                     e.stopPropagation()
-                    const src = resolveDraggedItem(e)
-                    if (canDropTreeItemIntoFolder(src, root.id, '')) {
-                      e.dataTransfer.dropEffect = 'move'
-                      if (dragOverTargetKey !== rootDropKey) {
-                        setDragOverTargetKey(rootDropKey)
+                    setDraggedWorkspaceId(root.id)
+                    try {
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('application/x-klartext-workspace', root.id)
+                      e.dataTransfer.setData('text/plain', root.id)
+                    } catch {
+                      // Ignore synthetic drag events
+                    }
+                  }}
+                  onDragEnd={() => {
+                    setDraggedWorkspaceId(null)
+                    setDragOverWorkspaceId(null)
+                  }}
+                  onDragOver={(e) => {
+                    const draggedWs = resolveDraggedWorkspaceId(e)
+                    if (draggedWs && draggedWs !== root.id) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (dragOverWorkspaceId !== root.id) {
+                        setDragOverWorkspaceId(root.id)
                       }
                     }
                   }}
                   onDragLeave={(e) => {
                     e.stopPropagation()
-                    if (dragOverTargetKey === rootDropKey) {
-                      setDragOverTargetKey(null)
+                    if (dragOverWorkspaceId === root.id) {
+                      setDragOverWorkspaceId(null)
                     }
                   }}
-                  onDrop={(e) => handleDropIntoTarget(root.id, '', e)}
-                  className="flex items-center justify-between px-2 py-1.5 bg-secondary/60 border-b border-subtle text-xs cursor-pointer"
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
+                  onDrop={(e) => {
+                    const draggedWs = resolveDraggedWorkspaceId(e)
+                    if (draggedWs && draggedWs !== root.id) {
+                      e.preventDefault()
                       e.stopPropagation()
-                      setSelectedFolder({ rootId: root.id, relativePath: '' })
-                      setCollapsedRoots((p) => ({ ...p, [root.id]: !p[root.id] }))
-                    }}
-                    className="flex items-center gap-1 font-semibold text-primary truncate"
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-3.5 h-3.5 shrink-0" />
-                    )}
-                    <span className="truncate">{root.name}</span>
-                  </button>
-
-                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <span
-                      data-testid={`root-git-badge-${root.id}`}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation()
-                        void window.klartext?.openRootInFinder?.(root.id)
-                      }}
-                      onMouseEnter={(e) => {
+                      setDraggedWorkspaceId(null)
+                      setDragOverWorkspaceId(null)
+                      let placement: 'before' | 'after' | undefined
+                      if (e.clientY > 0) {
                         const rect = e.currentTarget.getBoundingClientRect()
-                        setHoveredRootBadge({
-                          rootId: root.id,
-                          path: root.path,
-                          x: rect.left,
-                          y: rect.bottom + 6
-                        })
+                        if (rect.height > 0) {
+                          placement = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+                        }
+                      }
+                      handleReorderWorkspace(draggedWs, root.id, placement)
+                    }
+                  }}
+                  className={`shrink-0 rounded-md border bg-panel overflow-hidden transition-colors ${
+                    isDragOverRoot ? 'border-accent ring-1 ring-accent' : 'border-subtle'
+                  }`}
+                >
+                  <div
+                    data-testid={`workspace-root-header-${root.id}`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation()
+                      setDraggedWorkspaceId(root.id)
+                      try {
+                        e.dataTransfer.effectAllowed = 'move'
+                        e.dataTransfer.setData('application/x-klartext-workspace', root.id)
+                        e.dataTransfer.setData('text/plain', root.id)
+                      } catch {
+                        // Ignore synthetic drag events
+                      }
+                    }}
+                    onDragEnd={() => {
+                      setDraggedWorkspaceId(null)
+                      setDragOverWorkspaceId(null)
+                    }}
+                    onClick={() => setSelectedFolder({ rootId: root.id, relativePath: '' })}
+                    onDragOver={(e) => {
+                      const draggedWs = resolveDraggedWorkspaceId(e)
+                      if (draggedWs && draggedWs !== root.id) {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (dragOverWorkspaceId !== root.id) {
+                          setDragOverWorkspaceId(root.id)
+                        }
+                        return
+                      }
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const src = resolveDraggedItem(e)
+                      if (canDropTreeItemIntoFolder(src, root.id, '')) {
+                        try {
+                          e.dataTransfer.dropEffect = 'move'
+                        } catch {
+                          // Ignore synthetic drag events
+                        }
+                        if (dragOverTargetKey !== rootDropKey) {
+                          setDragOverTargetKey(rootDropKey)
+                        }
+                      }
+                    }}
+                    onDragLeave={(e) => {
+                      e.stopPropagation()
+                      if (dragOverTargetKey === rootDropKey) {
+                        setDragOverTargetKey(null)
+                      }
+                      if (dragOverWorkspaceId === root.id) {
+                        setDragOverWorkspaceId(null)
+                      }
+                    }}
+                    onDrop={(e) => {
+                      const draggedWs = resolveDraggedWorkspaceId(e)
+                      if (draggedWs && draggedWs !== root.id) {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setDraggedWorkspaceId(null)
+                        setDragOverWorkspaceId(null)
+                        let placement: 'before' | 'after' | undefined
+                        if (e.clientY > 0) {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          if (rect.height > 0) {
+                            placement = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+                          }
+                        }
+                        handleReorderWorkspace(draggedWs, root.id, placement)
+                        return
+                      }
+                      handleDropIntoTarget(root.id, '', e)
+                    }}
+                    className="flex items-center justify-between px-2 py-1.5 bg-secondary/60 border-b border-subtle text-xs cursor-grab active:cursor-grabbing"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedFolder({ rootId: root.id, relativePath: '' })
+                        setCollapsedRoots((p) => ({ ...p, [root.id]: !p[root.id] }))
                       }}
-                      onMouseLeave={() =>
-                        setHoveredRootBadge((prev) =>
-                          prev?.rootId === root.id ? null : prev
-                        )
-                      }
-                      className={`text-[10px] px-1.5 py-0.5 rounded border border-subtle cursor-pointer select-none ${
-                        gitStatus?.state === 'Merge Conflict'
-                          ? 'text-danger font-semibold'
-                          : 'text-muted'
-                      }`}
+                      className="flex items-center gap-1 font-semibold text-primary truncate"
                     >
-                      {gitStatus?.isGitRepo
-                        ? `${gitStatus.branch} · ${gitStatus.state}`
-                        : 'Local'}
-                    </span>
-                    <button
-                      type="button"
-                      title={
-                        activeSubfolderForRoot
-                          ? `Create New Note in "${activeSubfolderForRoot}"`
-                          : 'Create New File (Untitled.md)'
-                      }
-                      data-testid={`new-file-btn-${root.id}`}
-                      onClick={() => handleCreateUntitledFile(root.id)}
-                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
-                    >
-                      <FilePlus className="w-3.5 h-3.5" />
+                      {isCollapsed ? (
+                        <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span className="truncate">{root.name}</span>
                     </button>
-                    <button
-                      type="button"
-                      title={
-                        activeSubfolderForRoot
-                          ? `Create New Subfolder in "${activeSubfolderForRoot}"`
-                          : 'Create New Subfolder'
-                      }
-                      data-testid={`new-folder-btn-${root.id}`}
-                      onClick={() => handleCreateNewSubfolder(root.id)}
-                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
-                    >
-                      <FolderPlus className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Remove Root from Workspace"
-                      data-testid={`remove-root-btn-${root.id}`}
-                      onClick={() => onRemoveRoot(root.id)}
-                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <span
+                        data-testid={`root-git-badge-${root.id}`}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          void window.klartext?.openRootInFinder?.(root.id)
+                        }}
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setHoveredRootBadge({
+                            rootId: root.id,
+                            path: root.path,
+                            x: rect.left,
+                            y: rect.bottom + 6
+                          })
+                        }}
+                        onMouseLeave={() =>
+                          setHoveredRootBadge((prev) =>
+                            prev?.rootId === root.id ? null : prev
+                          )
+                        }
+                        className={`text-[10px] px-1.5 py-0.5 rounded border border-subtle cursor-pointer select-none ${
+                          gitStatus?.state === 'Merge Conflict'
+                            ? 'text-danger font-semibold'
+                            : 'text-muted'
+                        }`}
+                      >
+                        {gitStatus?.isGitRepo
+                          ? `${gitStatus.branch} · ${gitStatus.state}`
+                          : 'Local'}
+                      </span>
+                      <button
+                        type="button"
+                        title={
+                          activeSubfolderForRoot
+                            ? `Create New Note in "${activeSubfolderForRoot}"`
+                            : 'Create New File (Untitled.md)'
+                        }
+                        data-testid={`new-file-btn-${root.id}`}
+                        onClick={() => handleCreateUntitledFile(root.id)}
+                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                      >
+                        <FilePlus className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        title={
+                          activeSubfolderForRoot
+                            ? `Create New Subfolder in "${activeSubfolderForRoot}"`
+                            : 'Create New Subfolder'
+                        }
+                        data-testid={`new-folder-btn-${root.id}`}
+                        onClick={() => handleCreateNewSubfolder(root.id)}
+                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Remove Root from Workspace"
+                        data-testid={`remove-root-btn-${root.id}`}
+                        onClick={() => onRemoveRoot(root.id)}
+                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
+
+                  {!isCollapsed && (
+                    <div className="p-1.5 space-y-0.5">
+                      {nodes.length === 0 ? (
+                        <div className="text-xs text-muted px-2 py-1">Empty folder</div>
+                      ) : (
+                        renderTreeNodes(root.id, nodes, '')
+                      )}
+                    </div>
+                  )}
                 </div>
+              )
+            }
 
-                {!isCollapsed && (
-                  <div className="p-1.5 space-y-0.5">
-                    {nodes.length === 0 ? (
-                      <div className="text-xs text-muted px-2 py-1">Empty folder</div>
-                    ) : (
-                      renderTreeNodes(root.id, nodes, '')
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {/* DYNAMIC WORKSPACES (Container + Dynamic Folders or Root Dynamic Content) */}
-          {dynamicWorkspaces.map((dynWs) => {
+            const dynWs = wsEntry.dynWs
             const isCollapsed = Boolean(collapsedRoots[dynWs.id])
+            const isDragOverDynWs = dragOverWorkspaceId === dynWs.id
             const rootMatchedDocs =
               dynWs.mode === 'root-content'
                 ? dynamicCandidateDocuments.filter((doc) =>
@@ -1582,14 +1703,109 @@ export const MultiRootSidebar: React.FC<{
               <div
                 key={dynWs.id}
                 data-testid={`dynamic-workspace-section-${dynWs.id}`}
-                className="rounded-md border border-subtle bg-panel overflow-hidden transition-colors"
+                data-workspace-id={dynWs.id}
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation()
+                  setDraggedWorkspaceId(dynWs.id)
+                  try {
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('application/x-klartext-workspace', dynWs.id)
+                    e.dataTransfer.setData('text/plain', dynWs.id)
+                  } catch {
+                    // Ignore synthetic drag events
+                  }
+                }}
+                onDragEnd={() => {
+                  setDraggedWorkspaceId(null)
+                  setDragOverWorkspaceId(null)
+                }}
+                onDragOver={(e) => {
+                  const draggedWs = resolveDraggedWorkspaceId(e)
+                  if (draggedWs && draggedWs !== dynWs.id) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (dragOverWorkspaceId !== dynWs.id) {
+                      setDragOverWorkspaceId(dynWs.id)
+                    }
+                  }
+                }}
+                onDragLeave={(e) => {
+                  e.stopPropagation()
+                  if (dragOverWorkspaceId === dynWs.id) {
+                    setDragOverWorkspaceId(null)
+                  }
+                }}
+                onDrop={(e) => {
+                  const draggedWs = resolveDraggedWorkspaceId(e)
+                  if (draggedWs && draggedWs !== dynWs.id) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setDraggedWorkspaceId(null)
+                    setDragOverWorkspaceId(null)
+                    let placement: 'before' | 'after' | undefined
+                    if (e.clientY > 0) {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      if (rect.height > 0) {
+                        placement = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+                      }
+                    }
+                    handleReorderWorkspace(draggedWs, dynWs.id, placement)
+                  }
+                }}
+                className={`shrink-0 rounded-md border bg-panel overflow-hidden transition-colors ${
+                  isDragOverDynWs ? 'border-accent ring-1 ring-accent' : 'border-subtle'
+                }`}
               >
                 <div
                   data-testid={`dynamic-workspace-header-${dynWs.id}`}
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation()
+                    setDraggedWorkspaceId(dynWs.id)
+                    try {
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('application/x-klartext-workspace', dynWs.id)
+                      e.dataTransfer.setData('text/plain', dynWs.id)
+                    } catch {
+                      // Ignore synthetic drag events
+                    }
+                  }}
+                  onDragEnd={() => {
+                    setDraggedWorkspaceId(null)
+                    setDragOverWorkspaceId(null)
+                  }}
+                  onDragOver={(e) => {
+                    const draggedWs = resolveDraggedWorkspaceId(e)
+                    if (draggedWs && draggedWs !== dynWs.id) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (dragOverWorkspaceId !== dynWs.id) {
+                        setDragOverWorkspaceId(dynWs.id)
+                      }
+                    }
+                  }}
+                  onDrop={(e) => {
+                    const draggedWs = resolveDraggedWorkspaceId(e)
+                    if (draggedWs && draggedWs !== dynWs.id) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setDraggedWorkspaceId(null)
+                      setDragOverWorkspaceId(null)
+                      let placement: 'before' | 'after' | undefined
+                      if (e.clientY > 0) {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        if (rect.height > 0) {
+                          placement = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+                        }
+                      }
+                      handleReorderWorkspace(draggedWs, dynWs.id, placement)
+                    }
+                  }}
                   onClick={() =>
                     setCollapsedRoots((p) => ({ ...p, [dynWs.id]: !p[dynWs.id] }))
                   }
-                  className="flex items-center justify-between px-2 py-1.5 bg-secondary/60 border-b border-subtle text-xs cursor-pointer"
+                  className="flex items-center justify-between px-2 py-1.5 bg-secondary/60 border-b border-subtle text-xs cursor-grab active:cursor-grabbing"
                 >
                   <button
                     type="button"
@@ -2444,361 +2660,7 @@ export const MultiRootSidebar: React.FC<{
         </div>
       )}
 
-      {/* TAB 4: BACKLINKS & UNLINKED MENTIONS PANEL */}
-      {activeTab === 'backlinks' && (
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs" data-testid="backlinks-panel">
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] font-semibold uppercase text-muted">
-              Incoming WikiLinks ({backlinks.length})
-            </div>
-            <button
-              type="button"
-              data-testid="backlinks-open-graph-btn"
-              onClick={() => onOpenGraphView?.()}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-[10px] font-medium text-accent"
-            >
-              <Compass className="w-3 h-3" />
-              <span>2D Graph</span>
-            </button>
-          </div>
-          {backlinks.length === 0 ? (
-            <div className="text-muted">No documents link to this file yet.</div>
-          ) : (
-            backlinks.map((bl, idx) => (
-              <div
-                key={idx}
-                onClick={() =>
-                  onNavigateToLine(bl.sourceRootId, bl.sourceRelativePath, bl.lineNumber)
-                }
-                className="p-2 rounded bg-panel border border-subtle cursor-pointer hover:border-accent space-y-1"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-primary">{bl.sourceRelativePath}</span>
-                  <span className="px-1.5 py-0.5 rounded bg-secondary text-[10px] text-accent">
-                    {bl.sourceRootName}
-                  </span>
-                </div>
-                {bl.isCrossRoot && (
-                  <div className="text-[10px] text-warning flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" />
-                    Cross-repository link
-                  </div>
-                )}
-                <div className="text-[11px] font-mono text-muted truncate">
-                  L{bl.lineNumber}: {bl.excerpt}
-                </div>
-              </div>
-            ))
-          )}
-
-          {/* Unlinked Mentions Section */}
-          <div className="pt-2 border-t border-subtle space-y-2" data-testid="unlinked-mentions-list">
-            <div className="text-[10px] font-semibold uppercase text-muted">
-              Unlinked Mentions ({unlinkedMentions.length})
-            </div>
-            {unlinkedMentions.length === 0 ? (
-              <div className="text-muted text-[11px]">
-                No unlinked plain-text mentions found across workspace notes.
-              </div>
-            ) : (
-              unlinkedMentions.map((um, idx) => (
-                <div
-                  key={`${um.sourceRootId}-${um.sourceRelativePath}-${um.lineNumber}-${idx}`}
-                  data-testid={`unlinked-mention-card-${um.sourceRootId}-${um.sourceRelativePath}-${um.lineNumber}`}
-                  className="p-2 rounded bg-panel border border-subtle space-y-1"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span
-                      onClick={() =>
-                        onNavigateToLine(um.sourceRootId, um.sourceRelativePath, um.lineNumber)
-                      }
-                      className="font-semibold text-primary truncate cursor-pointer hover:underline"
-                    >
-                      {um.sourceRelativePath}
-                    </span>
-                    <button
-                      type="button"
-                      data-testid={`link-unlinked-mention-btn-${um.sourceRootId}-${um.sourceRelativePath}-${um.lineNumber}`}
-                      onClick={() => onLinkUnlinkedMention?.(um)}
-                      className="px-2 py-0.5 rounded bg-accent text-white text-[10px] font-medium hover:opacity-90 shrink-0"
-                    >
-                      Link [[{um.matchedTitle}]]
-                    </button>
-                  </div>
-                  <div className="text-[11px] font-mono text-muted truncate">
-                    L{um.lineNumber}: {um.excerpt}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 6: DAILY NOTES & MINI CALENDAR PANEL */}
-      {activeTab === 'calendar' && (() => {
-        const { year, month } = calendarMonth
-        const firstDay = new Date(year, month, 1)
-        const startOffset = (firstDay.getDay() + 6) % 7
-        const daysInMonth = new Date(year, month + 1, 0).getDate()
-        const cells: Array<number | null> = []
-        for (let i = 0; i < startOffset; i++) cells.push(null)
-        for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-        const pad2 = (n: number) => String(n).padStart(2, '0')
-        const monthNames = [
-          'January', 'February', 'March', 'April', 'May', 'June',
-          'July', 'August', 'September', 'October', 'November', 'December'
-        ]
-
-        // Index documents by date (filename YYYY-MM-DD or frontmatter date)
-        const docsByDate = new Map<string, DynamicCandidateDocument[]>()
-        for (const doc of dynamicCandidateDocuments) {
-          const fileMatch = doc.name.match(/(\d{4}-\d{2}-\d{2})/)
-          const { frontmatter } = extractFrontmatter(doc.content)
-          const fmDate = normalizeFrontmatterDate(frontmatter?.date)
-          const dateKeys = new Set<string>()
-          if (fileMatch) dateKeys.add(fileMatch[1])
-          if (fmDate) dateKeys.add(fmDate)
-          for (const dk of dateKeys) {
-            const list = docsByDate.get(dk) || []
-            list.push(doc)
-            docsByDate.set(dk, list)
-          }
-        }
-
-        const selectedDateDocs = docsByDate.get(selectedCalendarDate) || []
-
-        return (
-          <div
-            className="flex-1 overflow-y-auto p-3 space-y-3 text-xs"
-            data-testid="daily-calendar-panel"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase text-muted">
-                Daily Notes &amp; Calendar
-              </span>
-              <button
-                type="button"
-                data-testid="calendar-open-today-note-btn"
-                onClick={() => onOpenDailyNote?.()}
-                className="px-2 py-1 rounded bg-accent text-white text-[11px] font-medium hover:opacity-90 flex items-center gap-1"
-              >
-                <Calendar className="w-3 h-3" />
-                <span>Today&apos;s Note</span>
-              </button>
-            </div>
-
-            <div className="p-2.5 rounded-md bg-panel border border-subtle space-y-2">
-              <div className="flex items-center justify-between font-semibold text-primary">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCalendarMonth((prev) =>
-                      prev.month === 0
-                        ? { year: prev.year - 1, month: 11 }
-                        : { year: prev.year, month: prev.month - 1 }
-                    )
-                  }
-                  className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <span>
-                  {monthNames[month]} {year}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCalendarMonth((prev) =>
-                      prev.month === 11
-                        ? { year: prev.year + 1, month: 0 }
-                        : { year: prev.year, month: prev.month + 1 }
-                    )
-                  }
-                  className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-medium text-muted">
-                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => (
-                  <div key={d} className="py-0.5">
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-0.5 text-center text-[11px]">
-                {cells.map((day, idx) => {
-                  if (day === null) return <div key={`empty-${idx}`} className="h-7" />
-                  const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`
-                  const hasDocs = (docsByDate.get(dateStr)?.length || 0) > 0
-                  const isSelected = selectedCalendarDate === dateStr
-                  return (
-                    <button
-                      key={dateStr}
-                      type="button"
-                      data-testid={`mini-calendar-day-${dateStr}`}
-                      onClick={() => setSelectedCalendarDate(dateStr)}
-                      onDoubleClick={() => onOpenDailyNote?.(dateStr)}
-                      className={`h-7 rounded flex flex-col items-center justify-center relative transition-colors ${
-                        isSelected
-                          ? 'bg-accent text-white font-semibold'
-                          : 'hover:bg-secondary text-primary'
-                      }`}
-                    >
-                      <span>{day}</span>
-                      {hasDocs && (
-                        <span
-                          className={`w-1 h-1 rounded-full ${
-                            isSelected ? 'bg-white' : 'bg-accent'
-                          }`}
-                        />
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase text-muted">
-                  Notes on {selectedCalendarDate} ({selectedDateDocs.length})
-                </span>
-                <button
-                  type="button"
-                  data-testid={`calendar-create-or-open-daily-${selectedCalendarDate}`}
-                  onClick={() => onOpenDailyNote?.(selectedCalendarDate)}
-                  className="text-[11px] text-accent hover:underline font-medium"
-                >
-                  Open Daily Note ({selectedCalendarDate})
-                </button>
-              </div>
-              {selectedDateDocs.length === 0 ? (
-                <div className="text-muted text-[11px] italic">
-                  No notes dated {selectedCalendarDate}. Click above to create one.
-                </div>
-              ) : (
-                selectedDateDocs.map((doc) => (
-                  <button
-                    key={`${doc.rootId}::${doc.relativePath}`}
-                    type="button"
-                    onClick={() => onOpenDocument(doc.rootId, doc.relativePath)}
-                    className="w-full text-left p-2 rounded bg-panel border border-subtle hover:border-accent flex items-center justify-between"
-                  >
-                    <span className="truncate font-medium text-primary">{doc.name}</span>
-                    <span className="text-[10px] font-mono text-muted shrink-0">
-                      {doc.rootName}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* TAB 7: GLOBAL TASKS (- [ ]) DASHBOARD PANEL */}
-      {activeTab === 'tasks' && (() => {
-        const filteredTasks = globalTasks.filter((t) => {
-          if (taskStatusFilter === 'open' && t.checked) return false
-          if (taskStatusFilter === 'completed' && !t.checked) return false
-          if (taskSearchQuery.trim()) {
-            const q = taskSearchQuery.trim().toLowerCase()
-            return (
-              t.text.toLowerCase().includes(q) ||
-              t.docName.toLowerCase().includes(q) ||
-              t.tags.some((tg) => tg.toLowerCase().includes(q))
-            )
-          }
-          return true
-        })
-
-        return (
-          <div
-            className="flex-1 overflow-y-auto p-3 space-y-2.5 text-xs"
-            data-testid="global-tasks-panel"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase text-muted">
-                Global Tasks ({filteredTasks.length}/{globalTasks.length})
-              </span>
-              <div className="inline-flex rounded bg-panel border border-subtle p-0.5 text-[10px]">
-                {(['open', 'completed', 'all'] as const).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    data-testid={`tasks-filter-${status}`}
-                    onClick={() => setTaskStatusFilter(status)}
-                    className={`px-2 py-0.5 rounded capitalize font-medium ${
-                      taskStatusFilter === status
-                        ? 'bg-accent text-white'
-                        : 'text-muted hover:text-primary'
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <input
-              type="text"
-              data-testid="tasks-search-input"
-              value={taskSearchQuery}
-              onChange={(e) => setTaskSearchQuery(e.target.value)}
-              placeholder="Filter tasks by text, note, or #tag..."
-              className="w-full px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent"
-            />
-
-            {filteredTasks.length === 0 ? (
-              <div className="text-muted text-[11px] italic py-2">
-                No matching tasks across workspace roots.
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {filteredTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    data-testid={`global-task-card-${task.rootId}-${task.relativePath}-${task.lineNumber}`}
-                    className="p-2 rounded bg-panel border border-subtle hover:border-accent space-y-1"
-                  >
-                    <div className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        data-testid={`global-task-toggle-${task.rootId}-${task.relativePath}-${task.lineNumber}`}
-                        checked={task.checked}
-                        onChange={() => onToggleGlobalTask?.(task)}
-                        className="mt-0.5 rounded border-subtle accent-[var(--color-accent)] cursor-pointer"
-                      />
-                      <span
-                        onClick={() =>
-                          onNavigateToLine(task.rootId, task.relativePath, task.lineNumber)
-                        }
-                        className={`flex-1 cursor-pointer hover:underline ${
-                          task.checked ? 'line-through text-muted' : 'text-primary font-medium'
-                        }`}
-                      >
-                        {task.text}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between pl-5 text-[10px] text-muted font-mono">
-                      <span>
-                        {task.docName} · L{task.lineNumber}
-                      </span>
-                      <span>{task.rootName}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })()}
-
-      {/* TAB 5: MULTI-REPOSITORY GIT SOURCE CONTROL */}
+      {/* TAB 4: MULTI-REPOSITORY GIT SOURCE CONTROL */}
       {activeTab === 'git' && (
         <div
           className="flex-1 overflow-y-auto p-3 space-y-3 text-xs"

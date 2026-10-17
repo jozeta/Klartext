@@ -193,7 +193,8 @@ export const AppSettingsSchema = z.object({
   leftSidebarOpen: z.boolean().default(true),
   leftSidebarWidth: z.number().min(160).max(600).default(260),
   leftSidebarTab: z
-    .enum(['explorer', 'search', 'outline', 'backlinks', 'git', 'calendar', 'tasks'])
+    .enum(['explorer', 'search', 'outline', 'git'])
+    .catch('explorer')
     .default('explorer'),
   frontmatterSidebarWidth: z.number().min(160).max(600).default(288),
   rightSidebarOpen: z.boolean().default(false),
@@ -202,7 +203,12 @@ export const AppSettingsSchema = z.object({
   templatesSidebarWidth: z.number().min(180).max(600).default(300),
   helpPanelVisible: z.boolean().default(false),
   helpSidebarWidth: z.number().min(200).max(760).default(380),
-  lastActiveRightPanel: z.enum(['frontmatter', 'ai', 'templates', 'help']).default('frontmatter'),
+  calendarPanelVisible: z.boolean().default(false),
+  tasksPanelVisible: z.boolean().default(false),
+  lastActiveRightPanel: z
+    .enum(['frontmatter', 'ai', 'templates', 'help', 'calendar', 'tasks'])
+    .default('frontmatter'),
+  workspaceOrder: z.array(z.string()).default([]),
   workspaceSortOrder: WorkspaceSortOrderSchema.default('name-asc'),
   workspaceFoldersOnTop: z.boolean().default(true),
   workspaceCustomOrder: z.record(z.string(), z.array(z.string())).default({}),
