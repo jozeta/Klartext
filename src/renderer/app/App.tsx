@@ -28,7 +28,10 @@ import {
   updateFrontmatterInMarkdown
 } from '../../shared/markdown/pipeline'
 import { MultiRootSidebar, type LeftSidebarTab } from '../features/workspace/MultiRootSidebar'
-import { MarkdownEditorWorkspace } from '../features/editor/MarkdownEditorWorkspace'
+import {
+  MarkdownEditorWorkspace,
+  type EditorDispatchedCommand
+} from '../features/editor/MarkdownEditorWorkspace'
 import {
   SPELL_LANGUAGE_LABELS,
   type SupportedSpellLanguage
@@ -68,21 +71,14 @@ export const App: React.FC = () => {
   const [backlinks, setBacklinks] = useState<BacklinkItem[]>([])
   const [scrollToLine, setScrollToLine] = useState<{ line: number; nonce: number } | null>(null)
   const [editorCommandTrigger, setEditorCommandTrigger] = useState<{
-    command:
-      | 'undo'
-      | 'redo'
-      | 'cut'
-      | 'copy'
-      | 'paste'
-      | 'select-all'
-      | 'copy-rich-html'
-      | 'toggle-inline-ai'
-      | 'ai-improve'
+    command: EditorDispatchedCommand
     nonce: number
   } | null>(null)
   const [showFileMenu, setShowFileMenu] = useState(false)
   const [showEditMenu, setShowEditMenu] = useState(false)
   const [showViewMenu, setShowViewMenu] = useState(false)
+  const [showFormatMenu, setShowFormatMenu] = useState(false)
+  const [showInsertMenu, setShowInsertMenu] = useState(false)
   const [showAIMenu, setShowAIMenu] = useState(false)
   const [customFrontmatterKey, setCustomFrontmatterKey] = useState('')
 
@@ -209,36 +205,39 @@ export const App: React.FC = () => {
     settings?.rightSidebarOpen
   ])
 
-  const dispatchEditorCommand = useCallback(
-    (
-      command:
-        | 'undo'
-        | 'redo'
-        | 'cut'
-        | 'copy'
-        | 'paste'
-        | 'select-all'
-        | 'copy-rich-html'
-        | 'toggle-inline-ai'
-        | 'ai-improve'
-    ) => {
-      setEditorCommandTrigger({ command, nonce: Date.now() + Math.random() })
-    },
-    []
-  )
+  const dispatchEditorCommand = useCallback((command: EditorDispatchedCommand) => {
+    setEditorCommandTrigger({ command, nonce: Date.now() + Math.random() })
+  }, [])
 
-  // Auto-collapse File, Edit, View & AI menus when clicking anywhere in the app
+  // Auto-collapse File, Edit, View, Format, Insert & AI menus when clicking anywhere in the app
   useEffect(() => {
-    if (!showFileMenu && !showEditMenu && !showViewMenu && !showAIMenu) return
+    if (
+      !showFileMenu &&
+      !showEditMenu &&
+      !showViewMenu &&
+      !showFormatMenu &&
+      !showInsertMenu &&
+      !showAIMenu
+    )
+      return
     const handleGlobalClick = () => {
       setShowFileMenu(false)
       setShowEditMenu(false)
       setShowViewMenu(false)
+      setShowFormatMenu(false)
+      setShowInsertMenu(false)
       setShowAIMenu(false)
     }
     window.addEventListener('click', handleGlobalClick)
     return () => window.removeEventListener('click', handleGlobalClick)
-  }, [showFileMenu, showEditMenu, showViewMenu, showAIMenu])
+  }, [
+    showFileMenu,
+    showEditMenu,
+    showViewMenu,
+    showFormatMenu,
+    showInsertMenu,
+    showAIMenu
+  ])
 
   // Apply theme, white-paper-in-dark-mode, & granular typography CSS variables to documentElement
   useEffect(() => {
@@ -339,13 +338,19 @@ export const App: React.FC = () => {
     const ws = await window.klartext.getWorkspaceState()
     setRoots(ws.roots)
 
+    const [treeEntries, statuses] = await Promise.all([
+      Promise.all(
+        ws.roots.map(async (r) => [r.id, await window.klartext.listFilesForRoot(r.id)] as const)
+      ),
+      window.klartext.getAllGitStatus()
+    ])
+
     const nextTrees: Record<string, FileTreeNode[]> = {}
-    for (const r of ws.roots) {
-      nextTrees[r.id] = await window.klartext.listFilesForRoot(r.id)
+    for (const [rootId, nodes] of treeEntries) {
+      nextTrees[rootId] = nodes
     }
     setTreesByRoot(nextTrees)
 
-    const statuses = await window.klartext.getAllGitStatus()
     const statusMap: Record<string, GitRepoStatus> = {}
     for (const st of statuses) {
       statusMap[st.rootId] = st
@@ -412,7 +417,7 @@ export const App: React.FC = () => {
     setExportStatusBanner(`Exported PDF (${res.sizeBytes} bytes): ${res.outputPath}`)
   }, [activeTab])
 
-  // Subscribe to native application File, Edit & View Menu actions
+  // Subscribe to native application File, Edit, View, Format & Insert Menu actions
   useEffect(() => {
     if (!window.klartext.onMenuAction) return
     const unsubscribe = window.klartext.onMenuAction(async (action) => {
@@ -443,6 +448,8 @@ export const App: React.FC = () => {
         await handleUpdateSettings({
           spellcheckEnabled: settings.spellcheckEnabled === false
         })
+      } else if (action.startsWith('editor:')) {
+        dispatchEditorCommand(action.slice('editor:'.length) as EditorDispatchedCommand)
       }
     })
     return unsubscribe
@@ -456,10 +463,15 @@ export const App: React.FC = () => {
     handleUpdateSettings
   ])
 
-  // Initial boot: load settings, workspace roots, recovery snapshots, and saved open tabs (or first Markdown document)
+  // Initial boot: load settings, workspace roots, recovery snapshots, and saved open tabs in parallel
   useEffect(() => {
     const init = async () => {
-      const loadedSettings = await window.klartext.getSettings()
+      const [loadedSettings, ws, statuses, snaps] = await Promise.all([
+        window.klartext.getSettings(),
+        window.klartext.getWorkspaceState(),
+        window.klartext.getAllGitStatus(),
+        window.klartext.listRecoverySnapshots()
+      ])
       const normalizedSettings: AppSettings = {
         ...loadedSettings,
         ...(loadedSettings.frontmatterPanelVisible && loadedSettings.rightSidebarOpen
@@ -487,51 +499,53 @@ export const App: React.FC = () => {
       }
       setSettings(normalizedSettings)
       setEditMode(normalizedSettings.defaultEditMode || 'inline')
-
-      const ws = await window.klartext.getWorkspaceState()
       setRoots(ws.roots)
 
+      const treeEntries = await Promise.all(
+        ws.roots.map(async (r) => [r.id, await window.klartext.listFilesForRoot(r.id)] as const)
+      )
       const nextTrees: Record<string, FileTreeNode[]> = {}
-      for (const r of ws.roots) {
-        nextTrees[r.id] = await window.klartext.listFilesForRoot(r.id)
+      for (const [rootId, nodes] of treeEntries) {
+        nextTrees[rootId] = nodes
       }
       setTreesByRoot(nextTrees)
 
-      const statuses = await window.klartext.getAllGitStatus()
       const statusMap: Record<string, GitRepoStatus> = {}
       for (const st of statuses) {
         statusMap[st.rootId] = st
       }
       setGitStatuses(statusMap)
-
-      const snaps = await window.klartext.listRecoverySnapshots()
       setRecoverySnapshots(snaps)
 
-      // Restore previously open document tabs if available, otherwise open first .md file
+      // Restore previously open document tabs in parallel if available, otherwise open first .md file
       const restoredTabs: OpenDocumentTab[] = []
       if (Array.isArray(normalizedSettings.openTabs) && normalizedSettings.openTabs.length > 0) {
-        for (const savedTab of normalizedSettings.openTabs) {
-          const rootObj = ws.roots.find((r) => r.id === savedTab.rootId)
-          if (!rootObj) continue
-          try {
-            const { content } = await window.klartext.readDocument(
-              savedTab.rootId,
-              savedTab.relativePath
-            )
-            const key = `${savedTab.rootId}::${savedTab.relativePath}`
-            if (!restoredTabs.some((t) => t.key === key)) {
-              restoredTabs.push({
-                key,
+        const tabResults = await Promise.all(
+          normalizedSettings.openTabs.map(async (savedTab) => {
+            const rootObj = ws.roots.find((r) => r.id === savedTab.rootId)
+            if (!rootObj) return null
+            try {
+              const { content } = await window.klartext.readDocument(
+                savedTab.rootId,
+                savedTab.relativePath
+              )
+              return {
+                key: `${savedTab.rootId}::${savedTab.relativePath}`,
                 rootId: savedTab.rootId,
                 rootName: rootObj.name,
                 relativePath: savedTab.relativePath,
                 content,
                 savedContent: content,
                 dirty: false
-              })
+              } satisfies OpenDocumentTab
+            } catch {
+              return null
             }
-          } catch {
-            // Skip missing or deleted files
+          })
+        )
+        for (const tab of tabResults) {
+          if (tab && !restoredTabs.some((t) => t.key === tab.key)) {
+            restoredTabs.push(tab)
           }
         }
       }
@@ -1064,6 +1078,8 @@ export const App: React.FC = () => {
                   setShowFileMenu((v) => !v)
                   setShowEditMenu(false)
                   setShowViewMenu(false)
+                  setShowFormatMenu(false)
+                  setShowInsertMenu(false)
                   setShowAIMenu(false)
                 }}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
@@ -1139,6 +1155,8 @@ export const App: React.FC = () => {
                   setShowEditMenu((v) => !v)
                   setShowFileMenu(false)
                   setShowViewMenu(false)
+                  setShowFormatMenu(false)
+                  setShowInsertMenu(false)
                   setShowAIMenu(false)
                 }}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
@@ -1268,6 +1286,8 @@ export const App: React.FC = () => {
                   setShowViewMenu((v) => !v)
                   setShowFileMenu(false)
                   setShowEditMenu(false)
+                  setShowFormatMenu(false)
+                  setShowInsertMenu(false)
                   setShowAIMenu(false)
                 }}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
@@ -1489,6 +1509,595 @@ export const App: React.FC = () => {
               )}
             </div>
 
+            {/* Format Menu Dropdown (Comprehensive Word-Inspired Text Styles, Headings, Lists, Quotes & Document Formatting) */}
+            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                data-testid="format-menu-btn"
+                onClick={() => {
+                  setShowFormatMenu((v) => !v)
+                  setShowFileMenu(false)
+                  setShowEditMenu(false)
+                  setShowViewMenu(false)
+                  setShowInsertMenu(false)
+                  setShowAIMenu(false)
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+              >
+                <span>Format</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showFormatMenu && (
+                <div
+                  data-testid="format-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-72 max-h-[82vh] overflow-y-auto rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
+                >
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Text Styles
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="format-menu-bold"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('bold')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="font-semibold">Bold</span>
+                    <kbd className="text-[10px] font-mono text-muted">**text** · ⌘B</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-italic"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('italic')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="italic">Italic</span>
+                    <kbd className="text-[10px] font-mono text-muted">*text* · ⌘I</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-bold-italic"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('bold-italic')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="font-semibold italic">Bold &amp; Italic</span>
+                    <kbd className="text-[10px] font-mono text-muted">***text***</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-strike"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('strikethrough')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="line-through">Strikethrough</span>
+                    <kbd className="text-[10px] font-mono text-muted">~~text~~ · ⇧⌘X</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-highlight"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('highlight')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Highlight</span>
+                    <kbd className="text-[10px] font-mono text-muted">==text== · ⇧⌘H</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-underline"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('underline')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="underline">Underline</span>
+                    <kbd className="text-[10px] font-mono text-muted">&lt;u&gt;text&lt;/u&gt;</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-superscript"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('superscript')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Superscript (X²)</span>
+                    <kbd className="text-[10px] font-mono text-muted">&lt;sup&gt;2&lt;/sup&gt;</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-subscript"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('subscript')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Subscript (H₂O)</span>
+                    <kbd className="text-[10px] font-mono text-muted">&lt;sub&gt;2&lt;/sub&gt;</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-code"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('code')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Inline Code</span>
+                    <kbd className="text-[10px] font-mono text-muted">`code`</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-kbd"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('kbd')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Keyboard Shortcut Key</span>
+                    <kbd className="text-[10px] font-mono text-muted">&lt;kbd&gt;⌘K&lt;/kbd&gt;</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-spoiler"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('spoiler')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Spoiler Text</span>
+                    <kbd className="text-[10px] font-mono text-muted">&gt;!spoiler!&lt;</kbd>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Headings (H1 – H6)
+                  </div>
+                  {(
+                    [
+                      ['h1', 'Heading 1', '# Heading'],
+                      ['h2', 'Heading 2', '## Heading'],
+                      ['h3', 'Heading 3', '### Heading'],
+                      ['h4', 'Heading 4', '#### Heading'],
+                      ['h5', 'Heading 5', '##### Heading'],
+                      ['h6', 'Heading 6', '###### Heading']
+                    ] as const
+                  ).map(([cmd, label, syntax]) => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      data-testid={`format-menu-${cmd}`}
+                      onClick={() => {
+                        setShowFormatMenu(false)
+                        dispatchEditorCommand(cmd)
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    >
+                      <span>{label}</span>
+                      <kbd className="text-[10px] font-mono text-muted">{syntax}</kbd>
+                    </button>
+                  ))}
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Lists &amp; Quotes
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="format-menu-bullet"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('bullet')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Bulleted List</span>
+                    <kbd className="text-[10px] font-mono text-muted">- item</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-numbered"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('numbered')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Numbered List</span>
+                    <kbd className="text-[10px] font-mono text-muted">1. item</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-task"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('task')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Task Checklist</span>
+                    <kbd className="text-[10px] font-mono text-muted">- [ ] task</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-deflist"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('def-list')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Definition List</span>
+                    <kbd className="text-[10px] font-mono text-muted">Term : Def</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-quote"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('quote')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Blockquote</span>
+                    <kbd className="text-[10px] font-mono text-muted">&gt; quote</kbd>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Document Cleanup
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="format-menu-prettify-doc"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('format-doc')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between font-medium"
+                  >
+                    <span>Format &amp; Prettify Document</span>
+                    <kbd className="text-[10px] font-mono text-muted">⇧⌘I</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-align-tables"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('format-tables')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Align All GFM Tables</span>
+                    <kbd className="text-[10px] font-mono text-muted">| A | B |</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-clear"
+                    onClick={() => {
+                      setShowFormatMenu(false)
+                      dispatchEditorCommand('clear-format')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Clear Formatting</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Insert Menu Dropdown (Tables, Callouts/Alerts, Code & Math, Mermaid Diagrams, Links, Media & Metadata) */}
+            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                data-testid="insert-menu-btn"
+                onClick={() => {
+                  setShowInsertMenu((v) => !v)
+                  setShowFileMenu(false)
+                  setShowEditMenu(false)
+                  setShowViewMenu(false)
+                  setShowFormatMenu(false)
+                  setShowAIMenu(false)
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+              >
+                <span>Insert</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showInsertMenu && (
+                <div
+                  data-testid="insert-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-72 max-h-[82vh] overflow-y-auto rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
+                >
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Tables
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-table-2x2"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('table-2x2')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Insert Table (2 × 2)</span>
+                    <kbd className="text-[10px] font-mono text-muted">2 cols</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-table-3x3"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('table-3x3')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Insert Table (3 × 3)</span>
+                    <kbd className="text-[10px] font-mono text-muted">3 cols</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-table-4x4"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('table-4x4')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Insert Table (4 × 4)</span>
+                    <kbd className="text-[10px] font-mono text-muted">4 cols</kbd>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Callouts &amp; Alerts
+                  </div>
+                  {(
+                    [
+                      ['callout-note', 'Note Callout', '> [!NOTE]'],
+                      ['callout-tip', 'Tip Callout', '> [!TIP]'],
+                      ['callout-important', 'Important Callout', '> [!IMPORTANT]'],
+                      ['callout-warning', 'Warning Alert', '> [!WARNING]'],
+                      ['callout-caution', 'Caution Alert', '> [!CAUTION]']
+                    ] as const
+                  ).map(([cmd, label, syntax]) => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      data-testid={`insert-menu-${cmd}`}
+                      onClick={() => {
+                        setShowInsertMenu(false)
+                        dispatchEditorCommand(cmd)
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    >
+                      <span>{label}</span>
+                      <kbd className="text-[10px] font-mono text-muted">{syntax}</kbd>
+                    </button>
+                  ))}
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Code, Math &amp; Structure
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-codeblock"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('codeblock')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Fenced Code Block</span>
+                    <kbd className="text-[10px] font-mono text-muted">```ts</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-math-inline"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('math-inline')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Inline Math Formula (KaTeX)</span>
+                    <kbd className="text-[10px] font-mono text-muted">$E = mc^2$</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-math-block"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('math-block')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Display Math Equation Block</span>
+                    <kbd className="text-[10px] font-mono text-muted">$$ ... $$</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-details"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('details')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Collapsible Accordion Section</span>
+                    <kbd className="text-[10px] font-mono text-muted">&lt;details&gt;</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-hr"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('hr')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Horizontal Divider Line</span>
+                    <kbd className="text-[10px] font-mono text-muted">---</kbd>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Diagrams (Mermaid)
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-visual-builder"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('open-mermaid-builder')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-accent font-medium flex items-center justify-between"
+                  >
+                    <span>Open Visual Diagram Builder...</span>
+                    <kbd className="text-[10px] font-mono text-muted">Canvas</kbd>
+                  </button>
+                  {(
+                    [
+                      ['mermaid', 'Flowchart Diagram', 'flowchart LR'],
+                      ['mermaid-sequence', 'Sequence Diagram', 'sequenceDiagram'],
+                      ['mermaid-state', 'State Diagram', 'stateDiagram-v2'],
+                      ['mermaid-class', 'Class Diagram', 'classDiagram'],
+                      ['mermaid-er', 'ER Diagram', 'erDiagram'],
+                      ['mermaid-gantt', 'Gantt Roadmap', 'gantt'],
+                      ['mermaid-pie', 'Pie Chart', 'pie'],
+                      ['mermaid-mindmap', 'Mindmap', 'mindmap']
+                    ] as const
+                  ).map(([cmd, label, syntax]) => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      data-testid={`insert-menu-${cmd}`}
+                      onClick={() => {
+                        setShowInsertMenu(false)
+                        dispatchEditorCommand(cmd)
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    >
+                      <span>{label}</span>
+                      <kbd className="text-[10px] font-mono text-muted">{syntax}</kbd>
+                    </button>
+                  ))}
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Links, Media &amp; Metadata
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-link"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('link')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Hyperlink</span>
+                    <kbd className="text-[10px] font-mono text-muted">[text](url) · ⌘K</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-wikilink"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('wikilink')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Wiki-Link to Document</span>
+                    <kbd className="text-[10px] font-mono text-muted">[[Doc]]</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-image"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('image')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Image Reference</span>
+                    <kbd className="text-[10px] font-mono text-muted">![alt](img)</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-footnote"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('footnote')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Footnote Reference</span>
+                    <kbd className="text-[10px] font-mono text-muted">[^1]</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-toc"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('toc')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Table of Contents</span>
+                    <kbd className="text-[10px] font-mono text-muted">[[_TOC_]]</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-frontmatter"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('frontmatter')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>YAML Frontmatter Block</span>
+                    <kbd className="text-[10px] font-mono text-muted">---</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-date"
+                    onClick={() => {
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('date')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Current Date (ISO)</span>
+                    <kbd className="text-[10px] font-mono text-muted">YYYY-MM-DD</kbd>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* AI Menu Dropdown (Local AI Panel, Inline Draft, AI Improve) */}
             <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
               <button
@@ -1499,6 +2108,8 @@ export const App: React.FC = () => {
                   setShowFileMenu(false)
                   setShowEditMenu(false)
                   setShowViewMenu(false)
+                  setShowFormatMenu(false)
+                  setShowInsertMenu(false)
                 }}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
               >

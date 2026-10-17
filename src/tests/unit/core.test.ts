@@ -305,4 +305,40 @@ flowchart LR
     expect(parsedGraph.edges.length).toBe(1)
     expect(parsedGraph.edges[0]).toMatchObject({ from: 'A', to: 'B', style: '-->', label: 'Verify' })
   })
+
+  it('supports extended Markdown syntax (highlight, spoiler, kbd, TOC, definition list), document formatter, and HTML-to-Markdown paste', async () => {
+    const {
+      formatMarkdownDocument,
+      convertHtmlToMarkdown
+    } = await import('../../shared/markdown/pipeline')
+
+    const extendedDoc = `# Overview
+
+[[_TOC_]]
+
+Here is ==important highlight==, >!secret spoiler!<, and <kbd>⌘K</kbd>.
+
+Markdown
+: A lightweight markup language
+`
+    const rendered = await renderMarkdownDocument(extendedDoc)
+    expect(rendered.html).toContain('class="klartext-toc"')
+    expect(rendered.html).toContain('class="klartext-highlight"')
+    expect(rendered.html).toContain('class="klartext-spoiler"')
+    expect(rendered.html).toContain('<kbd>⌘K</kbd>')
+    expect(rendered.html).toContain('class="klartext-deflist"')
+
+    const unformatted = `#   Messy Heading   \n* Bullet one\n+ Bullet two\n- [X] Done task\n\n\n\n| Name | Value |\n|---|---|\n| LongerKey | 42 |\n`
+    const pretty = formatMarkdownDocument(unformatted)
+    expect(pretty).toContain('# Messy Heading')
+    expect(pretty).toContain('- Bullet one\n- Bullet two\n- [x] Done task')
+    expect(pretty).toContain('| LongerKey | 42    |')
+
+    const pastedHtml = '<h2>Title</h2><p>Hello <strong>world</strong> and <a href="https://example.com">link</a></p>'
+    const convertedMd = convertHtmlToMarkdown(pastedHtml)
+    expect(convertedMd).toContain('## Title')
+    expect(convertedMd).toContain('**world**')
+    expect(convertedMd).toContain('[link](https://example.com)')
+  })
 })
+

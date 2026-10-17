@@ -722,6 +722,8 @@ export interface SpellcheckExtensionOptions {
   }) => void
 }
 
+const wordSpellCache = new Map<string, boolean>()
+
 function buildSpellcheckDecorations(
   state: EditorView['state'],
   opts: SpellcheckExtensionOptions
@@ -729,10 +731,16 @@ function buildSpellcheckDecorations(
   if (!opts.enabled) return Decoration.none
 
   const ignoredSet = new Set(opts.ignoredOccurrences || [])
+  const customSet = new Set(opts.customWords.map((w) => w.toLowerCase()))
+  const langKey = (opts.languages.length > 0 ? opts.languages : ['en-US', 'sv-SE']).join(',')
   const decos: Array<{ from: number; to: number; value: Decoration }> = []
   const doc = state.doc
   let inCodeFence = false
   let inFrontmatter = false
+
+  // For very large documents (> 800 lines), scope spellcheck to ±400 lines around active cursor
+  const activeLineNum = doc.lineAt(state.selection.main.head).number
+  const windowRadius = doc.lines > 800 ? 400 : doc.lines
 
   for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
     const line = doc.line(lineNum)
@@ -752,6 +760,7 @@ function buildSpellcheckDecorations(
       continue
     }
     if (inCodeFence) continue
+    if (Math.abs(lineNum - activeLineNum) > windowRadius) continue
 
     // Mask inline code, URLs, markdown links, math expressions so we only spellcheck prose words
     const masked = text
@@ -765,12 +774,24 @@ function buildSpellcheckDecorations(
     let match: RegExpExecArray | null
     while ((match = wordRegex.exec(masked)) !== null) {
       const word = match[0]
+      const lower = word.toLowerCase()
+      if (customSet.has(lower)) continue
       const from = line.from + match.index
       const to = from + word.length
-      const occKey = `${from}:${to}:${word.toLowerCase()}`
+      const occKey = `${from}:${to}:${lower}`
       if (ignoredSet.has(occKey)) continue
 
-      if (!isWordSpelledCorrectly(word, opts.languages, opts.customWords)) {
+      const cacheKey = `${langKey}::${lower}`
+      let correct = wordSpellCache.get(cacheKey)
+      if (correct === undefined) {
+        correct = isWordSpelledCorrectly(word, opts.languages, [])
+        if (wordSpellCache.size > 8000) {
+          wordSpellCache.clear()
+        }
+        wordSpellCache.set(cacheKey, correct)
+      }
+
+      if (!correct) {
         decos.push({
           from,
           to,

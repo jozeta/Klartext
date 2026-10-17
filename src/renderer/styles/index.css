@@ -491,3 +491,104 @@ body {
   font-size: 0.8em;
   color: var(--status-warning);
 }
+
+/* Extended Markdown Formatting Styles (Highlight, Spoiler, KBD, Details, TOC, Definition Lists) */
+.cm-live-highlight,
+.klartext-highlight,
+.klartext-preview-body mark {
+  background-color: rgba(230, 184, 77, 0.32);
+  color: inherit;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+[data-theme='dark'] .cm-live-highlight,
+[data-theme='dark'] .klartext-highlight,
+[data-theme='dark'] .klartext-preview-body mark {
+  background-color: rgba(230, 184, 77, 0.26);
+}
+
+.cm-live-spoiler,
+.klartext-spoiler {
+  background-color: var(--text-secondary);
+  color: transparent;
+  padding: 1px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.cm-live-spoiler:hover,
+.klartext-spoiler:hover {
+  background-color: rgba(104, 117, 128, 0.18);
+  color: inherit;
+}
+
+.klartext-preview-body kbd,
+.cm-live-kbd {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text-primary);
+}
+
+.klartext-preview-body details {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0.85em 0;
+  background-color: var(--bg-secondary);
+}
+.klartext-preview-body summary {
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.klartext-toc {
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 1em 0;
+  font-size: 0.92em;
+}
+.klartext-toc-title {
+  font-weight: 600;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.klartext-toc ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.klartext-toc li {
+  margin: 3px 0;
+}
+.klartext-toc a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+.klartext-toc a:hover {
+  text-decoration: underline;
+}
+
+.klartext-deflist {
+  margin: 0.85em 0;
+}
+.klartext-deflist dt {
+  font-weight: 600;
+  margin-top: 0.5em;
+}
+.klartext-deflist dd {
+  margin-left: 1.25em;
+  color: var(--text-secondary);
+  margin-bottom: 0.35em;
+}
+

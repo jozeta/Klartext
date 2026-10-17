@@ -6,23 +6,17 @@ import {
 } from '@codemirror/view'
 import { StateField } from '@codemirror/state'
 import katex from 'katex'
-import mermaid from 'mermaid'
 import { sanitizeSvgContent } from '../../../shared/serialization/excalidraw-svg'
 import { highlightCodeToHtml } from '../../../shared/markdown/syntax-highlight'
-
-let mermaidInitialized = false
-
-function ensureMermaidInit() {
-  if (!mermaidInitialized) {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: 'neutral',
-      fontFamily: 'Inter, -apple-system, sans-serif'
-    })
-    mermaidInitialized = true
-  }
-}
+import {
+  getCachedMermaidSvgSync,
+  renderCachedMermaidSvg
+} from '../diagrams/DiagramWidgets'
+import {
+  formatAllTablesInMarkdown,
+  formatMarkdownDocument,
+  formatMarkdownTable
+} from '../../../shared/markdown/pipeline'
 
 class TaskCheckboxWidget extends WidgetType {
   constructor(
@@ -448,12 +442,16 @@ class InlineMermaidBlockWidget extends WidgetType {
     wrapper.appendChild(body)
 
     const renderCode = (currentCode: string) => {
-      ensureMermaidInit()
-      const id = `cm-mermaid-${Math.random().toString(36).slice(2, 10)}`
-      mermaid
-        .render(id, currentCode)
-        .then(({ svg }) => {
-          body.innerHTML = sanitizeSvgContent(svg)
+      const currentTheme =
+        document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+      const syncHit = getCachedMermaidSvgSync(currentCode, currentTheme)
+      if (syncHit) {
+        body.innerHTML = syncHit
+        return
+      }
+      renderCachedMermaidSvg(currentCode, currentTheme)
+        .then((sanitizedSvg) => {
+          body.innerHTML = sanitizedSvg
         })
         .catch((err) => {
           const errDiv = document.createElement('div')
@@ -1000,6 +998,51 @@ function buildLiveDecorations(
       decos.push({ from: end - 1, to: end, value: Decoration.replace({}) })
     }
 
+    // 17. Inline ==Highlight==
+    const highlightRegex = /==([^=\n]+)==/g
+    let highlightMatch: RegExpExecArray | null
+    while ((highlightMatch = highlightRegex.exec(text)) !== null) {
+      const start = line.from + highlightMatch.index
+      const end = start + highlightMatch[0].length
+      decos.push({ from: start, to: start + 2, value: Decoration.replace({}) })
+      decos.push({
+        from: start + 2,
+        to: end - 2,
+        value: Decoration.mark({ class: 'cm-live-highlight' })
+      })
+      decos.push({ from: end - 2, to: end, value: Decoration.replace({}) })
+    }
+
+    // 18. Inline >!Spoiler!<
+    const spoilerRegex = />!([^!\n]+)!</g
+    let spoilerMatch: RegExpExecArray | null
+    while ((spoilerMatch = spoilerRegex.exec(text)) !== null) {
+      const start = line.from + spoilerMatch.index
+      const end = start + spoilerMatch[0].length
+      decos.push({ from: start, to: start + 2, value: Decoration.replace({}) })
+      decos.push({
+        from: start + 2,
+        to: end - 2,
+        value: Decoration.mark({ class: 'cm-live-spoiler' })
+      })
+      decos.push({ from: end - 2, to: end, value: Decoration.replace({}) })
+    }
+
+    // 19. Inline <kbd>Key</kbd>
+    const kbdRegex = /<kbd>([^<\n]+)<\/kbd>/gi
+    let kbdMatch: RegExpExecArray | null
+    while ((kbdMatch = kbdRegex.exec(text)) !== null) {
+      const start = line.from + kbdMatch.index
+      const end = start + kbdMatch[0].length
+      decos.push({ from: start, to: start + 5, value: Decoration.replace({}) })
+      decos.push({
+        from: start + 5,
+        to: end - 6,
+        value: Decoration.mark({ class: 'cm-live-kbd' })
+      })
+      decos.push({ from: end - 6, to: end, value: Decoration.replace({}) })
+    }
+
     lineNum++
   }
 
@@ -1023,26 +1066,66 @@ export function createLivePreviewExtension(opts: LivePreviewOptions) {
   return [field]
 }
 
+export type MarkdownFormatCommand =
+  | 'bold'
+  | 'italic'
+  | 'bold-italic'
+  | 'strikethrough'
+  | 'highlight'
+  | 'underline'
+  | 'superscript'
+  | 'subscript'
+  | 'code'
+  | 'kbd'
+  | 'spoiler'
+  | 'clear-format'
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h4'
+  | 'h5'
+  | 'h6'
+  | 'bullet'
+  | 'numbered'
+  | 'task'
+  | 'def-list'
+  | 'quote'
+  | 'callout-note'
+  | 'callout-tip'
+  | 'callout-important'
+  | 'callout-warning'
+  | 'callout-caution'
+  | 'link'
+  | 'wikilink'
+  | 'image'
+  | 'footnote'
+  | 'table'
+  | 'table-2x2'
+  | 'table-3x3'
+  | 'table-4x4'
+  | 'format-tables'
+  | 'format-doc'
+  | 'codeblock'
+  | 'math-inline'
+  | 'math-block'
+  | 'details'
+  | 'hr'
+  | 'frontmatter'
+  | 'toc'
+  | 'date'
+  | 'mermaid'
+  | 'mermaid-sequence'
+  | 'mermaid-state'
+  | 'mermaid-class'
+  | 'mermaid-er'
+  | 'mermaid-gantt'
+  | 'mermaid-pie'
+  | 'mermaid-mindmap'
+  | 'excalidraw'
+
 export function applyMarkdownFormatCommand(
   view: EditorView,
-  command:
-    | 'bold'
-    | 'italic'
-    | 'strikethrough'
-    | 'code'
-    | 'h1'
-    | 'h2'
-    | 'h3'
-    | 'link'
-    | 'image'
-    | 'table'
-    | 'codeblock'
-    | 'bullet'
-    | 'numbered'
-    | 'task'
-    | 'quote'
-    | 'mermaid'
-    | 'excalidraw'
+  command: MarkdownFormatCommand
 ): void {
   const { state } = view
   const range = state.selection.main
@@ -1075,46 +1158,262 @@ export function applyMarkdownFormatCommand(
     view.focus()
   }
 
+  const insertCallout = (kind: 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION', defaultBody: string) => {
+    const bodyText = selected
+      ? selected
+          .split(/\r?\n/)
+          .map((l) => `> ${l}`)
+          .join('\n')
+      : `> ${defaultBody}`
+    const replacement = `\n> [!${kind}]\n${bodyText}\n`
+    view.dispatch({
+      changes: { from: range.from, to: range.to, insert: replacement },
+      selection: { anchor: range.from + replacement.length - 1 }
+    })
+    view.focus()
+  }
+
   switch (command) {
     case 'bold':
       return wrap('**', '**', 'bold text')
     case 'italic':
       return wrap('*', '*', 'italic text')
+    case 'bold-italic':
+      return wrap('***', '***', 'bold italic text')
     case 'strikethrough':
       return wrap('~~', '~~', 'struck text')
+    case 'highlight':
+      return wrap('==', '==', 'highlighted text')
+    case 'underline':
+      return wrap('<u>', '</u>', 'underlined text')
+    case 'superscript':
+      return wrap('<sup>', '</sup>', '2')
+    case 'subscript':
+      return wrap('<sub>', '</sub>', 'i')
     case 'code':
       return wrap('`', '`', 'code')
+    case 'kbd':
+      return wrap('<kbd>', '</kbd>', '⌘K')
+    case 'spoiler':
+      return wrap('>! ', ' !<', 'spoiler text')
+    case 'clear-format': {
+      const targetFrom = selected ? range.from : state.doc.lineAt(range.from).from
+      const targetTo = selected ? range.to : state.doc.lineAt(range.from).to
+      const rawText = state.sliceDoc(targetFrom, targetTo)
+      const cleaned = rawText
+        .replace(/^(#{1,6}\s+|[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+\.\s+|>\s+)/gm, '')
+        .replace(/\*\*\*([^*]+)\*\*\*/g, '$1')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/~~([^~]+)~~/g, '$1')
+        .replace(/==([^=]+)==/g, '$1')
+        .replace(/>!\s*([^!]+?)\s*!</g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/<\/?(?:u|sup|sub|kbd|mark)>/gi, '')
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g, (_m, t, a) => a || t)
+      view.dispatch({
+        changes: { from: targetFrom, to: targetTo, insert: cleaned },
+        selection: { anchor: targetFrom, head: targetFrom + cleaned.length }
+      })
+      view.focus()
+      return
+    }
     case 'h1':
       return prefixLine('# ')
     case 'h2':
       return prefixLine('## ')
     case 'h3':
       return prefixLine('### ')
+    case 'h4':
+      return prefixLine('#### ')
+    case 'h5':
+      return prefixLine('##### ')
+    case 'h6':
+      return prefixLine('###### ')
     case 'bullet':
       return prefixLine('- ')
     case 'numbered':
       return prefixLine('1. ')
     case 'task':
       return prefixLine('- [ ] ')
+    case 'def-list':
+      return wrap('\n', '\n: Definition of the term\n', 'Term')
     case 'quote':
       return prefixLine('> ')
+    case 'callout-note':
+      return insertCallout('NOTE', 'Key information that users should take into account.')
+    case 'callout-tip':
+      return insertCallout('TIP', 'Helpful advice for doing things better or more easily.')
+    case 'callout-important':
+      return insertCallout('IMPORTANT', 'Crucial information necessary for users to succeed.')
+    case 'callout-warning':
+      return insertCallout('WARNING', 'Urgent info that needs immediate user attention to avoid problems.')
+    case 'callout-caution':
+      return insertCallout('CAUTION', 'Advises about risks or negative outcomes of certain actions.')
     case 'link':
       return wrap('[', '](https://example.com)', 'link label')
+    case 'wikilink':
+      return wrap('[[', ']]', 'Document Name')
     case 'image':
       return wrap('![', '](assets/images/example.png)', 'Image caption')
+    case 'footnote': {
+      const docText = state.doc.toString()
+      const existingRefs = docText.match(/\[\^(\d+)\]/g) || []
+      const nextNum = existingRefs.length + 1
+      const marker = `[^${nextNum}]`
+      const defLine = `\n\n[^${nextNum}]: ${selected || 'Footnote reference details.'}`
+      view.dispatch({
+        changes: [
+          { from: range.from, to: range.to, insert: marker },
+          { from: state.doc.length, to: state.doc.length, insert: defLine }
+        ],
+        selection: { anchor: range.from + marker.length }
+      })
+      view.focus()
+      return
+    }
+    case 'table-2x2':
+      return wrap(
+        '\n| Column A | Column B |\n| :--- | :--- |\n| ',
+        ' | Value 2 |\n| Value 3  | Value 4 |\n',
+        'Value 1 '
+      )
     case 'table':
+    case 'table-3x3':
       return wrap(
         '\n| Column A | Column B | Column C |\n| :--- | :--- | :--- |\n| ',
-        ' | Value 2 | Value 3 |\n',
+        ' | Value 2 | Value 3 |\n| Value 4 | Value 5 | Value 6 |\n',
         'Value 1'
       )
+    case 'table-4x4':
+      return wrap(
+        '\n| Column A | Column B | Column C | Column D |\n| :--- | :--- | :--- | :--- |\n| ',
+        ' | Value 2 | Value 3 | Value 4 |\n| Value 5 | Value 6 | Value 7 | Value 8 |\n',
+        'Value 1'
+      )
+    case 'format-tables': {
+      const docText = state.doc.toString()
+      const formatted = formatAllTablesInMarkdown(docText)
+      if (formatted !== docText) {
+        const safeAnchor = Math.min(range.anchor, formatted.length)
+        view.dispatch({
+          changes: { from: 0, to: state.doc.length, insert: formatted },
+          selection: { anchor: safeAnchor }
+        })
+      }
+      view.focus()
+      return
+    }
+    case 'format-doc': {
+      const docText = state.doc.toString()
+      const formatted = formatMarkdownDocument(docText)
+      if (formatted !== docText) {
+        const safeAnchor = Math.min(range.anchor, formatted.length)
+        view.dispatch({
+          changes: { from: 0, to: state.doc.length, insert: formatted },
+          selection: { anchor: safeAnchor }
+        })
+      }
+      view.focus()
+      return
+    }
     case 'codeblock':
       return wrap('\n```typescript\n', '\n```\n', '// code')
+    case 'math-inline':
+      return wrap('$', '$', 'E = mc^2')
+    case 'math-block':
+      return wrap('\n$$\n', '\n$$\n', '\\sum_{i=1}^{n} x_i = \\int_{a}^{b} f(x)\\,dx')
+    case 'details':
+      return wrap(
+        '\n<details>\n<summary>',
+        '</summary>\n\nExpanded details content goes here.\n</details>\n',
+        'Click to expand'
+      )
+    case 'hr': {
+      const insertText = '\n---\n'
+      view.dispatch({
+        changes: { from: range.to, to: range.to, insert: insertText },
+        selection: { anchor: range.to + insertText.length }
+      })
+      view.focus()
+      return
+    }
+    case 'frontmatter': {
+      const docText = state.doc.toString()
+      if (docText.startsWith('---\n') || docText.startsWith('---\r\n')) {
+        view.dispatch({ selection: { anchor: 4 } })
+        view.focus()
+        return
+      }
+      const today = new Date().toISOString().slice(0, 10)
+      const fm = `---\ntitle: Document Title\ndate: ${today}\ntags:\n  - notes\nstatus: draft\n---\n\n`
+      view.dispatch({
+        changes: { from: 0, to: 0, insert: fm },
+        selection: { anchor: fm.length }
+      })
+      view.focus()
+      return
+    }
+    case 'toc':
+      return wrap('\n', '\n', '[[_TOC_]]')
+    case 'date': {
+      const today = new Date().toISOString().slice(0, 10)
+      view.dispatch({
+        changes: { from: range.from, to: range.to, insert: today },
+        selection: { anchor: range.from + today.length }
+      })
+      view.focus()
+      return
+    }
     case 'mermaid':
       return wrap(
         '\n```mermaid\n',
         '\n```\n',
-        'flowchart LR\n  Start["Start"] --> Finish["Done"]'
+        'flowchart LR\n  Start["Start"] --> Process["Process"] --> Finish["Done"]'
+      )
+    case 'mermaid-sequence':
+      return wrap(
+        '\n```mermaid\n',
+        '\n```\n',
+        'sequenceDiagram\n  participant Client\n  participant Server\n  Client->>Server: Request Data\n  Server-->>Client: JSON Response'
+      )
+    case 'mermaid-state':
+      return wrap(
+        '\n```mermaid\n',
+        '\n```\n',
+        'stateDiagram-v2\n  [*] --> Idle\n  Idle --> Processing: Start\n  Processing --> Complete: Success\n  Complete --> [*]'
+      )
+    case 'mermaid-class':
+      return wrap(
+        '\n```mermaid\n',
+        '\n```\n',
+        'classDiagram\n  class Document {\n    +String title\n    +String content\n    +render() HTML\n  }'
+      )
+    case 'mermaid-er':
+      return wrap(
+        '\n```mermaid\n',
+        '\n```\n',
+        'erDiagram\n  WORKSPACE ||--o{ DOCUMENT : contains\n  DOCUMENT ||--o{ ASSET : references'
+      )
+    case 'mermaid-gantt':
+      return wrap(
+        '\n```mermaid\n',
+        '\n```\n',
+        'gantt\n  title Project Roadmap\n  dateFormat YYYY-MM-DD\n  section Phase 1\n    Design & Specs :a1, 2026-01-01, 7d\n    Implementation :after a1, 10d'
+      )
+    case 'mermaid-pie':
+      return wrap(
+        '\n```mermaid\n',
+        '\n```\n',
+        'pie title Distribution\n  "Markdown Docs" : 55\n  "Diagrams" : 25\n  "Code Blocks" : 20'
+      )
+    case 'mermaid-mindmap':
+      return wrap(
+        '\n```mermaid\n',
+        '\n```\n',
+        'mindmap\n  root((Klartext))\n    Architecture\n      Local First\n      Multi-Root\n    Formatting\n      GFM Tables\n      Mermaid Diagrams'
       )
     case 'excalidraw':
       return wrap(
@@ -1124,3 +1423,4 @@ export function applyMarkdownFormatCommand(
       )
   }
 }
+

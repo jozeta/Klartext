@@ -197,7 +197,29 @@ export function rewriteAssetLinksInMarkdown(
   })
 }
 
-function preprocessExtensions(markdown: string, rootId: string): {
+function transformInlineExtendedSyntax(line: string): string {
+  // Split by inline code spans (`...`) so we never mutate inside inline code
+  const segments = line.split(/(`+[^`]*`+)/g)
+  return segments
+    .map((seg, idx) => {
+      if (idx % 2 === 1) return seg
+      // ==highlight==
+      let out = seg.replace(/==([^=\n]+)==/g, '<mark class="klartext-highlight">$1</mark>')
+      // >!spoiler!< (Reddit / GitLab style inline spoiler)
+      out = out.replace(
+        />!([^!\n]+)!<\s*/g,
+        '<span class="klartext-spoiler" title="Hover or click to reveal">$1</span>'
+      )
+      return out
+    })
+    .join('')
+}
+
+function preprocessExtensions(
+  markdown: string,
+  rootId: string,
+  headingsForToc: HeadingItem[] = []
+): {
   processed: string
   mermaidBlocks: Array<{ index: number; code: string; startLine: number }>
 } {
@@ -206,11 +228,12 @@ function preprocessExtensions(markdown: string, rootId: string): {
   const outLines: string[] = []
 
   let i = 0
+  let inOtherCodeFence = false
   while (i < lines.length) {
     const line = lines[i]
 
     // Detect Mermaid code fence
-    if (/^\s*```mermaid\s*$/i.test(line)) {
+    if (!inOtherCodeFence && /^\s*```mermaid\s*$/i.test(line)) {
       const startLine = i + 1
       i++
       const codeLines: string[] = []
@@ -228,6 +251,41 @@ function preprocessExtensions(markdown: string, rootId: string): {
       continue
     }
 
+    // Track non-mermaid fenced code blocks so we don't transform syntax inside code blocks
+    if (/^\s*```/.test(line)) {
+      inOtherCodeFence = !inOtherCodeFence
+      outLines.push(line)
+      i++
+      continue
+    }
+
+    if (inOtherCodeFence) {
+      outLines.push(line)
+      i++
+      continue
+    }
+
+    // Detect [[_TOC_]] or [TOC] on its own line (GitLab / Extended Markdown Table of Contents)
+    if (/^\s*(?:\[\[_TOC_\]\]|\[TOC\])\s*$/i.test(line)) {
+      if (headingsForToc.length > 0) {
+        const items = headingsForToc
+          .map((h) => {
+            const indent = Math.max(0, (h.depth - 1) * 14)
+            return `<li style="margin-left:${indent}px"><a href="#${h.id}">${h.text}</a></li>`
+          })
+          .join('')
+        outLines.push(
+          `<nav class="klartext-toc"><div class="klartext-toc-title">Table of Contents</div><ul>${items}</ul></nav>`
+        )
+      } else {
+        outLines.push(
+          `<nav class="klartext-toc"><div class="klartext-toc-title">Table of Contents</div></nav>`
+        )
+      }
+      i++
+      continue
+    }
+
     // Detect Callout blocks: > [!NOTE] Title
     const calloutMatch = line.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i)
     if (calloutMatch) {
@@ -241,6 +299,30 @@ function preprocessExtensions(markdown: string, rootId: string): {
       }
       outLines.push(
         `<div class="klartext-callout klartext-callout-${kind.toLowerCase()}" data-callout="${kind}"><div class="klartext-callout-title">${title}</div><div class="klartext-callout-body">\n\n${bodyLines.join('\n')}\n\n</div></div>`
+      )
+      continue
+    }
+
+    // Detect Definition List: Term line followed by one or more `: Definition` lines
+    if (
+      line.trim().length > 0 &&
+      !line.startsWith('#') &&
+      !line.startsWith('>') &&
+      !line.startsWith('-') &&
+      !line.startsWith('*') &&
+      !line.startsWith('|') &&
+      i + 1 < lines.length &&
+      /^:\s+(.+)$/.test(lines[i + 1])
+    ) {
+      const term = transformInlineExtendedSyntax(line.trim())
+      i++
+      const defs: string[] = []
+      while (i < lines.length && /^:\s+(.+)$/.test(lines[i])) {
+        defs.push(transformInlineExtendedSyntax(lines[i].replace(/^:\s+/, '').trim()))
+        i++
+      }
+      outLines.push(
+        `<dl class="klartext-deflist"><dt>${term}</dt>${defs.map((d) => `<dd>${d}</dd>`).join('')}</dl>`
       )
       continue
     }
@@ -276,7 +358,7 @@ function preprocessExtensions(markdown: string, rootId: string): {
       }
     )
 
-    outLines.push(assetReplaced)
+    outLines.push(transformInlineExtendedSyntax(assetReplaced))
     i++
   }
 
@@ -297,6 +379,17 @@ const sanitizeSchema = {
     ...(defaultSchema.tagNames || []),
     'div',
     'span',
+    'nav',
+    'mark',
+    'kbd',
+    'u',
+    'sup',
+    'sub',
+    'details',
+    'summary',
+    'dl',
+    'dt',
+    'dd',
     'math',
     'semantics',
     'mrow',
@@ -321,11 +414,13 @@ const sanitizeSchema = {
       'data-start-line',
       'data-callout'
     ],
+    details: ['open', 'className', 'class'],
+    li: ['style', 'className', 'class'],
     a: ['href', 'className', 'class', 'data-wikilink', 'target', 'rel'],
     img: ['src', 'alt', 'title', 'width', 'height', 'className', 'class'],
     input: [['type', 'checkbox'], 'checked', 'disabled', 'className'],
     code: ['className', 'class'],
-    span: ['className', 'class', 'style', 'aria-hidden']
+    span: ['className', 'class', 'style', 'aria-hidden', 'title']
   }
 }
 
@@ -338,7 +433,7 @@ export async function renderMarkdownDocument(
   const headings = extractHeadings(markdown)
   const wikiLinks = extractWikiLinks(markdown)
   const assetReferences = extractLocalAssetReferences(markdown)
-  const { processed, mermaidBlocks } = preprocessExtensions(body, rootId)
+  const { processed, mermaidBlocks } = preprocessExtensions(body, rootId, headings)
 
   // Strip dangerous inline schemes before AST processing
   const schemeFiltered = processed.replace(
@@ -457,6 +552,193 @@ export function formatMarkdownTable(rawTable: string): string {
       return `| ${cells.join(' | ')} |`
     })
     .join('\n')
+}
+
+export function formatAllTablesInMarkdown(markdown: string): string {
+  const lines = markdown.split(/\r?\n/)
+  const out: string[] = []
+  let inCodeFence = false
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    if (/^\s*```/.test(line)) {
+      inCodeFence = !inCodeFence
+      out.push(line)
+      i++
+      continue
+    }
+    if (
+      !inCodeFence &&
+      line.trim().startsWith('|') &&
+      line.trim().endsWith('|') &&
+      i + 1 < lines.length &&
+      lines[i + 1].trim().startsWith('|')
+    ) {
+      const tableLines: string[] = []
+      while (
+        i < lines.length &&
+        lines[i].trim().startsWith('|') &&
+        lines[i].trim().endsWith('|')
+      ) {
+        tableLines.push(lines[i])
+        i++
+      }
+      out.push(formatMarkdownTable(tableLines.join('\n')))
+      continue
+    }
+    out.push(line)
+    i++
+  }
+
+  return out.join('\n')
+}
+
+export function formatMarkdownDocument(markdown: string): string {
+  // Preserve YAML frontmatter untouched
+  const fmMatch = markdown.match(/^(---\r?\n[\s\S]*?\r?\n---\r?\n?)/)
+  const fmPrefix = fmMatch ? fmMatch[1].replace(/\r\n/g, '\n') : ''
+  const rawBody = fmMatch ? markdown.slice(fmMatch[1].length) : markdown
+
+  // First align all GFM tables
+  const tableFormatted = formatAllTablesInMarkdown(rawBody)
+  const lines = tableFormatted.split(/\r?\n/)
+  const out: string[] = []
+  let inCodeFence = false
+  let blankCount = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    if (/^\s*```/.test(line)) {
+      inCodeFence = !inCodeFence
+      blankCount = 0
+      out.push(line.trimEnd())
+      continue
+    }
+    if (inCodeFence) {
+      out.push(line)
+      continue
+    }
+
+    // Trim trailing spaces (preserve 2-space hard line break only if followed by text)
+    line = line.replace(/[ \t]+$/, '')
+
+    if (line.length === 0) {
+      blankCount++
+      if (blankCount <= 2) {
+        out.push('')
+      }
+      continue
+    }
+    blankCount = 0
+
+    // Normalize ATX heading spacing: `#   Heading` -> `# Heading`
+    const headingMatch = line.match(/^(#{1,6})\s+(.+?)(?:\s+#+)?$/)
+    if (headingMatch) {
+      line = `${headingMatch[1]} ${headingMatch[2].trim()}`
+    }
+
+    // Standardize unordered list markers (`* item` or `+ item` -> `- item`)
+    const listMatch = line.match(/^(\s*)[*+]\s+(.+)$/)
+    if (listMatch) {
+      line = `${listMatch[1]}- ${listMatch[2]}`
+    }
+
+    // Normalize task list checkbox `[X]` -> `[x]`
+    line = line.replace(/^(\s*-\s+)\[X\](\s+)/, '$1[x]$2')
+
+    out.push(line)
+  }
+
+  const cleanedBody = out.join('\n').trim()
+  if (!cleanedBody && !fmPrefix) return ''
+  return `${fmPrefix}${cleanedBody}\n`
+}
+
+export function convertHtmlToMarkdown(html: string): string {
+  if (!html || !html.trim()) return ''
+  let md = html
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+
+  // Convert HTML tables into formatted GFM tables
+  md = md.replace(/<table\b[^>]*>([\s\S]*?)<\/table>/gi, (_m, tableInner) => {
+    const rowMatches = String(tableInner).match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)
+    if (!rowMatches || rowMatches.length === 0) return ''
+    const rows: string[][] = []
+    for (const rowHtml of rowMatches) {
+      const cellMatches = rowHtml.match(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi) || []
+      const cells = cellMatches.map((c) =>
+        c
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      )
+      if (cells.length > 0) rows.push(cells)
+    }
+    if (rows.length === 0) return ''
+    const cols = Math.max(...rows.map((r) => r.length))
+    const header = rows[0]
+    const sep = new Array(cols).fill('---')
+    const body = rows.slice(1)
+    const rawTable = [
+      `| ${header.join(' | ')} |`,
+      `| ${sep.join(' | ')} |`,
+      ...body.map((r) => `| ${r.join(' | ')} |`)
+    ].join('\n')
+    return `\n\n${formatMarkdownTable(rawTable)}\n\n`
+  })
+
+  // Headings
+  for (let level = 1; level <= 6; level++) {
+    const hashes = '#'.repeat(level)
+    const re = new RegExp(`<h${level}\\b[^>]*>([\\s\\S]*?)<\\/h${level}>`, 'gi')
+    md = md.replace(re, (_m, inner) => `\n\n${hashes} ${String(inner).replace(/<[^>]+>/g, '').trim()}\n\n`)
+  }
+
+  // Code blocks
+  md = md.replace(/<pre\b[^>]*>\s*<code(?:\s+class="[^"]*language-([a-z0-9_-]+)[^"]*")?[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi, (_m, lang, code) => {
+    const cleanCode = String(code)
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+    return `\n\n\`\`\`${lang || ''}\n${cleanCode.trim()}\n\`\`\`\n\n`
+  })
+
+  // Inline formatting
+  md = md
+    .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**')
+    .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*')
+    .replace(/<(del|s|strike)\b[^>]*>([\s\S]*?)<\/\1>/gi, '~~$2~~')
+    .replace(/<mark\b[^>]*>([\s\S]*?)<\/mark>/gi, '==$1==')
+    .replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
+    .replace(/<kbd\b[^>]*>([\s\S]*?)<\/kbd>/gi, '<kbd>$1</kbd>')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
+    .replace(/<img\b[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*\/?>/gi, '![$2]($1)')
+    .replace(/<img\b[^>]*src=["']([^"']+)["'][^>]*\/?>/gi, '![]($1)')
+    .replace(/<hr\b[^>]*\/?>/gi, '\n\n---\n\n')
+    .replace(/<br\b[^>]*\/?>/gi, '\n')
+    .replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, (_m, inner) => {
+      const clean = String(inner).replace(/<[^>]+>/g, '').trim()
+      return `\n\n> ${clean.split(/\r?\n/).join('\n> ')}\n\n`
+    })
+    .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_m, inner) => `- ${String(inner).replace(/<[^>]+>/g, '').trim()}\n`)
+    .replace(/<\/?(ul|ol|p|div)\b[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  return md
 }
 
 export function convertDelimitedTextToTable(text: string): string {

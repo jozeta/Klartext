@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react'
-import mermaid from 'mermaid'
 import {
   MousePointer,
   Square,
@@ -19,16 +18,48 @@ import {
   type ExcalidrawSceneData
 } from '../../../shared/serialization/excalidraw-svg'
 
-let mermaidInitialized = false
+let mermaidModulePromise: Promise<typeof import('mermaid').default> | null = null
+let lastMermaidTheme: 'light' | 'dark' | null = null
+const mermaidSvgCache = new Map<string, string>()
 
-function ensureMermaidInit(theme: 'light' | 'dark') {
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    theme: theme === 'dark' ? 'dark' : 'neutral',
-    fontFamily: 'Inter, -apple-system, sans-serif'
-  })
-  mermaidInitialized = true
+export function getCachedMermaidSvgSync(
+  code: string,
+  theme: 'light' | 'dark'
+): string | undefined {
+  return mermaidSvgCache.get(`${theme}::${code.trim()}`)
+}
+
+export async function renderCachedMermaidSvg(
+  code: string,
+  theme: 'light' | 'dark'
+): Promise<string> {
+  const trimmed = code.trim()
+  const cacheKey = `${theme}::${trimmed}`
+  const cached = mermaidSvgCache.get(cacheKey)
+  if (cached) return cached
+
+  if (!mermaidModulePromise) {
+    mermaidModulePromise = import('mermaid').then((m) => m.default || (m as any))
+  }
+  const mermaid = await mermaidModulePromise
+  if (lastMermaidTheme !== theme) {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: theme === 'dark' ? 'dark' : 'neutral',
+      fontFamily: 'Inter, -apple-system, sans-serif'
+    })
+    lastMermaidTheme = theme
+  }
+  const id = `klartext-mermaid-${Math.random().toString(36).slice(2, 10)}`
+  const { svg } = await mermaid.render(id, trimmed)
+  const sanitized = sanitizeSvgContent(svg)
+  if (mermaidSvgCache.size > 200) {
+    const firstKey = mermaidSvgCache.keys().next().value
+    if (firstKey) mermaidSvgCache.delete(firstKey)
+  }
+  mermaidSvgCache.set(cacheKey, sanitized)
+  return sanitized
 }
 
 export const MermaidDiagramWidget: React.FC<{
@@ -37,7 +68,9 @@ export const MermaidDiagramWidget: React.FC<{
   onUpdateCode?: (newCode: string) => void
   onOpenVisualBuilder?: (currentCode: string) => void
 }> = ({ code, theme, onUpdateCode, onOpenVisualBuilder }) => {
-  const [svgHtml, setSvgHtml] = useState<string>('')
+  const [svgHtml, setSvgHtml] = useState<string>(
+    () => getCachedMermaidSvgSync(code, theme) || ''
+  )
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [editingSource, setEditingSource] = useState(false)
   const [draftCode, setDraftCode] = useState(code)
@@ -48,27 +81,25 @@ export const MermaidDiagramWidget: React.FC<{
   }, [code])
 
   useEffect(() => {
+    const syncHit = getCachedMermaidSvgSync(code, theme)
+    if (syncHit) {
+      setSvgHtml(syncHit)
+      setErrorMsg(null)
+      return
+    }
     let cancelled = false
-    const renderDiagram = async () => {
-      try {
-        if (!mermaidInitialized) {
-          ensureMermaidInit(theme)
-        } else {
-          ensureMermaidInit(theme)
-        }
-        const id = `klartext-mermaid-${Math.random().toString(36).slice(2, 10)}`
-        const { svg } = await mermaid.render(id, code)
+    renderCachedMermaidSvg(code, theme)
+      .then((sanitized) => {
         if (!cancelled) {
-          setSvgHtml(sanitizeSvgContent(svg))
+          setSvgHtml(sanitized)
           setErrorMsg(null)
         }
-      } catch (err: any) {
+      })
+      .catch((err: any) => {
         if (!cancelled) {
           setErrorMsg(err?.message || 'Invalid Mermaid syntax')
         }
-      }
-    }
-    renderDiagram()
+      })
     return () => {
       cancelled = true
     }
@@ -443,12 +474,9 @@ export const VisualMermaidBuilderModal: React.FC<{
       return
     }
     let cancelled = false
-    ensureMermaidInit(theme)
-    const id = `visual-builder-preview-${Math.random().toString(36).slice(2, 9)}`
-    mermaid
-      .render(id, generatedCode)
-      .then(({ svg }) => {
-        if (!cancelled) setPreviewSvg(sanitizeSvgContent(svg))
+    renderCachedMermaidSvg(generatedCode, theme)
+      .then((sanitized) => {
+        if (!cancelled) setPreviewSvg(sanitized)
       })
       .catch(() => {})
     return () => {

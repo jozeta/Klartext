@@ -317,6 +317,143 @@ app.whenReady().then(() => {
         { role: 'togglefullscreen' }
       ]
     },
+    {
+      label: 'Format',
+      submenu: [
+        {
+          label: 'Bold',
+          accelerator: 'CmdOrCtrl+B',
+          click: () => sendMenuAction('editor:bold')
+        },
+        {
+          label: 'Italic',
+          accelerator: 'CmdOrCtrl+I',
+          click: () => sendMenuAction('editor:italic')
+        },
+        {
+          label: 'Bold & Italic',
+          click: () => sendMenuAction('editor:bold-italic')
+        },
+        {
+          label: 'Strikethrough',
+          accelerator: 'CmdOrCtrl+Shift+X',
+          click: () => sendMenuAction('editor:strikethrough')
+        },
+        {
+          label: 'Highlight (==text==)',
+          accelerator: 'CmdOrCtrl+Shift+H',
+          click: () => sendMenuAction('editor:highlight')
+        },
+        {
+          label: 'Underline',
+          click: () => sendMenuAction('editor:underline')
+        },
+        {
+          label: 'Superscript',
+          click: () => sendMenuAction('editor:superscript')
+        },
+        {
+          label: 'Subscript',
+          click: () => sendMenuAction('editor:subscript')
+        },
+        {
+          label: 'Inline Code',
+          click: () => sendMenuAction('editor:code')
+        },
+        {
+          label: 'Keyboard Key (<kbd>)',
+          click: () => sendMenuAction('editor:kbd')
+        },
+        {
+          label: 'Spoiler (>!text!<)',
+          click: () => sendMenuAction('editor:spoiler')
+        },
+        { type: 'separator' },
+        { label: 'Heading 1', click: () => sendMenuAction('editor:h1') },
+        { label: 'Heading 2', click: () => sendMenuAction('editor:h2') },
+        { label: 'Heading 3', click: () => sendMenuAction('editor:h3') },
+        { label: 'Heading 4', click: () => sendMenuAction('editor:h4') },
+        { label: 'Heading 5', click: () => sendMenuAction('editor:h5') },
+        { label: 'Heading 6', click: () => sendMenuAction('editor:h6') },
+        { type: 'separator' },
+        { label: 'Bulleted List', click: () => sendMenuAction('editor:bullet') },
+        { label: 'Numbered List', click: () => sendMenuAction('editor:numbered') },
+        { label: 'Task Checklist', click: () => sendMenuAction('editor:task') },
+        { label: 'Definition List', click: () => sendMenuAction('editor:def-list') },
+        { label: 'Blockquote', click: () => sendMenuAction('editor:quote') },
+        { type: 'separator' },
+        {
+          label: 'Format & Prettify Document',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => sendMenuAction('editor:format-doc')
+        },
+        {
+          label: 'Align All GFM Tables',
+          click: () => sendMenuAction('editor:format-tables')
+        },
+        {
+          label: 'Clear Formatting',
+          click: () => sendMenuAction('editor:clear-format')
+        }
+      ]
+    },
+    {
+      label: 'Insert',
+      submenu: [
+        { label: 'Table (2 × 2)', click: () => sendMenuAction('editor:table-2x2') },
+        { label: 'Table (3 × 3)', click: () => sendMenuAction('editor:table-3x3') },
+        { label: 'Table (4 × 4)', click: () => sendMenuAction('editor:table-4x4') },
+        { type: 'separator' },
+        { label: 'Note Callout (> [!NOTE])', click: () => sendMenuAction('editor:callout-note') },
+        { label: 'Tip Callout (> [!TIP])', click: () => sendMenuAction('editor:callout-tip') },
+        {
+          label: 'Important Callout (> [!IMPORTANT])',
+          click: () => sendMenuAction('editor:callout-important')
+        },
+        {
+          label: 'Warning Alert (> [!WARNING])',
+          click: () => sendMenuAction('editor:callout-warning')
+        },
+        {
+          label: 'Caution Alert (> [!CAUTION])',
+          click: () => sendMenuAction('editor:callout-caution')
+        },
+        { type: 'separator' },
+        { label: 'Code Block', click: () => sendMenuAction('editor:codeblock') },
+        { label: 'Inline Math ($...$)', click: () => sendMenuAction('editor:math-inline') },
+        { label: 'Display Math Block ($$...$$)', click: () => sendMenuAction('editor:math-block') },
+        {
+          label: 'Collapsible Accordion (<details>)',
+          click: () => sendMenuAction('editor:details')
+        },
+        { label: 'Horizontal Rule (---)', click: () => sendMenuAction('editor:hr') },
+        { type: 'separator' },
+        {
+          label: 'Open Visual Diagram Builder...',
+          click: () => sendMenuAction('editor:open-mermaid-builder')
+        },
+        { label: 'Mermaid Flowchart', click: () => sendMenuAction('editor:mermaid') },
+        { label: 'Mermaid Sequence Diagram', click: () => sendMenuAction('editor:mermaid-sequence') },
+        { label: 'Mermaid State Diagram', click: () => sendMenuAction('editor:mermaid-state') },
+        { label: 'Mermaid Class Diagram', click: () => sendMenuAction('editor:mermaid-class') },
+        { label: 'Mermaid ER Diagram', click: () => sendMenuAction('editor:mermaid-er') },
+        { label: 'Mermaid Gantt Chart', click: () => sendMenuAction('editor:mermaid-gantt') },
+        { label: 'Mermaid Pie Chart', click: () => sendMenuAction('editor:mermaid-pie') },
+        { label: 'Mermaid Mindmap', click: () => sendMenuAction('editor:mermaid-mindmap') },
+        { type: 'separator' },
+        {
+          label: 'Hyperlink',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => sendMenuAction('editor:link')
+        },
+        { label: 'Wiki-Link ([[Doc]])', click: () => sendMenuAction('editor:wikilink') },
+        { label: 'Image Reference', click: () => sendMenuAction('editor:image') },
+        { label: 'Footnote ([^1])', click: () => sendMenuAction('editor:footnote') },
+        { label: 'Table of Contents ([[_TOC_]])', click: () => sendMenuAction('editor:toc') },
+        { label: 'YAML Frontmatter', click: () => sendMenuAction('editor:frontmatter') },
+        { label: 'Current Date (YYYY-MM-DD)', click: () => sendMenuAction('editor:date') }
+      ]
+    },
     { role: 'windowMenu' }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))

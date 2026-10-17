@@ -7,9 +7,23 @@ import {
   Bold,
   Italic,
   Strikethrough,
+  Highlighter,
+  Underline,
   Code,
+  FileCode2,
   Heading1,
   Heading2,
+  Heading3,
+  ListOrdered,
+  Quote,
+  AlertCircle,
+  Sigma,
+  Minus,
+  Wand2,
+  Eraser,
+  Keyboard,
+  EyeOff,
+  ChevronRightSquare,
   Link as LinkIcon,
   Image as ImageIcon,
   Table as TableIcon,
@@ -29,13 +43,15 @@ import type { EditMode } from '../../../shared/types'
 import {
   renderMarkdownDocument,
   convertDelimitedTextToTable,
+  convertHtmlToMarkdown,
   type RenderedMarkdownResult
 } from '../../../shared/markdown/pipeline'
 import { sanitizeSvgContent } from '../../../shared/serialization/excalidraw-svg'
 import { hasConflictMarkers, parseConflictHunks } from '../../../main/git/conflict-resolver'
 import {
   createLivePreviewExtension,
-  applyMarkdownFormatCommand
+  applyMarkdownFormatCommand,
+  type MarkdownFormatCommand
 } from './live-preview-extension'
 import {
   createSpellcheckExtension,
@@ -44,6 +60,25 @@ import {
   type SupportedSpellLanguage
 } from './spellcheck-extension'
 import { MermaidDiagramWidget, VisualMermaidBuilderModal } from '../diagrams/DiagramWidgets'
+
+export type EditorDispatchedCommand =
+  | 'undo'
+  | 'redo'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'select-all'
+  | 'copy-rich-html'
+  | 'toggle-inline-ai'
+  | 'ai-improve'
+  | 'open-mermaid-builder'
+  | MarkdownFormatCommand
+
+// Per-tab selection and scroll offset cache so switching tabs restores exact cursor & scroll position
+const tabViewStateCache = new Map<
+  string,
+  { anchor: number; head: number; scrollTop: number }
+>()
 
 function clearPreviewHighlights(container: HTMLElement) {
   const marks = container.querySelectorAll('mark.klartext-split-highlight')
@@ -112,16 +147,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   onChangeSplitPercent?: (percent: number) => void
   scrollToLine?: { line: number; nonce: number } | null
   editorCommandTrigger?: {
-    command:
-      | 'undo'
-      | 'redo'
-      | 'cut'
-      | 'copy'
-      | 'paste'
-      | 'select-all'
-      | 'copy-rich-html'
-      | 'toggle-inline-ai'
-      | 'ai-improve'
+    command: EditorDispatchedCommand
     nonce: number
   } | null
   onChangeContent: (nextContent: string) => void
@@ -235,7 +261,7 @@ export const MarkdownEditorWorkspace: React.FC<{
     setAssetZoom(100)
   }, [relativePath])
 
-  // Handle commands dispatched from top Edit & AI dropdown menus (strictly once per nonce)
+  // Handle commands dispatched from top Edit, Format, Insert & AI dropdown menus (strictly once per nonce)
   useEffect(() => {
     if (!editorCommandTrigger) return
     if (lastHandledCommandNonceRef.current === editorCommandTrigger.nonce) return
@@ -293,6 +319,10 @@ export const MarkdownEditorWorkspace: React.FC<{
         ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
         : ''
       onTriggerAIQuickActionRef.current('improve', sel || latestContentRef.current)
+    } else if (command === 'open-mermaid-builder') {
+      setMermaidBuilderTarget({})
+    } else if (view) {
+      applyMarkdownFormatCommand(view, command as MarkdownFormatCommand)
     }
   }, [editorCommandTrigger])
 
@@ -476,6 +506,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   }, [scrollToLine])
 
   const combinedCustomWords = [...customDictionaryWords, ...sessionIgnoredWords]
+  const tabCacheKey = `${rootId}::${relativePath}`
 
   // Initialize or reconfigure CodeMirror 6
   useEffect(() => {
@@ -487,10 +518,287 @@ export const MarkdownEditorWorkspace: React.FC<{
       viewRef.current = null
     }
 
+    const cachedTabState = tabViewStateCache.get(tabCacheKey)
+    const initialAnchor = cachedTabState
+      ? Math.min(cachedTabState.anchor, content.length)
+      : 0
+    const initialHead = cachedTabState
+      ? Math.min(cachedTabState.head, content.length)
+      : 0
+
+    const smartMarkdownKeymap = keymap.of([
+      {
+        key: 'Mod-b',
+        run: (view) => {
+          applyMarkdownFormatCommand(view, 'bold')
+          return true
+        }
+      },
+      {
+        key: 'Mod-i',
+        run: (view) => {
+          applyMarkdownFormatCommand(view, 'italic')
+          return true
+        }
+      },
+      {
+        key: 'Mod-k',
+        run: (view) => {
+          applyMarkdownFormatCommand(view, 'link')
+          return true
+        }
+      },
+      {
+        key: 'Mod-Shift-x',
+        run: (view) => {
+          applyMarkdownFormatCommand(view, 'strikethrough')
+          return true
+        }
+      },
+      {
+        key: 'Mod-Shift-h',
+        run: (view) => {
+          applyMarkdownFormatCommand(view, 'highlight')
+          return true
+        }
+      },
+      {
+        key: 'Mod-Shift-i',
+        run: (view) => {
+          applyMarkdownFormatCommand(view, 'format-doc')
+          return true
+        }
+      },
+      {
+        key: 'Alt-Shift-f',
+        run: (view) => {
+          applyMarkdownFormatCommand(view, 'format-doc')
+          return true
+        }
+      },
+      {
+        key: 'Enter',
+        run: (view) => {
+          const { state } = view
+          const sel = state.selection.main
+          if (!sel.empty) return false
+          const line = state.doc.lineAt(sel.head)
+          if (sel.head !== line.to) return false
+
+          // 1. Empty list / task / ordered / blockquote prefix -> exit list cleanly
+          const emptyPrefixMatch = line.text.match(
+            /^(\s*)(?:[-*+]\s+\[[ xX]\]|[-*+]|\d+\.|>)\s*$/
+          )
+          if (emptyPrefixMatch) {
+            view.dispatch({
+              changes: { from: line.from, to: line.to, insert: '' },
+              selection: { anchor: line.from }
+            })
+            return true
+          }
+
+          // 2. Task list continuation: - [ ] item -> \n- [ ] 
+          const taskMatch = line.text.match(/^(\s*[-*+]\s+)\[[ xX]\]\s+(.+)$/)
+          if (taskMatch) {
+            const nextPrefix = `\n${taskMatch[1]}[ ] `
+            view.dispatch({
+              changes: { from: sel.head, to: sel.head, insert: nextPrefix },
+              selection: { anchor: sel.head + nextPrefix.length }
+            })
+            return true
+          }
+
+          // 3. Ordered list continuation: 1. item -> \n2. 
+          const orderedMatch = line.text.match(/^(\s*)(\d+)\.\s+(.+)$/)
+          if (orderedMatch) {
+            const nextNum = Number(orderedMatch[2]) + 1
+            const nextPrefix = `\n${orderedMatch[1]}${nextNum}. `
+            view.dispatch({
+              changes: { from: sel.head, to: sel.head, insert: nextPrefix },
+              selection: { anchor: sel.head + nextPrefix.length }
+            })
+            return true
+          }
+
+          // 4. Bullet list continuation: - item -> \n- 
+          const bulletMatch = line.text.match(/^(\s*[-*+]\s+)(.+)$/)
+          if (bulletMatch) {
+            const nextPrefix = `\n${bulletMatch[1]}`
+            view.dispatch({
+              changes: { from: sel.head, to: sel.head, insert: nextPrefix },
+              selection: { anchor: sel.head + nextPrefix.length }
+            })
+            return true
+          }
+
+          // 5. Blockquote continuation: > quote -> \n> 
+          const quoteMatch = line.text.match(/^(\s*>\s+)(.+)$/)
+          if (quoteMatch) {
+            const nextPrefix = `\n${quoteMatch[1]}`
+            view.dispatch({
+              changes: { from: sel.head, to: sel.head, insert: nextPrefix },
+              selection: { anchor: sel.head + nextPrefix.length }
+            })
+            return true
+          }
+
+          return false
+        }
+      },
+      {
+        key: 'Tab',
+        run: (view) => {
+          const { state } = view
+          const sel = state.selection.main
+          const line = state.doc.lineAt(sel.head)
+
+          // Table cell navigation: jump to next cell in current or next table row
+          if (/^\s*\|.*\|\s*$/.test(line.text)) {
+            const offsetInLine = sel.to - line.from
+            const nextPipeIdx = line.text.indexOf('|', offsetInLine)
+            if (nextPipeIdx !== -1) {
+              const followingPipeIdx = line.text.indexOf('|', nextPipeIdx + 1)
+              if (followingPipeIdx !== -1) {
+                const rawCell = line.text.slice(nextPipeIdx + 1, followingPipeIdx)
+                const trimStart = rawCell.search(/\S/)
+                const cellStart =
+                  line.from + nextPipeIdx + 1 + (trimStart >= 0 ? trimStart : 1)
+                const cellEnd =
+                  line.from + nextPipeIdx + 1 + rawCell.trimEnd().length
+                view.dispatch({
+                  selection: { anchor: cellStart, head: Math.max(cellStart, cellEnd) }
+                })
+                return true
+              }
+            }
+            // Check next line if it's also a table row
+            if (line.number < state.doc.lines) {
+              const nextLine = state.doc.line(line.number + 1)
+              if (/^\s*\|.*\|\s*$/.test(nextLine.text)) {
+                const firstPipe = nextLine.text.indexOf('|')
+                const secondPipe = nextLine.text.indexOf('|', firstPipe + 1)
+                if (firstPipe !== -1 && secondPipe !== -1) {
+                  const rawCell = nextLine.text.slice(firstPipe + 1, secondPipe)
+                  const trimStart = rawCell.search(/\S/)
+                  const cellStart =
+                    nextLine.from + firstPipe + 1 + (trimStart >= 0 ? trimStart : 1)
+                  const cellEnd =
+                    nextLine.from + firstPipe + 1 + rawCell.trimEnd().length
+                  view.dispatch({
+                    selection: { anchor: cellStart, head: Math.max(cellStart, cellEnd) }
+                  })
+                  return true
+                }
+              }
+            }
+          }
+
+          // List item indent by 2 spaces
+          if (/^(\s*)(?:[-*+]|\d+\.)\s+/.test(line.text)) {
+            view.dispatch({
+              changes: { from: line.from, to: line.from, insert: '  ' },
+              selection: { anchor: sel.anchor + 2, head: sel.head + 2 }
+            })
+            return true
+          }
+
+          return false
+        }
+      },
+      {
+        key: 'Shift-Tab',
+        run: (view) => {
+          const { state } = view
+          const sel = state.selection.main
+          const line = state.doc.lineAt(sel.head)
+
+          // Table cell reverse navigation: jump to previous cell
+          if (/^\s*\|.*\|\s*$/.test(line.text)) {
+            const offsetInLine = sel.from - line.from
+            const beforeText = line.text.slice(0, Math.max(0, offsetInLine - 1))
+            const prevPipeIdx = beforeText.lastIndexOf('|')
+            const openPipeIdx =
+              prevPipeIdx > 0 ? beforeText.lastIndexOf('|', prevPipeIdx - 1) : -1
+            if (openPipeIdx !== -1 && prevPipeIdx !== -1) {
+              const rawCell = line.text.slice(openPipeIdx + 1, prevPipeIdx)
+              const trimStart = rawCell.search(/\S/)
+              const cellStart =
+                line.from + openPipeIdx + 1 + (trimStart >= 0 ? trimStart : 1)
+              const cellEnd =
+                line.from + openPipeIdx + 1 + rawCell.trimEnd().length
+              view.dispatch({
+                selection: { anchor: cellStart, head: Math.max(cellStart, cellEnd) }
+              })
+              return true
+            }
+          }
+
+          // List item outdent by up to 2 spaces
+          const indentMatch = line.text.match(/^( {1,2})(?:[-*+]|\d+\.)\s+/)
+          if (indentMatch) {
+            const removeLen = indentMatch[1].length
+            view.dispatch({
+              changes: { from: line.from, to: line.from + removeLen, insert: '' },
+              selection: {
+                anchor: Math.max(line.from, sel.anchor - removeLen),
+                head: Math.max(line.from, sel.head - removeLen)
+              }
+            })
+            return true
+          }
+
+          return false
+        }
+      }
+    ])
+
+    // Smart character wrapping when text is selected (*, _, `, ~, =, [, (, ", $)
+    const smartSelectionWrapHandler = EditorView.inputHandler.of(
+      (view, from, to, text) => {
+        if (from >= to || text.length !== 1) return false
+        const wrapPairs: Record<string, [string, string]> = {
+          '*': ['*', '*'],
+          _: ['_', '_'],
+          '`': ['`', '`'],
+          '~': ['~~', '~~'],
+          '=': ['==', '=='],
+          '(': ['(', ')'],
+          '"': ['"', '"'],
+          $: ['$', '$']
+        }
+        const selected = view.state.sliceDoc(from, to)
+        if (text === '[') {
+          const replacement = `[${selected}]()`
+          view.dispatch({
+            changes: { from, to, insert: replacement },
+            selection: { anchor: from + selected.length + 3 }
+          })
+          return true
+        }
+        const pair = wrapPairs[text]
+        if (pair) {
+          const [open, close] = pair
+          const replacement = `${open}${selected}${close}`
+          view.dispatch({
+            changes: { from, to, insert: replacement },
+            selection: {
+              anchor: from + open.length,
+              head: from + open.length + selected.length
+            }
+          })
+          return true
+        }
+        return false
+      }
+    )
+
     const startState = EditorState.create({
       doc: content,
+      selection: { anchor: initialAnchor, head: initialHead },
       extensions: [
         history(),
+        smartMarkdownKeymap,
+        smartSelectionWrapHandler,
         keymap.of([...defaultKeymap, ...historyKeymap]),
         markdown(),
         ...(showLineNumbers || editMode === 'source' ? [lineNumbers()] : []),
@@ -547,6 +855,14 @@ export const MarkdownEditorWorkspace: React.FC<{
 
           if (update.selectionSet || update.docChanged || update.viewportChanged) {
             const sel = update.state.selection.main
+            tabViewStateCache.set(tabCacheKey, {
+              anchor: sel.anchor,
+              head: sel.head,
+              scrollTop:
+                editorScrollWrapperRef.current?.scrollTop ??
+                tabViewStateCache.get(tabCacheKey)?.scrollTop ??
+                0
+            })
             if (!sel.empty) {
               const selectedStr = update.state.sliceDoc(sel.from, sel.to)
               if (floatingToolbarEnabled) {
@@ -561,7 +877,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   const top = placeAbove ? selectionTop - 42 : selectionBottom + 8
                   const left = Math.max(
                     12,
-                    Math.min(window.innerWidth - 460, selectionLeft)
+                    Math.min(window.innerWidth - 560, selectionLeft)
                   )
                   setSelectionCoords({
                     top,
@@ -610,17 +926,55 @@ export const MarkdownEditorWorkspace: React.FC<{
               }
             }
 
-            // Smart TSV/CSV spreadsheet paste into GFM table when multiple tabs are detected
+            const range = view.state.selection.main
             const textData = event.clipboardData?.getData('text/plain')
+
+            // Smart URL paste over selected text -> [selected text](https://...)
+            if (
+              range.from < range.to &&
+              textData &&
+              /^https?:\/\/[^\s)]+$/i.test(textData.trim())
+            ) {
+              event.preventDefault()
+              const selectedText = view.state.sliceDoc(range.from, range.to)
+              const mdLink = `[${selectedText}](${textData.trim()})`
+              view.dispatch({
+                changes: { from: range.from, to: range.to, insert: mdLink },
+                selection: { anchor: range.from + mdLink.length }
+              })
+              return true
+            }
+
+            // Smart TSV/CSV spreadsheet paste into GFM table when multiple tabs are detected
             if (textData && textData.includes('\t') && textData.includes('\n')) {
               event.preventDefault()
               const formattedTable = convertDelimitedTextToTable(textData)
-              const range = view.state.selection.main
               view.dispatch({
                 changes: { from: range.from, to: range.to, insert: formattedTable }
               })
               return true
             }
+
+            // Smart HTML paste conversion when rich HTML tags exist and plain text isn't already Markdown
+            const htmlData = event.clipboardData?.getData('text/html')
+            if (
+              htmlData &&
+              /<(?:h[1-6]|strong|b|em|i|a|ul|ol|li|table|blockquote|pre|code|del|mark)\b/i.test(
+                htmlData
+              ) &&
+              (!textData || !/(?:^#{1,6}\s|\*\*|```|\[.+\]\(.+\))/m.test(textData))
+            ) {
+              const converted = convertHtmlToMarkdown(htmlData)
+              if (converted && converted !== (textData || '').trim()) {
+                event.preventDefault()
+                view.dispatch({
+                  changes: { from: range.from, to: range.to, insert: converted },
+                  selection: { anchor: range.from + converted.length }
+                })
+                return true
+              }
+            }
+
             return false
           },
           drop: (event, view) => {
@@ -654,7 +1008,24 @@ export const MarkdownEditorWorkspace: React.FC<{
     })
     viewRef.current = view
 
+    // Restore cached scroll offset for this tab if available
+    if (cachedTabState && cachedTabState.scrollTop > 0 && editorScrollWrapperRef.current) {
+      requestAnimationFrame(() => {
+        if (editorScrollWrapperRef.current) {
+          editorScrollWrapperRef.current.scrollTop = cachedTabState.scrollTop
+        }
+      })
+    }
+
     return () => {
+      if (editorScrollWrapperRef.current) {
+        const curSel = view.state.selection.main
+        tabViewStateCache.set(tabCacheKey, {
+          anchor: curSel.anchor,
+          head: curSel.head,
+          scrollTop: editorScrollWrapperRef.current.scrollTop
+        })
+      }
       view.destroy()
       viewRef.current = null
     }
@@ -828,10 +1199,10 @@ export const MarkdownEditorWorkspace: React.FC<{
         /* Compact Editor Action & Formatting Strip for Markdown files (can be hidden via View menu) */
         formattingToolbarVisible && (
           <div
-            className="flex items-center justify-between px-4 py-1 bg-panel border-b border-subtle text-xs"
+            className="flex items-center justify-between px-4 py-1 bg-panel border-b border-subtle text-xs overflow-x-auto no-scrollbar"
             data-testid="editor-formatting-bar"
           >
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 data-tooltip="Bold (⌘B)"
@@ -860,7 +1231,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               </button>
               <button
                 type="button"
-                data-tooltip="Strikethrough"
+                data-tooltip="Strikethrough (⇧⌘X)"
                 aria-label="Strikethrough"
                 data-testid="fmt-strike"
                 onMouseDown={(e) => {
@@ -873,7 +1244,33 @@ export const MarkdownEditorWorkspace: React.FC<{
               </button>
               <button
                 type="button"
-                data-tooltip="Inline Code"
+                data-tooltip="Highlight (==text==, ⇧⌘H)"
+                aria-label="Highlight"
+                data-testid="fmt-highlight"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('highlight')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Highlighter className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Underline (<u>)"
+                aria-label="Underline"
+                data-testid="fmt-underline"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('underline')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Underline className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Inline Code (`)"
                 aria-label="Inline Code"
                 data-testid="fmt-code"
                 onMouseDown={(e) => {
@@ -884,10 +1281,36 @@ export const MarkdownEditorWorkspace: React.FC<{
               >
                 <Code className="w-3.5 h-3.5" />
               </button>
+              <button
+                type="button"
+                data-tooltip="Keyboard Key (<kbd>)"
+                aria-label="Keyboard Key"
+                data-testid="fmt-kbd"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('kbd')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Spoiler (>!text!<)"
+                aria-label="Spoiler"
+                data-testid="fmt-spoiler"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('spoiler')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+              </button>
               <span className="h-4 w-px bg-subtle mx-1" />
               <button
                 type="button"
-                data-tooltip="Heading 1"
+                data-tooltip="Heading 1 (#)"
                 aria-label="Heading 1"
                 data-testid="fmt-h1"
                 onMouseDown={(e) => {
@@ -900,7 +1323,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               </button>
               <button
                 type="button"
-                data-tooltip="Heading 2"
+                data-tooltip="Heading 2 (##)"
                 aria-label="Heading 2"
                 data-testid="fmt-h2"
                 onMouseDown={(e) => {
@@ -911,6 +1334,86 @@ export const MarkdownEditorWorkspace: React.FC<{
               >
                 <Heading2 className="w-3.5 h-3.5" />
               </button>
+              <button
+                type="button"
+                data-tooltip="Heading 3 (###)"
+                aria-label="Heading 3"
+                data-testid="fmt-h3"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('h3')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Heading3 className="w-3.5 h-3.5" />
+              </button>
+              <span className="h-4 w-px bg-subtle mx-1" />
+              <button
+                type="button"
+                data-tooltip="Task List (- [ ])"
+                aria-label="Task List"
+                data-testid="fmt-task"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('task')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Bulleted List (-)"
+                aria-label="Bulleted List"
+                data-testid="fmt-bullet"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('bullet')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Numbered List (1.)"
+                aria-label="Numbered List"
+                data-testid="fmt-numbered"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('numbered')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <ListOrdered className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Blockquote (>)"
+                aria-label="Blockquote"
+                data-testid="fmt-quote"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('quote')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Quote className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Callout / Alert (> [!NOTE])"
+                aria-label="Callout"
+                data-testid="fmt-callout"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('callout-note')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <AlertCircle className="w-3.5 h-3.5" />
+              </button>
+              <span className="h-4 w-px bg-subtle mx-1" />
               <button
                 type="button"
                 data-tooltip="Insert Table"
@@ -926,33 +1429,59 @@ export const MarkdownEditorWorkspace: React.FC<{
               </button>
               <button
                 type="button"
-                data-tooltip="Task List"
-                aria-label="Task List"
-                data-testid="fmt-task"
+                data-tooltip="Code Block (```)"
+                aria-label="Code Block"
+                data-testid="fmt-codeblock"
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  executeFormat('task')
+                  executeFormat('codeblock')
                 }}
                 className="p-1.5 rounded hover:bg-secondary text-primary"
               >
-                <CheckSquare className="w-3.5 h-3.5" />
+                <FileCode2 className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                data-tooltip="Bulleted List"
-                aria-label="Bulleted List"
-                data-testid="fmt-bullet"
+                data-tooltip="Math Formula ($...$)"
+                aria-label="Math Formula"
+                data-testid="fmt-math"
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  executeFormat('bullet')
+                  executeFormat('math-inline')
                 }}
                 className="p-1.5 rounded hover:bg-secondary text-primary"
               >
-                <List className="w-3.5 h-3.5" />
+                <Sigma className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                data-tooltip="Insert Link"
+                data-tooltip="Collapsible Details (<details>)"
+                aria-label="Collapsible Details"
+                data-testid="fmt-details"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('details')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <ChevronRightSquare className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Horizontal Rule (---)"
+                aria-label="Horizontal Rule"
+                data-testid="fmt-hr"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('hr')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Insert Link (⌘K)"
                 aria-label="Insert Link"
                 data-testid="fmt-link"
                 onMouseDown={(e) => {
@@ -977,8 +1506,6 @@ export const MarkdownEditorWorkspace: React.FC<{
                 <ImageIcon className="w-3.5 h-3.5" />
               </button>
               <span className="h-4 w-px bg-subtle mx-1" />
-
-              {/* Visual Mermaid Diagram Builder Icon Button (Insert Mermaid & Excalidraw removed per user request) */}
               <button
                 type="button"
                 data-tooltip="Visual Diagram Builder"
@@ -988,6 +1515,33 @@ export const MarkdownEditorWorkspace: React.FC<{
                 className="p-1.5 rounded hover:bg-secondary text-accent"
               >
                 <Workflow className="w-3.5 h-3.5" />
+              </button>
+              <span className="h-4 w-px bg-subtle mx-1" />
+              <button
+                type="button"
+                data-tooltip="Format & Align Document (⇧⌘I)"
+                aria-label="Format Document"
+                data-testid="fmt-format-doc"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('format-doc')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                data-tooltip="Clear Formatting"
+                aria-label="Clear Formatting"
+                data-testid="fmt-clear"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeFormat('clear-format')
+                }}
+                className="p-1.5 rounded hover:bg-secondary text-primary"
+              >
+                <Eraser className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -1186,7 +1740,7 @@ export const MarkdownEditorWorkspace: React.FC<{
         </div>
       )}
 
-      {/* Floating Selection Toolbar (Positioned directly above/below selected text with full formatting items matching top bar) */}
+      {/* Floating Selection Toolbar (Positioned directly above/below selected text with comprehensive formatting options) */}
       {selectionCoords && floatingToolbarEnabled && (
         <div
           data-testid="floating-selection-toolbar"
@@ -1199,7 +1753,7 @@ export const MarkdownEditorWorkspace: React.FC<{
         >
           <button
             type="button"
-            data-tooltip="Bold"
+            data-tooltip="Bold (⌘B)"
             data-testid="floating-bold-btn"
             onMouseDown={(e) => {
               e.preventDefault()
@@ -1211,7 +1765,7 @@ export const MarkdownEditorWorkspace: React.FC<{
           </button>
           <button
             type="button"
-            data-tooltip="Italic"
+            data-tooltip="Italic (⌘I)"
             data-testid="floating-italic-btn"
             onMouseDown={(e) => {
               e.preventDefault()
@@ -1223,7 +1777,7 @@ export const MarkdownEditorWorkspace: React.FC<{
           </button>
           <button
             type="button"
-            data-tooltip="Strikethrough"
+            data-tooltip="Strikethrough (⇧⌘X)"
             data-testid="floating-strike-btn"
             onMouseDown={(e) => {
               e.preventDefault()
@@ -1235,7 +1789,31 @@ export const MarkdownEditorWorkspace: React.FC<{
           </button>
           <button
             type="button"
-            data-tooltip="Inline Code"
+            data-tooltip="Highlight (==)"
+            data-testid="floating-highlight-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('highlight')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Highlighter className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Underline (<u>)"
+            data-testid="floating-underline-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('underline')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Underline className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Inline Code (`)"
             data-testid="floating-code-btn"
             onMouseDown={(e) => {
               e.preventDefault()
@@ -1244,6 +1822,30 @@ export const MarkdownEditorWorkspace: React.FC<{
             className="p-1 rounded hover:bg-secondary text-primary"
           >
             <Code className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Keyboard Key (<kbd>)"
+            data-testid="floating-kbd-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('kbd')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Spoiler (>! !<)"
+            data-testid="floating-spoiler-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('spoiler')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <EyeOff className="w-3.5 h-3.5" />
           </button>
           <span className="h-3.5 w-px bg-subtle mx-0.5" />
           <button
@@ -1272,16 +1874,41 @@ export const MarkdownEditorWorkspace: React.FC<{
           </button>
           <button
             type="button"
-            data-tooltip="Insert Table"
-            data-testid="floating-table-btn"
+            data-tooltip="Heading 3"
+            data-testid="floating-h3-btn"
             onMouseDown={(e) => {
               e.preventDefault()
-              executeFormat('table')
+              executeFormat('h3')
             }}
             className="p-1 rounded hover:bg-secondary text-primary"
           >
-            <TableIcon className="w-3.5 h-3.5" />
+            <Heading3 className="w-3.5 h-3.5" />
           </button>
+          <button
+            type="button"
+            data-tooltip="Blockquote (>)"
+            data-testid="floating-quote-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('quote')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Quote className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Callout Alert (> [!NOTE])"
+            data-testid="floating-callout-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('callout-note')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <AlertCircle className="w-3.5 h-3.5" />
+          </button>
+          <span className="h-3.5 w-px bg-subtle mx-0.5" />
           <button
             type="button"
             data-tooltip="Task List"
@@ -1308,7 +1935,56 @@ export const MarkdownEditorWorkspace: React.FC<{
           </button>
           <button
             type="button"
-            data-tooltip="Insert Link"
+            data-tooltip="Numbered List"
+            data-testid="floating-numbered-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('numbered')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <ListOrdered className="w-3.5 h-3.5" />
+          </button>
+          <span className="h-3.5 w-px bg-subtle mx-0.5" />
+          <button
+            type="button"
+            data-tooltip="Insert Table"
+            data-testid="floating-table-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('table')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <TableIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Code Block"
+            data-testid="floating-codeblock-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('codeblock')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <FileCode2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Math ($...$)"
+            data-testid="floating-math-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('math-inline')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Sigma className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Insert Link (⌘K)"
             data-testid="floating-link-btn"
             onMouseDown={(e) => {
               e.preventDefault()
@@ -1329,6 +2005,18 @@ export const MarkdownEditorWorkspace: React.FC<{
             className="p-1 rounded hover:bg-secondary text-primary"
           >
             <ImageIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            data-tooltip="Clear Formatting"
+            data-testid="floating-clear-btn"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              executeFormat('clear-format')
+            }}
+            className="p-1 rounded hover:bg-secondary text-primary"
+          >
+            <Eraser className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
