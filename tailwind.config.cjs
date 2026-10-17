@@ -1,20 +1,37 @@
 /** @type {import('tailwindcss').Config} */
+function cssVarWithOpacity(varName) {
+  return ({ opacityValue }) => {
+    if (opacityValue !== undefined) {
+      const pct = Math.round(Number(opacityValue) * 100)
+      if (!Number.isNaN(pct)) {
+        return `color-mix(in srgb, var(${varName}) ${pct}%, transparent)`
+      }
+    }
+    return `var(${varName})`
+  }
+}
+
 module.exports = {
   content: ['./src/renderer/**/*.{html,js,ts,jsx,tsx}'],
   darkMode: ['class', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        app: 'var(--bg-app)',
-        panel: 'var(--bg-panel)',
-        secondary: 'var(--bg-secondary)',
-        primary: 'var(--text-primary)',
-        muted: 'var(--text-secondary)',
-        subtle: 'var(--border-subtle)',
-        accent: 'var(--accent-primary)',
-        danger: 'var(--status-danger)',
-        warning: 'var(--status-warning)',
-        success: 'var(--status-success)'
+        app: cssVarWithOpacity('--bg-app'),
+        panel: cssVarWithOpacity('--bg-panel'),
+        secondary: cssVarWithOpacity('--bg-secondary'),
+        primary: cssVarWithOpacity('--text-primary'),
+        muted: cssVarWithOpacity('--text-secondary'),
+        subtle: cssVarWithOpacity('--border-subtle'),
+        accent: cssVarWithOpacity('--accent-primary'),
+        danger: cssVarWithOpacity('--status-danger'),
+        warning: cssVarWithOpacity('--status-warning'),
+        success: cssVarWithOpacity('--status-success')
+      },
+      textColor: {
+        primary: cssVarWithOpacity('--text-primary'),
+        secondary: cssVarWithOpacity('--text-secondary'),
+        muted: cssVarWithOpacity('--text-secondary')
       },
       fontFamily: {
         sans: ['var(--font-ui)', 'Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],

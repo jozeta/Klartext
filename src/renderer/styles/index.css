@@ -10,9 +10,9 @@
   --text-editor: #20272D;
   --text-editor-effective: var(--text-editor-custom, var(--text-editor));
   --bg-secondary: #EEF1F3;
-  --text-primary: #20272D;
-  --text-secondary: #687580;
-  --border-subtle: #DDE2E6;
+  --text-primary: #1B2228;
+  --text-secondary: #4B5865;
+  --border-subtle: #D5DCE2;
   --accent-primary: #426B79;
   --status-danger: #B54747;
   --status-warning: #B8860B;
@@ -49,12 +49,12 @@
   --bg-app: #171A1D;
   --bg-panel: #202428;
   --bg-editor: #202428;
-  --text-editor: #E8ECEF;
+  --text-editor: #EEF2F5;
   --text-editor-effective: var(--text-editor-custom, var(--text-editor));
   --bg-secondary: #272D32;
-  --text-primary: #E8ECEF;
-  --text-secondary: #A5B0B9;
-  --border-subtle: #353D44;
+  --text-primary: #EEF2F5;
+  --text-secondary: #B8C4CE;
+  --border-subtle: #38414A;
   --accent-primary: #8AB6C3;
   --status-danger: #E17A7A;
   --status-warning: #E6B84D;
@@ -75,6 +75,12 @@ body {
   background-color: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-ui);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.78;
 }
 
 .titlebar-drag-region {

@@ -147,17 +147,17 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
         </div>
 
         {/* Stepper Header */}
-        <div className="px-5 py-2.5 bg-app/50 border-b border-subtle flex items-center gap-4 text-[11px]">
+        <div className="px-5 py-2.5 bg-secondary border-b border-subtle flex items-center gap-4 text-[11px]">
           <button
             type="button"
             onClick={() => !isCloning && setStep(1)}
-            className={`flex items-center gap-1.5 font-medium ${
-              step === 1 ? 'text-accent' : 'text-secondary'
+            className={`flex items-center gap-1.5 font-semibold ${
+              step === 1 ? 'text-accent' : 'text-primary'
             }`}
           >
             <span
               className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                step === 1 ? 'bg-accent text-white' : 'bg-secondary text-primary'
+                step === 1 ? 'bg-accent text-white' : 'bg-panel border border-subtle text-primary'
               }`}
             >
               1
@@ -166,13 +166,13 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
           </button>
           <span className="text-muted">→</span>
           <span
-            className={`flex items-center gap-1.5 font-medium ${
+            className={`flex items-center gap-1.5 font-semibold ${
               step === 2 ? 'text-accent' : 'text-muted'
             }`}
           >
             <span
               className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                step === 2 ? 'bg-accent text-white' : 'bg-secondary text-muted'
+                step === 2 ? 'bg-accent text-white' : 'bg-panel border border-subtle text-muted'
               }`}
             >
               2
@@ -185,8 +185,8 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
           {step === 1 ? (
             <>
               <div>
-                <label className="block text-[11px] font-semibold text-secondary mb-1">
-                  GitHub Repository (URL or <code className="font-mono">owner/repo</code>)
+                <label className="block text-[11px] font-semibold text-primary mb-1">
+                  GitHub Repository (URL or <code className="font-mono text-accent">owner/repo</code>)
                 </label>
                 <input
                   type="text"
@@ -198,14 +198,14 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
                   className="w-full px-3 py-2 rounded-md bg-app border border-subtle text-primary focus:outline-none focus:border-accent font-mono text-xs"
                 />
                 {normalizedRepoUrl && (
-                  <p className="mt-1 text-[10px] text-muted truncate">
-                    Resolved remote: <code className="font-mono text-secondary">{normalizedRepoUrl}</code>
+                  <p className="mt-1 text-[11px] text-muted truncate">
+                    Resolved remote: <code className="font-mono text-primary">{normalizedRepoUrl}</code>
                   </p>
                 )}
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-secondary mb-1">
+                <label className="block text-[11px] font-semibold text-primary mb-1">
                   GitHub Personal Access Token (Optional — for private HTTPS repos)
                 </label>
                 <input
@@ -216,7 +216,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
                   placeholder="ghp_... or github_pat_..."
                   className="w-full px-3 py-2 rounded-md bg-app border border-subtle text-primary focus:outline-none focus:border-accent font-mono text-xs"
                 />
-                <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-secondary cursor-pointer">
+                <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-primary cursor-pointer">
                   <input
                     type="checkbox"
                     checked={saveTokenToKeychain}
@@ -230,7 +230,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
               {errorMsg && (
                 <div
                   data-testid="github-wizard-error"
-                  className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-[11px]"
+                  className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-danger text-[11px]"
                 >
                   {errorMsg}
                 </div>
@@ -240,7 +240,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-3 py-1.5 rounded-md border border-subtle text-secondary hover:text-primary"
+                  className="px-3 py-1.5 rounded-md bg-secondary border border-subtle text-primary hover:border-accent"
                 >
                   Cancel
                 </button>
@@ -257,7 +257,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
           ) : (
             <>
               <div>
-                <label className="block text-[11px] font-semibold text-secondary mb-1">
+                <label className="block text-[11px] font-semibold text-primary mb-1">
                   Local Parent Directory
                 </label>
                 <input
@@ -272,7 +272,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
                     Target Folder Name
                   </label>
                   <input
@@ -285,7 +285,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
                     Workspace Display Name
                   </label>
                   <input
@@ -299,9 +299,9 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-md bg-secondary/40 border border-subtle text-[11px] text-secondary">
-                Cloning <code className="font-mono text-primary">{normalizedRepoUrl}</code> into{' '}
-                <code className="font-mono text-primary">
+              <div className="p-2.5 rounded-md bg-secondary border border-subtle text-[11px] text-muted">
+                Cloning <code className="font-mono text-primary font-medium">{normalizedRepoUrl}</code> into{' '}
+                <code className="font-mono text-primary font-medium">
                   {(parentDir.trim().replace(/\/+$/, '') || '/tmp') +
                     '/' +
                     (folderName.trim() || inferredRepoBaseName)}
@@ -311,7 +311,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
               {errorMsg && (
                 <div
                   data-testid="github-wizard-error"
-                  className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-[11px]"
+                  className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-danger text-[11px]"
                 >
                   {errorMsg}
                 </div>
@@ -322,7 +322,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
                   type="button"
                   onClick={() => setStep(1)}
                   disabled={isCloning}
-                  className="px-3 py-1.5 rounded-md border border-subtle text-secondary hover:text-primary"
+                  className="px-3 py-1.5 rounded-md bg-secondary border border-subtle text-primary hover:border-accent"
                 >
                   ← Back
                 </button>
@@ -331,7 +331,7 @@ export const GitHubWorkspaceWizardModal: React.FC<GitHubWorkspaceWizardModalProp
                     type="button"
                     onClick={onClose}
                     disabled={isCloning}
-                    className="px-3 py-1.5 rounded-md border border-subtle text-secondary hover:text-primary"
+                    className="px-3 py-1.5 rounded-md bg-secondary border border-subtle text-primary hover:border-accent"
                   >
                     Cancel
                   </button>
@@ -567,8 +567,8 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="w-full max-w-2xl rounded-xl bg-panel border border-subtle shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
-        <div className="px-5 py-3.5 border-b border-subtle flex items-center justify-between bg-secondary/40">
+      <div className="w-full max-w-2xl rounded-xl bg-panel text-primary border border-subtle shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+        <div className="px-5 py-3.5 border-b border-subtle flex items-center justify-between bg-secondary">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-semibold text-primary">
@@ -584,24 +584,24 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+            className="p-1 rounded hover:bg-panel text-muted hover:text-primary"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {!targetWorkspace && (
-          <div className="px-5 py-2.5 bg-app/50 border-b border-subtle flex items-center gap-4 text-[11px]">
+          <div className="px-5 py-2.5 bg-app border-b border-subtle flex items-center gap-4 text-[11px]">
             <button
               type="button"
               onClick={() => setStep(1)}
-              className={`flex items-center gap-1.5 font-medium ${
-                step === 1 ? 'text-accent' : 'text-secondary'
+              className={`flex items-center gap-1.5 font-semibold ${
+                step === 1 ? 'text-accent' : 'text-primary'
               }`}
             >
               <span
                 className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  step === 1 ? 'bg-accent text-white' : 'bg-secondary text-primary'
+                  step === 1 ? 'bg-accent text-white' : 'bg-secondary border border-subtle text-primary'
                 }`}
               >
                 1
@@ -610,13 +610,13 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
             </button>
             <span className="text-muted">→</span>
             <span
-              className={`flex items-center gap-1.5 font-medium ${
+              className={`flex items-center gap-1.5 font-semibold ${
                 step === 2 ? 'text-accent' : 'text-muted'
               }`}
             >
               <span
                 className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  step === 2 ? 'bg-accent text-white' : 'bg-secondary text-muted'
+                  step === 2 ? 'bg-accent text-white' : 'bg-secondary border border-subtle text-muted'
                 }`}
               >
                 2
@@ -630,7 +630,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
           {step === 1 && !targetWorkspace ? (
             <>
               <div>
-                <label className="block text-[11px] font-semibold text-secondary mb-1">
+                <label className="block text-[11px] font-semibold text-primary mb-1">
                   Dynamic Workspace Container Name
                 </label>
                 <input
@@ -642,13 +642,13 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                   autoFocus
                   className="w-full px-3 py-2 rounded-md bg-app border border-subtle text-primary focus:outline-none focus:border-accent text-xs"
                 />
-                <p className="mt-1 text-[10px] text-muted">
+                <p className="mt-1 text-[11px] text-muted">
                   Creates a workspace container in the left sidebar just like a local folder workspace.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[11px] font-semibold text-secondary">
+                <label className="block text-[11px] font-semibold text-primary">
                   How should this Dynamic Workspace organize dynamic content?
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -658,11 +658,11 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                     onClick={() => setMode('dynamic-folders')}
                     className={`p-3 rounded-lg border text-left transition-colors ${
                       mode === 'dynamic-folders'
-                        ? 'border-accent bg-accent/10 text-primary'
-                        : 'border-subtle bg-app/60 text-secondary hover:text-primary'
+                        ? 'border-accent bg-accent/15 text-primary shadow-xs'
+                        : 'border-subtle bg-secondary text-primary hover:border-accent'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-semibold text-xs mb-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-xs text-primary mb-1">
                       <FolderPlus className="w-3.5 h-3.5 text-accent" />
                       <span>Dynamic Folders (Recommended)</span>
                     </div>
@@ -677,11 +677,11 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                     onClick={() => setMode('root-content')}
                     className={`p-3 rounded-lg border text-left transition-colors ${
                       mode === 'root-content'
-                        ? 'border-accent bg-accent/10 text-primary'
-                        : 'border-subtle bg-app/60 text-secondary hover:text-primary'
+                        ? 'border-accent bg-accent/15 text-primary shadow-xs'
+                        : 'border-subtle bg-secondary text-primary hover:border-accent'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 font-semibold text-xs mb-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-xs text-primary mb-1">
                       <Folder className="w-3.5 h-3.5 text-accent" />
                       <span>Dynamic Content in Root</span>
                     </div>
@@ -694,7 +694,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
 
               {mode === 'dynamic-folders' && (
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
                     First Dynamic Folder Name
                   </label>
                   <input
@@ -709,7 +709,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
               )}
 
               {errorMsg && (
-                <div className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-[11px]">
+                <div className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-danger text-[11px]">
                   {errorMsg}
                 </div>
               )}
@@ -718,7 +718,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-3 py-1.5 rounded-md border border-subtle text-secondary hover:text-primary"
+                  className="px-3 py-1.5 rounded-md bg-secondary border border-subtle text-primary hover:border-accent"
                 >
                   Cancel
                 </button>
@@ -736,7 +736,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
             <>
               {isAddingOrEditingFolderOnly && (
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
                     Dynamic Folder Name
                   </label>
                   <input
@@ -751,10 +751,10 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                 </div>
               )}
 
-              <div className="p-2.5 rounded-lg bg-accent/10 border border-accent/25 text-[11px] text-secondary flex items-center justify-between">
+              <div className="p-2.5 rounded-lg bg-secondary border border-subtle text-[11px] text-primary flex items-center justify-between">
                 <span>
-                  Supports wildcards (<code className="font-mono text-primary">*</code> and{' '}
-                  <code className="font-mono text-primary">?</code>) across all Frontmatter fields.
+                  Supports wildcards (<code className="font-mono text-accent font-bold">*</code> and{' '}
+                  <code className="font-mono text-accent font-bold">?</code>) across all Frontmatter fields.
                   Leave a field blank to match any value.
                 </span>
                 <span className="font-mono text-[10px] text-accent font-semibold shrink-0 ml-2">
@@ -764,8 +764,8 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
-                    Tags (comma-separated, supports <code className="font-mono">*</code>)
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
+                    Tags (comma-separated, supports <code className="font-mono text-accent">*</code>)
                   </label>
                   <input
                     type="text"
@@ -782,9 +782,9 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                           key={tag}
                           type="button"
                           onClick={() => handleAppendTagChip(tag)}
-                          className="px-1.5 py-0.5 rounded bg-secondary hover:bg-accent/20 text-[10px] text-secondary hover:text-primary flex items-center gap-0.5"
+                          className="px-1.5 py-0.5 rounded bg-secondary border border-subtle hover:border-accent text-[10px] text-primary flex items-center gap-0.5"
                         >
-                          <Tag className="w-2.5 h-2.5" />
+                          <Tag className="w-2.5 h-2.5 text-accent" />
                           {tag}
                         </button>
                       ))}
@@ -793,8 +793,8 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
-                    Title / Filename Pattern (supports <code className="font-mono">*</code>)
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
+                    Title / Filename Pattern (supports <code className="font-mono text-accent">*</code>)
                   </label>
                   <input
                     type="text"
@@ -811,8 +811,8 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
-                    Author Pattern (supports <code className="font-mono">*</code>)
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
+                    Author Pattern (supports <code className="font-mono text-accent">*</code>)
                   </label>
                   <input
                     type="text"
@@ -827,8 +827,8 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
-                    Status Pattern (supports <code className="font-mono">*</code>)
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
+                    Status Pattern (supports <code className="font-mono text-accent">*</code>)
                   </label>
                   <div className="flex gap-1.5">
                     <input
@@ -849,7 +849,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                           setRules((prev) => ({ ...prev, statusPattern: e.target.value }))
                         }
                       }}
-                      className="px-2 py-1.5 rounded-md bg-app border border-subtle text-secondary text-[11px]"
+                      className="px-2 py-1.5 rounded-md bg-app border border-subtle text-primary text-[11px]"
                     >
                       <option value="">Presets</option>
                       {statusOptions.map((st) => (
@@ -864,7 +864,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
                     Frontmatter Date From (Inclusive)
                   </label>
                   <input
@@ -876,7 +876,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-secondary mb-1">
+                  <label className="block text-[11px] font-semibold text-primary mb-1">
                     Frontmatter Date To (Inclusive)
                   </label>
                   <input
@@ -893,21 +893,21 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
               <div className="border-t border-subtle pt-3">
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <span className="text-[11px] font-semibold text-secondary">
+                    <span className="text-[11px] font-semibold text-primary">
                       Any Frontmatter Property Filters (Wildcards Supported)
                     </span>
-                    <p className="text-[10px] text-muted">
-                      Match any frontmatter key (e.g. <code className="font-mono">tlp</code>,{' '}
-                      <code className="font-mono">severity</code>,{' '}
-                      <code className="font-mono">sprint</code>, or{' '}
-                      <code className="font-mono">*</code>) and value pattern.
+                    <p className="text-[11px] text-muted">
+                      Match any frontmatter key (e.g. <code className="font-mono text-primary">tlp</code>,{' '}
+                      <code className="font-mono text-primary">severity</code>,{' '}
+                      <code className="font-mono text-primary">sprint</code>, or{' '}
+                      <code className="font-mono text-primary">*</code>) and value pattern.
                     </p>
                   </div>
                   <button
                     type="button"
                     data-testid="dynamic-wizard-add-custom-filter-btn"
                     onClick={handleAddCustomFilterRow}
-                    className="px-2.5 py-1 rounded bg-secondary hover:bg-accent hover:text-white text-primary text-[11px] font-medium flex items-center gap-1"
+                    className="px-2.5 py-1 rounded bg-secondary border border-subtle hover:border-accent text-primary text-[11px] font-medium flex items-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
                     Add Frontmatter Filter
@@ -928,7 +928,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                           placeholder="Frontmatter key (e.g. severity, tlp, *)"
                           className="w-44 px-2.5 py-1.5 rounded-md bg-app border border-subtle text-primary font-mono text-xs"
                         />
-                        <span className="text-muted font-mono">=</span>
+                        <span className="text-primary font-mono">=</span>
                         <input
                           type="text"
                           data-testid={`dynamic-wizard-custom-val-${idx}`}
@@ -942,7 +942,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                         <button
                           type="button"
                           onClick={() => handleRemoveCustomFilterRow(idx)}
-                          className="p-1.5 rounded hover:bg-red-500/10 text-muted hover:text-red-500"
+                          className="p-1.5 rounded hover:bg-red-500/10 text-muted hover:text-danger"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -955,9 +955,9 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
               {/* Live Matching Files Preview */}
               <div
                 data-testid="dynamic-wizard-live-preview"
-                className="border border-subtle rounded-lg bg-app/60 p-2.5"
+                className="border border-subtle rounded-lg bg-secondary p-2.5"
               >
-                <div className="flex items-center justify-between text-[11px] font-semibold text-secondary mb-1.5">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-primary mb-1.5">
                   <span className="flex items-center gap-1.5">
                     <Search className="w-3 h-3 text-accent" />
                     Live Preview ({matchingDocs.length} matching document
@@ -968,7 +968,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                   </span>
                 </div>
                 {matchingDocs.length === 0 ? (
-                  <p className="text-[11px] text-muted italic py-1">
+                  <p className="text-[11px] text-muted py-1">
                     No currently mounted files match these rules yet. Files will populate automatically as soon as their frontmatter matches.
                   </p>
                 ) : (
@@ -976,7 +976,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                     {matchingDocs.slice(0, 15).map((doc) => (
                       <div
                         key={`${doc.rootId}::${doc.relativePath}`}
-                        className="flex items-center justify-between text-[11px] py-0.5 px-1.5 rounded bg-panel/70"
+                        className="flex items-center justify-between text-[11px] py-1 px-2 rounded bg-panel border border-subtle"
                       >
                         <span className="text-primary font-medium truncate">
                           {doc.relativePath}
@@ -991,7 +991,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
               </div>
 
               {errorMsg && (
-                <div className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-red-500 text-[11px]">
+                <div className="p-2.5 rounded-md bg-red-500/10 border border-red-500/30 text-danger text-[11px]">
                   {errorMsg}
                 </div>
               )}
@@ -1001,7 +1001,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="px-3 py-1.5 rounded-md border border-subtle text-secondary hover:text-primary"
+                    className="px-3 py-1.5 rounded-md bg-secondary border border-subtle text-primary hover:border-accent"
                   >
                     ← Back
                   </button>
@@ -1012,7 +1012,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-3 py-1.5 rounded-md border border-subtle text-secondary hover:text-primary"
+                    className="px-3 py-1.5 rounded-md bg-secondary border border-subtle text-primary hover:border-accent"
                   >
                     Cancel
                   </button>
