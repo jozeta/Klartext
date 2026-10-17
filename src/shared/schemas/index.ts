@@ -184,6 +184,8 @@ export const AppSettingsSchema = z.object({
   showLineNumbers: z.boolean().default(false),
   wordWrap: z.boolean().default(true),
   editorMarginMode: EditorMarginModeSchema.default('medium'),
+  focusMode: z.boolean().default(false),
+  typewriterScrolling: z.boolean().default(false),
   lightPaperInDarkMode: z.boolean().default(false),
   autosaveDelayMs: z.number().min(200).max(60000).default(1000),
   allowRawHtml: z.boolean().default(false),
@@ -191,7 +193,7 @@ export const AppSettingsSchema = z.object({
   leftSidebarOpen: z.boolean().default(true),
   leftSidebarWidth: z.number().min(160).max(600).default(260),
   leftSidebarTab: z
-    .enum(['explorer', 'search', 'outline', 'backlinks', 'git'])
+    .enum(['explorer', 'search', 'outline', 'backlinks', 'git', 'calendar', 'tasks'])
     .default('explorer'),
   frontmatterSidebarWidth: z.number().min(160).max(600).default(288),
   rightSidebarOpen: z.boolean().default(false),

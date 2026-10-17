@@ -137,6 +137,9 @@ class InlineLinkWidget extends WidgetType {
     const a = document.createElement('a')
     a.href = this.href
     a.textContent = this.label
+    if (this.isWiki) {
+      a.setAttribute('data-wikilink', encodeURIComponent(this.href))
+    }
     a.className =
       'text-accent underline underline-offset-2 font-medium cursor-pointer hover:opacity-80'
     a.title = `Click to navigate to ${this.href}`
@@ -581,9 +584,80 @@ class ConflictActionLensWidget extends WidgetType {
   }
 }
 
+import {
+  extractHeadingSectionFromMarkdown,
+  type WorkspaceDocEntry
+} from '../../../shared/markdown/knowledge-features'
+
+class InlineTransclusionWidget extends WidgetType {
+  constructor(
+    private rawTarget: string,
+    private alias: string,
+    private excerptText: string,
+    private resolvedTitle: string,
+    private onNavigate: (target: string, isWiki: boolean) => void,
+    private targetPos: number
+  ) {
+    super()
+  }
+
+  eq(other: InlineTransclusionWidget): boolean {
+    return (
+      this.rawTarget === other.rawTarget &&
+      this.alias === other.alias &&
+      this.excerptText === other.excerptText &&
+      this.targetPos === other.targetPos
+    )
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const card = document.createElement('div')
+    card.className =
+      'my-2 p-3 rounded-md border border-subtle border-l-4 border-l-accent bg-secondary/40 text-xs flex flex-col gap-1.5'
+    card.setAttribute('data-testid', 'inline-transclusion-card')
+
+    const header = document.createElement('div')
+    header.className = 'flex items-center justify-between gap-2 pb-1 border-b border-subtle/60'
+
+    const link = document.createElement('a')
+    link.href = this.rawTarget
+    link.setAttribute('data-wikilink', encodeURIComponent(this.rawTarget))
+    link.className = 'font-semibold text-accent hover:underline cursor-pointer flex items-center gap-1'
+    link.textContent = `📄 ${this.alias || this.resolvedTitle}`
+    link.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      this.onNavigate(this.rawTarget.split('#')[0].trim(), true)
+    })
+
+    const editBtn = document.createElement('button')
+    editBtn.type = 'button'
+    editBtn.className = 'text-[10px] px-1.5 py-0.5 rounded bg-panel border border-subtle text-muted hover:text-primary'
+    editBtn.textContent = 'Edit ![[]]'
+    editBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      view.dispatch({ selection: { anchor: this.targetPos } })
+      view.focus()
+    })
+
+    header.appendChild(link)
+    header.appendChild(editBtn)
+    card.appendChild(header)
+
+    const body = document.createElement('div')
+    body.className = 'text-primary whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto font-sans'
+    body.textContent = this.excerptText
+    card.appendChild(body)
+
+    return card
+  }
+}
+
 export interface LivePreviewOptions {
   inlineRichMode: boolean
   rootId: string
+  getWorkspaceDocuments?: () => WorkspaceDocEntry[]
   onResolveConflict: (
     hunkIndex: number,
     resolution: 'current' | 'incoming' | 'both' | '3way'
@@ -915,8 +989,63 @@ function buildLiveDecorations(
       })
     }
 
-    // 10. WikiLinks [[Target|Alias]]
-    const wikiRegex = /\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g
+    // 10a. Embedded Note Transclusion ![[Target#Heading|Alias]]
+    const transcludeRegex = /!\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g
+    let transcludeMatch: RegExpExecArray | null
+    while ((transcludeMatch = transcludeRegex.exec(text)) !== null) {
+      const start = line.from + transcludeMatch.index
+      const end = start + transcludeMatch[0].length
+      const rawTarget = transcludeMatch[1].trim()
+      const alias = (transcludeMatch[2] || '').trim()
+      if (!/\.(png|jpg|jpeg|gif|webp|svg|bmp|ico|avif|pdf)$/i.test(rawTarget)) {
+        const hashIdx = rawTarget.indexOf('#')
+        const targetNote = (hashIdx !== -1 ? rawTarget.slice(0, hashIdx) : rawTarget).trim()
+        const targetHeading = hashIdx !== -1 ? rawTarget.slice(hashIdx + 1).trim() : ''
+        const docs = opts.getWorkspaceDocuments?.() || []
+        const normTarget = targetNote.toLowerCase().replace(/\.(md|markdown)$/i, '')
+        const matchedDoc = docs.find((d) => {
+          const base =
+            d.relativePath
+              .split('/')
+              .pop()
+              ?.toLowerCase()
+              .replace(/\.(md|markdown)$/i, '') || ''
+          const relNoExt = d.relativePath.toLowerCase().replace(/\.(md|markdown)$/i, '')
+          return (
+            base === normTarget ||
+            relNoExt === normTarget ||
+            d.title.toLowerCase() === normTarget
+          )
+        })
+        const resolvedTitle = matchedDoc
+          ? `${matchedDoc.title}${targetHeading ? ` › ${targetHeading}` : ''}`
+          : rawTarget
+        let excerpt = matchedDoc
+          ? matchedDoc.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
+          : `Embedded note "${targetNote}" not found in workspace`
+        if (matchedDoc && targetHeading) {
+          const section = extractHeadingSectionFromMarkdown(matchedDoc.content, targetHeading)
+          if (section) excerpt = section
+        }
+        decos.push({
+          from: start,
+          to: end,
+          value: Decoration.replace({
+            widget: new InlineTransclusionWidget(
+              rawTarget,
+              alias,
+              excerpt.slice(0, 600),
+              resolvedTitle,
+              opts.onNavigateLink,
+              start
+            )
+          })
+        })
+      }
+    }
+
+    // 10b. WikiLinks [[Target|Alias]] (ignoring transclusions starting with !)
+    const wikiRegex = /(?<!!)\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g
     let wikiMatch: RegExpExecArray | null
     while ((wikiMatch = wikiRegex.exec(text)) !== null) {
       const start = line.from + wikiMatch.index

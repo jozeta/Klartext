@@ -221,7 +221,7 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       ).toHaveCount(0)
       await page.getByTestId('manifest-filepath-input').fill(manifestFile)
       await page.getByTestId('save-manifest-btn').click()
-      expect(fs.existsSync(manifestFile)).toBe(true)
+      await expect.poll(() => fs.existsSync(manifestFile)).toBe(true)
 
       // Scenario 2: Create, edit, save, close, and reopen Markdown files across multiple roots via Quick Switcher (in left sidebar bottom controls)
       await expect(page.getByTestId('left-sidebar-bottom-controls')).toBeVisible()
@@ -854,6 +854,39 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('frontmatter-custom-global-checkbox').check()
       await page.getByTestId('frontmatter-custom-add-btn').click()
       await expect(page.getByTestId('frontmatter-date-picker-btn-review_date')).toBeVisible()
+
+      // 5. Verify Knowledge Graph Modal (1.1), Focus Mode & Typewriter Scrolling (4.1), In-Doc Find Bar (4.3), Daily Calendar (3.1), and Global Tasks (3.2)
+      await page.getByTestId('view-menu-btn').click()
+      await expect(page.getByTestId('view-menu-toggle-focus-mode')).toBeVisible()
+      await expect(page.getByTestId('view-menu-toggle-typewriter')).toBeVisible()
+      await expect(page.getByTestId('view-menu-open-graph')).toBeVisible()
+      await page.getByTestId('view-menu-toggle-focus-mode').click()
+      await expect(page.getByTestId('codemirror-editor-container')).toHaveAttribute(
+        'data-focus-mode',
+        'true'
+      )
+
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-open-graph').click()
+      await expect(page.getByTestId('graph-view-modal')).toBeVisible()
+      await page.getByTestId('graph-mode-local').click()
+      await page.getByTestId('graph-mode-global').click()
+      await page.getByTestId('close-graph-view-btn').click()
+      await expect(page.getByTestId('graph-view-modal')).toHaveCount(0)
+
+      // Verify In-Document Find & Replace Bar (4.3)
+      await page.getByTestId('edit-menu-btn').click()
+      await page.getByTestId('edit-menu-find-in-doc').click()
+      await expect(page.getByTestId('in-doc-find-bar')).toBeVisible()
+      await page.getByTestId('in-doc-find-close').click()
+      await expect(page.getByTestId('in-doc-find-bar')).toHaveCount(0)
+
+      // Verify Daily Calendar (3.1) and Global Tasks (3.2) sidebar tabs, then return to git tab
+      await page.getByTestId('sidebar-tab-calendar').click()
+      await expect(page.getByTestId('daily-calendar-panel')).toBeVisible()
+      await page.getByTestId('sidebar-tab-tasks').click()
+      await expect(page.getByTestId('global-tasks-panel')).toBeVisible()
+      await page.getByTestId('sidebar-tab-git').click()
 
       // Verify all settings, panel visibility, sidebar tab, saved themes, and open tabs are persisted
       const persistedSettings = await page.evaluate(() => window.klartext.getSettings())

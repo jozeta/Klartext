@@ -653,3 +653,21 @@ body[data-portal-tooltips='true'] [data-tooltip]::after {
   margin-bottom: 0.35em;
 }
 
+/* Focus Mode: dim inactive lines while keeping active cursor line at full opacity */
+[data-focus-mode='true'] .cm-content > .cm-line {
+  opacity: 0.32;
+  transition: opacity 150ms ease;
+}
+[data-focus-mode='true'] .cm-content > .cm-line.cm-activeLine,
+[data-focus-mode='true'] .cm-content > .cm-line:hover {
+  opacity: 1 !important;
+}
+[data-focus-mode='true'] .cm-activeLine {
+  background-color: transparent !important;
+}
+
+/* Typewriter Scrolling: allow top and bottom lines to center vertically */
+[data-typewriter-mode='true'] .cm-scroller {
+  padding-top: 38vh !important;
+  padding-bottom: 38vh !important;
+}

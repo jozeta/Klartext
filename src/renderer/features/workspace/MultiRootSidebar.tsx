@@ -47,6 +47,8 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  CheckSquare,
+  ChevronLeft,
   type LucideIcon
 } from '../../components/icons/untitled-icons'
 import type {
@@ -60,14 +62,26 @@ import type {
   WorkspaceRoot,
   WorkspaceSortOrder
 } from '../../../shared/types'
-import type { HeadingItem } from '../../../shared/markdown/pipeline'
+import { extractFrontmatter, type HeadingItem } from '../../../shared/markdown/pipeline'
 import {
   formatDynamicRuleSummary,
   matchesDynamicFilterRule,
+  normalizeFrontmatterDate,
   type DynamicCandidateDocument
 } from '../../../shared/markdown/dynamic-workspace'
+import type {
+  GlobalTaskItem,
+  UnlinkedMentionItem
+} from '../../../shared/markdown/knowledge-features'
 
-export type LeftSidebarTab = 'explorer' | 'search' | 'outline' | 'backlinks' | 'git'
+export type LeftSidebarTab =
+  | 'explorer'
+  | 'search'
+  | 'outline'
+  | 'backlinks'
+  | 'git'
+  | 'calendar'
+  | 'tasks'
 
 export interface WorkspaceTreeSortOptions {
   sortOrder: WorkspaceSortOrder
@@ -253,6 +267,12 @@ export const MultiRootSidebar: React.FC<{
   ) => Promise<void> | void
   headings: HeadingItem[]
   backlinks: BacklinkItem[]
+  unlinkedMentions?: UnlinkedMentionItem[]
+  onLinkUnlinkedMention?: (mention: UnlinkedMentionItem) => void
+  onOpenGraphView?: () => void
+  onOpenDailyNote?: (dateYmd?: string) => void
+  globalTasks?: GlobalTaskItem[]
+  onToggleGlobalTask?: (task: GlobalTaskItem) => void
   onOpenDocument: (rootId: string, relativePath: string) => void
   onNavigateToLine: (rootId: string, relativePath: string, lineNumber: number) => void
   onAddRootDialog: () => void
@@ -323,6 +343,12 @@ export const MultiRootSidebar: React.FC<{
   onCreateNoteFromTemplateInFolder,
   headings,
   backlinks,
+  unlinkedMentions = [],
+  onLinkUnlinkedMention,
+  onOpenGraphView,
+  onOpenDailyNote,
+  globalTasks = [],
+  onToggleGlobalTask,
   onOpenDocument,
   onNavigateToLine,
   onAddRootDialog: _onAddRootDialog,
@@ -1261,6 +1287,16 @@ export const MultiRootSidebar: React.FC<{
     })
   }
 
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() }
+  })
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'open' | 'completed' | 'all'>('open')
+  const [taskSearchQuery, setTaskSearchQuery] = useState('')
+
   const visibleTabs = (
     [
       {
@@ -1283,9 +1319,21 @@ export const MultiRootSidebar: React.FC<{
       },
       {
         id: 'backlinks',
-        label: 'Links',
+        label: 'Links & Mentions',
         icon: <Link2 className="w-3.5 h-3.5" />,
         visible: showBacklinksTab
+      },
+      {
+        id: 'calendar',
+        label: 'Daily Notes & Calendar',
+        icon: <Calendar className="w-3.5 h-3.5" />,
+        visible: true
+      },
+      {
+        id: 'tasks',
+        label: 'Global Tasks',
+        icon: <CheckSquare className="w-3.5 h-3.5" />,
+        visible: true
       },
       {
         id: 'git',
@@ -1309,10 +1357,32 @@ export const MultiRootSidebar: React.FC<{
       {/* TAB 1: MULTI-ROOT FILE EXPLORER */}
       {activeTab === 'explorer' && (
         <div className="flex-1 flex flex-col overflow-y-auto p-2 space-y-2">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+          <div className="flex items-center justify-between px-1 gap-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted truncate">
               Workspace Roots ({roots.length + dynamicWorkspaces.length})
             </span>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                title="Open Today's Daily Note"
+                data-testid="open-daily-note-btn"
+                onClick={() => onOpenDailyNote?.()}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-[10px] font-medium text-primary"
+              >
+                <Calendar className="w-3 h-3 text-accent" />
+                <span>Daily</span>
+              </button>
+              <button
+                type="button"
+                title="Open 2D Knowledge Graph"
+                data-testid="open-graph-view-btn"
+                onClick={() => onOpenGraphView?.()}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-[10px] font-medium text-primary"
+              >
+                <Compass className="w-3 h-3 text-accent" />
+                <span>Graph</span>
+              </button>
+            </div>
           </div>
 
           {/* Workspace Sort Order Dropdown (Name A-Z, Name Z-A, Custom) + Folders on Top Checkbox */}
@@ -2374,11 +2444,22 @@ export const MultiRootSidebar: React.FC<{
         </div>
       )}
 
-      {/* TAB 4: BACKLINKS PANEL */}
+      {/* TAB 4: BACKLINKS & UNLINKED MENTIONS PANEL */}
       {activeTab === 'backlinks' && (
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 text-xs" data-testid="backlinks-panel">
-          <div className="text-[10px] font-semibold uppercase text-muted">
-            Incoming WikiLinks ({backlinks.length})
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs" data-testid="backlinks-panel">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-semibold uppercase text-muted">
+              Incoming WikiLinks ({backlinks.length})
+            </div>
+            <button
+              type="button"
+              data-testid="backlinks-open-graph-btn"
+              onClick={() => onOpenGraphView?.()}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-[10px] font-medium text-accent"
+            >
+              <Compass className="w-3 h-3" />
+              <span>2D Graph</span>
+            </button>
           </div>
           {backlinks.length === 0 ? (
             <div className="text-muted">No documents link to this file yet.</div>
@@ -2409,8 +2490,313 @@ export const MultiRootSidebar: React.FC<{
               </div>
             ))
           )}
+
+          {/* Unlinked Mentions Section */}
+          <div className="pt-2 border-t border-subtle space-y-2" data-testid="unlinked-mentions-list">
+            <div className="text-[10px] font-semibold uppercase text-muted">
+              Unlinked Mentions ({unlinkedMentions.length})
+            </div>
+            {unlinkedMentions.length === 0 ? (
+              <div className="text-muted text-[11px]">
+                No unlinked plain-text mentions found across workspace notes.
+              </div>
+            ) : (
+              unlinkedMentions.map((um, idx) => (
+                <div
+                  key={`${um.sourceRootId}-${um.sourceRelativePath}-${um.lineNumber}-${idx}`}
+                  data-testid={`unlinked-mention-card-${um.sourceRootId}-${um.sourceRelativePath}-${um.lineNumber}`}
+                  className="p-2 rounded bg-panel border border-subtle space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span
+                      onClick={() =>
+                        onNavigateToLine(um.sourceRootId, um.sourceRelativePath, um.lineNumber)
+                      }
+                      className="font-semibold text-primary truncate cursor-pointer hover:underline"
+                    >
+                      {um.sourceRelativePath}
+                    </span>
+                    <button
+                      type="button"
+                      data-testid={`link-unlinked-mention-btn-${um.sourceRootId}-${um.sourceRelativePath}-${um.lineNumber}`}
+                      onClick={() => onLinkUnlinkedMention?.(um)}
+                      className="px-2 py-0.5 rounded bg-accent text-white text-[10px] font-medium hover:opacity-90 shrink-0"
+                    >
+                      Link [[{um.matchedTitle}]]
+                    </button>
+                  </div>
+                  <div className="text-[11px] font-mono text-muted truncate">
+                    L{um.lineNumber}: {um.excerpt}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
+
+      {/* TAB 6: DAILY NOTES & MINI CALENDAR PANEL */}
+      {activeTab === 'calendar' && (() => {
+        const { year, month } = calendarMonth
+        const firstDay = new Date(year, month, 1)
+        const startOffset = (firstDay.getDay() + 6) % 7
+        const daysInMonth = new Date(year, month + 1, 0).getDate()
+        const cells: Array<number | null> = []
+        for (let i = 0; i < startOffset; i++) cells.push(null)
+        for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+        const pad2 = (n: number) => String(n).padStart(2, '0')
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ]
+
+        // Index documents by date (filename YYYY-MM-DD or frontmatter date)
+        const docsByDate = new Map<string, DynamicCandidateDocument[]>()
+        for (const doc of dynamicCandidateDocuments) {
+          const fileMatch = doc.name.match(/(\d{4}-\d{2}-\d{2})/)
+          const { frontmatter } = extractFrontmatter(doc.content)
+          const fmDate = normalizeFrontmatterDate(frontmatter?.date)
+          const dateKeys = new Set<string>()
+          if (fileMatch) dateKeys.add(fileMatch[1])
+          if (fmDate) dateKeys.add(fmDate)
+          for (const dk of dateKeys) {
+            const list = docsByDate.get(dk) || []
+            list.push(doc)
+            docsByDate.set(dk, list)
+          }
+        }
+
+        const selectedDateDocs = docsByDate.get(selectedCalendarDate) || []
+
+        return (
+          <div
+            className="flex-1 overflow-y-auto p-3 space-y-3 text-xs"
+            data-testid="daily-calendar-panel"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase text-muted">
+                Daily Notes &amp; Calendar
+              </span>
+              <button
+                type="button"
+                data-testid="calendar-open-today-note-btn"
+                onClick={() => onOpenDailyNote?.()}
+                className="px-2 py-1 rounded bg-accent text-white text-[11px] font-medium hover:opacity-90 flex items-center gap-1"
+              >
+                <Calendar className="w-3 h-3" />
+                <span>Today&apos;s Note</span>
+              </button>
+            </div>
+
+            <div className="p-2.5 rounded-md bg-panel border border-subtle space-y-2">
+              <div className="flex items-center justify-between font-semibold text-primary">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalendarMonth((prev) =>
+                      prev.month === 0
+                        ? { year: prev.year - 1, month: 11 }
+                        : { year: prev.year, month: prev.month - 1 }
+                    )
+                  }
+                  className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span>
+                  {monthNames[month]} {year}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalendarMonth((prev) =>
+                      prev.month === 11
+                        ? { year: prev.year + 1, month: 0 }
+                        : { year: prev.year, month: prev.month + 1 }
+                    )
+                  }
+                  className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-medium text-muted">
+                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => (
+                  <div key={d} className="py-0.5">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5 text-center text-[11px]">
+                {cells.map((day, idx) => {
+                  if (day === null) return <div key={`empty-${idx}`} className="h-7" />
+                  const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`
+                  const hasDocs = (docsByDate.get(dateStr)?.length || 0) > 0
+                  const isSelected = selectedCalendarDate === dateStr
+                  return (
+                    <button
+                      key={dateStr}
+                      type="button"
+                      data-testid={`mini-calendar-day-${dateStr}`}
+                      onClick={() => setSelectedCalendarDate(dateStr)}
+                      onDoubleClick={() => onOpenDailyNote?.(dateStr)}
+                      className={`h-7 rounded flex flex-col items-center justify-center relative transition-colors ${
+                        isSelected
+                          ? 'bg-accent text-white font-semibold'
+                          : 'hover:bg-secondary text-primary'
+                      }`}
+                    >
+                      <span>{day}</span>
+                      {hasDocs && (
+                        <span
+                          className={`w-1 h-1 rounded-full ${
+                            isSelected ? 'bg-white' : 'bg-accent'
+                          }`}
+                        />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase text-muted">
+                  Notes on {selectedCalendarDate} ({selectedDateDocs.length})
+                </span>
+                <button
+                  type="button"
+                  data-testid={`calendar-create-or-open-daily-${selectedCalendarDate}`}
+                  onClick={() => onOpenDailyNote?.(selectedCalendarDate)}
+                  className="text-[11px] text-accent hover:underline font-medium"
+                >
+                  Open Daily Note ({selectedCalendarDate})
+                </button>
+              </div>
+              {selectedDateDocs.length === 0 ? (
+                <div className="text-muted text-[11px] italic">
+                  No notes dated {selectedCalendarDate}. Click above to create one.
+                </div>
+              ) : (
+                selectedDateDocs.map((doc) => (
+                  <button
+                    key={`${doc.rootId}::${doc.relativePath}`}
+                    type="button"
+                    onClick={() => onOpenDocument(doc.rootId, doc.relativePath)}
+                    className="w-full text-left p-2 rounded bg-panel border border-subtle hover:border-accent flex items-center justify-between"
+                  >
+                    <span className="truncate font-medium text-primary">{doc.name}</span>
+                    <span className="text-[10px] font-mono text-muted shrink-0">
+                      {doc.rootName}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* TAB 7: GLOBAL TASKS (- [ ]) DASHBOARD PANEL */}
+      {activeTab === 'tasks' && (() => {
+        const filteredTasks = globalTasks.filter((t) => {
+          if (taskStatusFilter === 'open' && t.checked) return false
+          if (taskStatusFilter === 'completed' && !t.checked) return false
+          if (taskSearchQuery.trim()) {
+            const q = taskSearchQuery.trim().toLowerCase()
+            return (
+              t.text.toLowerCase().includes(q) ||
+              t.docName.toLowerCase().includes(q) ||
+              t.tags.some((tg) => tg.toLowerCase().includes(q))
+            )
+          }
+          return true
+        })
+
+        return (
+          <div
+            className="flex-1 overflow-y-auto p-3 space-y-2.5 text-xs"
+            data-testid="global-tasks-panel"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase text-muted">
+                Global Tasks ({filteredTasks.length}/{globalTasks.length})
+              </span>
+              <div className="inline-flex rounded bg-panel border border-subtle p-0.5 text-[10px]">
+                {(['open', 'completed', 'all'] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    data-testid={`tasks-filter-${status}`}
+                    onClick={() => setTaskStatusFilter(status)}
+                    className={`px-2 py-0.5 rounded capitalize font-medium ${
+                      taskStatusFilter === status
+                        ? 'bg-accent text-white'
+                        : 'text-muted hover:text-primary'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <input
+              type="text"
+              data-testid="tasks-search-input"
+              value={taskSearchQuery}
+              onChange={(e) => setTaskSearchQuery(e.target.value)}
+              placeholder="Filter tasks by text, note, or #tag..."
+              className="w-full px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent"
+            />
+
+            {filteredTasks.length === 0 ? (
+              <div className="text-muted text-[11px] italic py-2">
+                No matching tasks across workspace roots.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {filteredTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    data-testid={`global-task-card-${task.rootId}-${task.relativePath}-${task.lineNumber}`}
+                    className="p-2 rounded bg-panel border border-subtle hover:border-accent space-y-1"
+                  >
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        data-testid={`global-task-toggle-${task.rootId}-${task.relativePath}-${task.lineNumber}`}
+                        checked={task.checked}
+                        onChange={() => onToggleGlobalTask?.(task)}
+                        className="mt-0.5 rounded border-subtle accent-[var(--color-accent)] cursor-pointer"
+                      />
+                      <span
+                        onClick={() =>
+                          onNavigateToLine(task.rootId, task.relativePath, task.lineNumber)
+                        }
+                        className={`flex-1 cursor-pointer hover:underline ${
+                          task.checked ? 'line-through text-muted' : 'text-primary font-medium'
+                        }`}
+                      >
+                        {task.text}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pl-5 text-[10px] text-muted font-mono">
+                      <span>
+                        {task.docName} · L{task.lineNumber}
+                      </span>
+                      <span>{task.rootName}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* TAB 5: MULTI-REPOSITORY GIT SOURCE CONTROL */}
       {activeTab === 'git' && (

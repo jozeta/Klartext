@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { EditorState } from '@codemirror/state'
-import { EditorView, keymap, lineNumbers } from '@codemirror/view'
+import { EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, undo, redo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import {
@@ -38,7 +38,13 @@ import {
   ZoomOut,
   RotateCcw,
   Languages,
-  Smile
+  Smile,
+  Search,
+  X,
+  ArrowUp,
+  ChevronDown,
+  Plus,
+  Trash2
 } from '../../components/icons/untitled-icons'
 import type { EditMode, EditorMarginMode } from '../../../shared/types'
 import {
@@ -47,6 +53,15 @@ import {
   convertHtmlToMarkdown,
   type RenderedMarkdownResult
 } from '../../../shared/markdown/pipeline'
+import {
+  detectMarkdownTableAtPosition,
+  extractHeadingSectionFromMarkdown,
+  manipulateMarkdownTable,
+  resolveTransclusionsInMarkdown,
+  type DetectedMarkdownTable,
+  type TableManipulationAction,
+  type WorkspaceDocEntry
+} from '../../../shared/markdown/knowledge-features'
 import { sanitizeSvgContent } from '../../../shared/serialization/excalidraw-svg'
 import { hasConflictMarkers, parseConflictHunks } from '../../../main/git/conflict-resolver'
 import {
@@ -74,7 +89,110 @@ export type EditorDispatchedCommand =
   | 'ai-improve'
   | 'open-mermaid-builder'
   | 'open-icon-picker'
+  | 'open-in-doc-find'
   | MarkdownFormatCommand
+
+export interface SlashCommandItem {
+  id: string
+  label: string
+  description: string
+  keywords: string[]
+  badge: string
+}
+
+export const SLASH_COMMAND_ITEMS: SlashCommandItem[] = [
+  {
+    id: 'table',
+    label: 'Table (3×2)',
+    description: 'Insert a GitHub Flavored Markdown table',
+    keywords: ['table', 'grid', 'spreadsheet', 'cols', 'rows'],
+    badge: '⊞'
+  },
+  {
+    id: 'task',
+    label: 'Task Checklist',
+    description: 'Insert interactive - [ ] task items',
+    keywords: ['task', 'todo', 'checklist', 'checkbox'],
+    badge: '☑'
+  },
+  {
+    id: 'callout-note',
+    label: 'Note Callout',
+    description: 'Insert a > [!NOTE] highlighted callout block',
+    keywords: ['callout', 'note', 'info', 'alert'],
+    badge: 'ℹ'
+  },
+  {
+    id: 'callout-warning',
+    label: 'Warning Callout',
+    description: 'Insert a > [!WARNING] alert callout block',
+    keywords: ['warning', 'caution', 'important', 'callout'],
+    badge: '⚠'
+  },
+  {
+    id: 'codeblock',
+    label: 'Code Block',
+    description: 'Insert a syntax-highlighted fenced code block',
+    keywords: ['code', 'codeblock', 'snippet', 'pre'],
+    badge: '</>'
+  },
+  {
+    id: 'mermaid',
+    label: 'Mermaid Flowchart',
+    description: 'Insert a live Mermaid diagram block',
+    keywords: ['mermaid', 'diagram', 'flowchart', 'chart', 'graph'],
+    badge: '◇'
+  },
+  {
+    id: 'h1',
+    label: 'Heading 1',
+    description: 'Top-level section heading (#)',
+    keywords: ['h1', 'heading1', 'title'],
+    badge: 'H1'
+  },
+  {
+    id: 'h2',
+    label: 'Heading 2',
+    description: 'Medium section heading (##)',
+    keywords: ['h2', 'heading2', 'subtitle'],
+    badge: 'H2'
+  },
+  {
+    id: 'h3',
+    label: 'Heading 3',
+    description: 'Sub-section heading (###)',
+    keywords: ['h3', 'heading3'],
+    badge: 'H3'
+  },
+  {
+    id: 'embed',
+    label: 'Embed Note (![[Note]])',
+    description: 'Transclude another note or heading section inline',
+    keywords: ['embed', 'transclude', 'wikilink', 'note', 'include'],
+    badge: '![[]]'
+  },
+  {
+    id: 'date',
+    label: "Today's Date",
+    description: 'Insert current ISO date (YYYY-MM-DD)',
+    keywords: ['date', 'today', 'now', 'time'],
+    badge: '📅'
+  },
+  {
+    id: 'hr',
+    label: 'Horizontal Divider',
+    description: 'Insert a thematic break line (---)',
+    keywords: ['hr', 'divider', 'line', 'separator'],
+    badge: '—'
+  },
+  {
+    id: 'ai-custom',
+    label: 'Ask AI / Custom Instruction...',
+    description: 'Open custom AI instruction dialog at cursor',
+    keywords: ['ai', 'ask', 'custom', 'generate', 'prompt'],
+    badge: '✨'
+  }
+]
 
 /**
  * Computes horizontal page margins (`marginPx`) and content max-width (`maxWidthCss`)
@@ -173,6 +291,9 @@ export const MarkdownEditorWorkspace: React.FC<{
   showLineNumbers: boolean
   wordWrap: boolean
   marginMode?: EditorMarginMode
+  focusMode?: boolean
+  typewriterScrolling?: boolean
+  workspaceDocuments?: WorkspaceDocEntry[]
   spellcheckEnabled?: boolean
   spellcheckLanguages?: string[]
   customDictionaryWords?: string[]
@@ -213,6 +334,9 @@ export const MarkdownEditorWorkspace: React.FC<{
   showLineNumbers,
   wordWrap,
   marginMode = 'medium',
+  focusMode = false,
+  typewriterScrolling = false,
+  workspaceDocuments = [],
   spellcheckEnabled = true,
   spellcheckLanguages = ['en-US', 'sv-SE'],
   customDictionaryWords = [],
@@ -239,6 +363,10 @@ export const MarkdownEditorWorkspace: React.FC<{
   const latestContentRef = useRef(content)
   const lastHandledCommandNonceRef = useRef<number | null>(null)
   const lastHandledTextInsertNonceRef = useRef<number | null>(null)
+  const workspaceDocumentsRef = useRef<WorkspaceDocEntry[]>(workspaceDocuments)
+  workspaceDocumentsRef.current = workspaceDocuments
+  const typewriterScrollingRef = useRef<boolean>(typewriterScrolling)
+  typewriterScrollingRef.current = typewriterScrolling
 
   const [rendered, setRendered] = useState<RenderedMarkdownResult | null>(null)
   const renderedRef = useRef<RenderedMarkdownResult | null>(null)
@@ -268,6 +396,43 @@ export const MarkdownEditorWorkspace: React.FC<{
   const [threeWayModalHunk, setThreeWayModalHunk] = useState<number | null>(null)
   const [showInlineAIPrompt, setShowInlineAIPrompt] = useState(false)
   const [inlineAIPromptText, setInlineAIPromptText] = useState('')
+
+  // 2.1 `/` Slash Command Menu state
+  const [slashMenuState, setSlashMenuState] = useState<{
+    query: string
+    replaceFrom: number
+    replaceTo: number
+    top: number
+    left: number
+    selectedIndex: number
+  } | null>(null)
+  const slashMenuStateRef = useRef(slashMenuState)
+  slashMenuStateRef.current = slashMenuState
+
+  // 2.2 Interactive Table Toolbar state
+  const [activeTableInfo, setActiveTableInfo] = useState<DetectedMarkdownTable | null>(null)
+
+  // 1.2 Hover Page Preview state (`[[WikiLink]]` popover card)
+  const [wikiHoverPreview, setWikiHoverPreview] = useState<{
+    rawTarget: string
+    title: string
+    rootName: string
+    relativePath: string
+    tags: string[]
+    excerpt: string
+    exists: boolean
+    top: number
+    left: number
+  } | null>(null)
+  const hoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 4.3 In-Document Find & Replace Bar (`Cmd+F`) state
+  const [showInDocFindBar, setShowInDocFindBar] = useState(false)
+  const [inDocFindQuery, setInDocFindQuery] = useState('')
+  const [inDocReplaceText, setInDocReplaceText] = useState('')
+  const [inDocMatchCase, setInDocMatchCase] = useState(false)
+  const [inDocActiveMatchIdx, setInDocActiveMatchIdx] = useState(0)
+  const inDocFindInputRef = useRef<HTMLInputElement | null>(null)
 
   // Visual Mermaid Builder Modal state
   const [mermaidBuilderTarget, setMermaidBuilderTarget] = useState<{
@@ -358,6 +523,246 @@ export const MarkdownEditorWorkspace: React.FC<{
     setAssetZoom(100)
   }, [relativePath])
 
+  // Filtered `/` Slash Command items
+  const filteredSlashItems = useMemo(() => {
+    const q = (slashMenuState?.query || '').trim().toLowerCase()
+    if (!q) return SLASH_COMMAND_ITEMS
+    return SLASH_COMMAND_ITEMS.filter(
+      (item) =>
+        item.id.toLowerCase().includes(q) ||
+        item.label.toLowerCase().includes(q) ||
+        item.keywords.some((kw) => kw.toLowerCase().includes(q))
+    )
+  }, [slashMenuState?.query])
+  const filteredSlashItemsRef = useRef(filteredSlashItems)
+  filteredSlashItemsRef.current = filteredSlashItems
+
+  const executeSlashCommand = (
+    item: SlashCommandItem,
+    overrideRange?: { replaceFrom: number; replaceTo: number }
+  ) => {
+    const view = viewRef.current
+    const activeSlash = overrideRange || slashMenuStateRef.current
+    if (!view || !activeSlash) return
+    const { replaceFrom, replaceTo } = activeSlash
+    setSlashMenuState(null)
+
+    if (item.id === 'ai-custom') {
+      view.dispatch({
+        changes: { from: replaceFrom, to: replaceTo, insert: '' },
+        selection: { anchor: replaceFrom }
+      })
+      onTriggerAIQuickActionRef.current('open-custom-dialog', '')
+      return
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const firstDocTitle =
+      workspaceDocumentsRef.current.find((d) => d.relativePath !== relativePath)?.title ||
+      'Overview'
+
+    let snippet = ''
+    let cursorOffsetInSnippet = 0
+
+    switch (item.id) {
+      case 'table':
+        snippet = '| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n| Value 1 | Value 2 | Value 3 |'
+        cursorOffsetInSnippet = 2
+        break
+      case 'task':
+        snippet = '- [ ] Task item'
+        cursorOffsetInSnippet = snippet.length
+        break
+      case 'callout-note':
+        snippet = '> [!NOTE] Key Note\n> Add important context here.'
+        cursorOffsetInSnippet = snippet.length
+        break
+      case 'callout-warning':
+        snippet = '> [!WARNING] Important Warning\n> Review carefully before proceeding.'
+        cursorOffsetInSnippet = snippet.length
+        break
+      case 'codeblock':
+        snippet = '```typescript\n\n```'
+        cursorOffsetInSnippet = 14
+        break
+      case 'mermaid':
+        snippet = '```mermaid\nflowchart LR\n  Start([Start]) --> Process[Action] --> End([Done])\n```'
+        cursorOffsetInSnippet = snippet.length
+        break
+      case 'h1':
+        snippet = '# '
+        cursorOffsetInSnippet = 2
+        break
+      case 'h2':
+        snippet = '## '
+        cursorOffsetInSnippet = 3
+        break
+      case 'h3':
+        snippet = '### '
+        cursorOffsetInSnippet = 4
+        break
+      case 'embed':
+        snippet = `![[${firstDocTitle}]]`
+        cursorOffsetInSnippet = snippet.length - 2
+        break
+      case 'date':
+        snippet = todayStr
+        cursorOffsetInSnippet = snippet.length
+        break
+      case 'hr':
+        snippet = '---\n'
+        cursorOffsetInSnippet = snippet.length
+        break
+      default:
+        snippet = ''
+    }
+
+    view.dispatch({
+      changes: { from: replaceFrom, to: replaceTo, insert: snippet },
+      selection: { anchor: replaceFrom + cursorOffsetInSnippet }
+    })
+    view.focus()
+  }
+  const executeSlashCommandRef = useRef(executeSlashCommand)
+  executeSlashCommandRef.current = executeSlashCommand
+
+  // 2.2 Interactive Table manipulation handler
+  const handleManipulateTable = (action: TableManipulationAction) => {
+    const view = viewRef.current
+    if (!view) return
+    const docText = view.state.doc.toString()
+    const cursorPos = view.state.selection.main.head
+    const nextContent = manipulateMarkdownTable(docText, cursorPos, action)
+    if (nextContent !== docText) {
+      view.dispatch({
+        changes: { from: 0, to: docText.length, insert: nextContent },
+        selection: { anchor: Math.min(cursorPos, nextContent.length) }
+      })
+      view.focus()
+    }
+  }
+
+  // 4.3 In-Document Find & Replace matches computation
+  const inDocMatches = useMemo(() => {
+    const q = inDocFindQuery
+    if (!showInDocFindBar || !q) return [] as Array<{ from: number; to: number }>
+    const matches: Array<{ from: number; to: number }> = []
+    const haystack = inDocMatchCase ? content : content.toLowerCase()
+    const needle = inDocMatchCase ? q : q.toLowerCase()
+    if (!needle) return matches
+    let idx = 0
+    while (idx <= haystack.length - needle.length) {
+      const found = haystack.indexOf(needle, idx)
+      if (found === -1) break
+      matches.push({ from: found, to: found + needle.length })
+      idx = found + Math.max(1, needle.length)
+      if (matches.length >= 1000) break
+    }
+    return matches
+  }, [showInDocFindBar, inDocFindQuery, inDocMatchCase, content])
+
+  const selectInDocMatchAt = (matchIndex: number, focusEditor = false) => {
+    if (inDocMatches.length === 0) return
+    const safeIdx = ((matchIndex % inDocMatches.length) + inDocMatches.length) % inDocMatches.length
+    setInDocActiveMatchIdx(safeIdx)
+    const m = inDocMatches[safeIdx]
+    const view = viewRef.current
+    if (view && m) {
+      view.dispatch({
+        selection: { anchor: m.from, head: m.to },
+        effects: EditorView.scrollIntoView(m.from, { y: 'center' })
+      })
+      if (focusEditor) view.focus()
+    }
+  }
+
+  const handleInDocReplaceOne = () => {
+    const view = viewRef.current
+    if (!view || inDocMatches.length === 0) return
+    const safeIdx = Math.min(inDocActiveMatchIdx, inDocMatches.length - 1)
+    const m = inDocMatches[safeIdx]
+    if (!m) return
+    view.dispatch({
+      changes: { from: m.from, to: m.to, insert: inDocReplaceText },
+      selection: { anchor: m.from + inDocReplaceText.length }
+    })
+  }
+
+  const handleInDocReplaceAll = () => {
+    const view = viewRef.current
+    if (!view || inDocMatches.length === 0 || !inDocFindQuery) return
+    const changes = inDocMatches.map((m) => ({
+      from: m.from,
+      to: m.to,
+      insert: inDocReplaceText
+    }))
+    view.dispatch({ changes })
+  }
+
+  // 1.2 Helper to populate and display the [[WikiLink]] Hover Page Preview card
+  const openWikiHoverPreview = (rawTarget: string, anchorRect: DOMRect) => {
+    if (hoverHideTimerRef.current) {
+      clearTimeout(hoverHideTimerRef.current)
+      hoverHideTimerRef.current = null
+    }
+    const hashIdx = rawTarget.indexOf('#')
+    const targetNote = (hashIdx !== -1 ? rawTarget.slice(0, hashIdx) : rawTarget).trim()
+    const targetHeading = hashIdx !== -1 ? rawTarget.slice(hashIdx + 1).trim() : ''
+    const normTarget = targetNote.toLowerCase().replace(/\.(md|markdown)$/i, '')
+
+    const matchedDoc = workspaceDocumentsRef.current.find((d) => {
+      const base =
+        d.relativePath
+          .split('/')
+          .pop()
+          ?.toLowerCase()
+          .replace(/\.(md|markdown)$/i, '') || ''
+      const relNoExt = d.relativePath.toLowerCase().replace(/\.(md|markdown)$/i, '')
+      return (
+        base === normTarget ||
+        relNoExt === normTarget ||
+        d.title.toLowerCase() === normTarget
+      )
+    })
+
+    const top =
+      anchorRect.bottom + 220 < window.innerHeight
+        ? anchorRect.bottom + 6
+        : Math.max(12, anchorRect.top - 210)
+    const left = Math.max(12, Math.min(window.innerWidth - 360, anchorRect.left))
+
+    if (matchedDoc) {
+      let bodyText = matchedDoc.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
+      if (targetHeading) {
+        const sec = extractHeadingSectionFromMarkdown(matchedDoc.content, targetHeading)
+        if (sec) bodyText = sec
+      }
+      setWikiHoverPreview({
+        rawTarget,
+        title: targetHeading ? `${matchedDoc.title} › ${targetHeading}` : matchedDoc.title,
+        rootName: matchedDoc.rootName,
+        relativePath: matchedDoc.relativePath,
+        tags: matchedDoc.tags || [],
+        excerpt: bodyText.slice(0, 420) || '(Empty note)',
+        exists: true,
+        top,
+        left
+      })
+    } else {
+      setWikiHoverPreview({
+        rawTarget,
+        title: targetNote,
+        rootName: 'Unresolved Note',
+        relativePath: `${targetNote}.md`,
+        tags: [],
+        excerpt: `No note named "${targetNote}" exists yet. Click to navigate or create.`,
+        exists: false,
+        top,
+        left
+      })
+    }
+  }
+
   // Handle commands dispatched from top Edit, Format, Insert & AI dropdown menus (strictly once per nonce)
   useEffect(() => {
     if (!editorCommandTrigger) return
@@ -420,6 +825,15 @@ export const MarkdownEditorWorkspace: React.FC<{
       setMermaidBuilderTarget({})
     } else if (command === 'open-icon-picker') {
       onOpenIconPickerRef.current?.()
+    } else if (command === 'open-in-doc-find') {
+      const sel = view
+        ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+        : ''
+      if (sel && !sel.includes('\n')) {
+        setInDocFindQuery(sel)
+      }
+      setShowInDocFindBar(true)
+      setTimeout(() => inDocFindInputRef.current?.focus(), 20)
     } else if (view) {
       applyMarkdownFormatCommand(view, command as MarkdownFormatCommand)
     }
@@ -620,12 +1034,24 @@ export const MarkdownEditorWorkspace: React.FC<{
     }
   }, [])
 
-  // Listen for Cmd/Ctrl + J to toggle inline AI prompt bar
+  // Listen for Cmd/Ctrl + J (inline AI) and Cmd/Ctrl + F (in-document Find & Replace)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j' && aiEnabled) {
         e.preventDefault()
         setShowInlineAIPrompt((v) => !v)
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        const view = viewRef.current
+        const sel = view
+          ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+          : ''
+        if (sel && !sel.includes('\n')) {
+          setInDocFindQuery(sel)
+        }
+        setShowInDocFindBar(true)
+        setTimeout(() => inDocFindInputRef.current?.focus(), 20)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -635,12 +1061,13 @@ export const MarkdownEditorWorkspace: React.FC<{
   const conflictHunks =
     !isVisualAssetFile && hasConflictMarkers(content) ? parseConflictHunks(content) : []
 
-  // Debounced Markdown AST & preview rendering
+  // Debounced Markdown AST & preview rendering (with ![[Note]] & ![[Note#Heading]] transclusion resolved)
   useEffect(() => {
     if (isVisualAssetFile) return
     let cancelled = false
     const timer = setTimeout(() => {
-      renderMarkdownDocument(content, { rootId }).then((res) => {
+      const expandedContent = resolveTransclusionsInMarkdown(content, workspaceDocuments)
+      renderMarkdownDocument(expandedContent, { rootId }).then((res) => {
         if (!cancelled) setRendered(res)
       })
     }, 60)
@@ -648,7 +1075,7 @@ export const MarkdownEditorWorkspace: React.FC<{
       cancelled = true
       clearTimeout(timer)
     }
-  }, [content, rootId, isVisualAssetFile])
+  }, [content, rootId, isVisualAssetFile, workspaceDocuments])
 
   // Jump/scroll to a target line number in CodeMirror
   const jumpToLine = (lineNumber: number) => {
@@ -694,6 +1121,62 @@ export const MarkdownEditorWorkspace: React.FC<{
       : 0
 
     const smartMarkdownKeymap = keymap.of([
+      {
+        key: 'ArrowDown',
+        run: () => {
+          const menu = slashMenuStateRef.current
+          const items = filteredSlashItemsRef.current
+          if (!menu || items.length === 0) return false
+          setSlashMenuState((prev) =>
+            prev
+              ? { ...prev, selectedIndex: (prev.selectedIndex + 1) % items.length }
+              : null
+          )
+          return true
+        }
+      },
+      {
+        key: 'ArrowUp',
+        run: () => {
+          const menu = slashMenuStateRef.current
+          const items = filteredSlashItemsRef.current
+          if (!menu || items.length === 0) return false
+          setSlashMenuState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  selectedIndex: (prev.selectedIndex - 1 + items.length) % items.length
+                }
+              : null
+          )
+          return true
+        }
+      },
+      {
+        key: 'Escape',
+        run: () => {
+          if (slashMenuStateRef.current) {
+            setSlashMenuState(null)
+            return true
+          }
+          return false
+        }
+      },
+      {
+        key: 'Mod-f',
+        run: (view) => {
+          const sel = view.state.sliceDoc(
+            view.state.selection.main.from,
+            view.state.selection.main.to
+          )
+          if (sel && !sel.includes('\n')) {
+            setInDocFindQuery(sel)
+          }
+          setShowInDocFindBar(true)
+          setTimeout(() => inDocFindInputRef.current?.focus(), 20)
+          return true
+        }
+      },
       {
         key: 'Mod-b',
         run: (view) => {
@@ -746,6 +1229,21 @@ export const MarkdownEditorWorkspace: React.FC<{
       {
         key: 'Enter',
         run: (view) => {
+          // 0. If `/` Slash Command Menu is open, execute the selected command
+          const activeSlash = slashMenuStateRef.current
+          const slashItems = filteredSlashItemsRef.current
+          if (activeSlash && slashItems.length > 0) {
+            const chosen =
+              slashItems[Math.min(activeSlash.selectedIndex, slashItems.length - 1)]
+            if (chosen) {
+              executeSlashCommandRef.current(chosen, {
+                replaceFrom: activeSlash.replaceFrom,
+                replaceTo: activeSlash.replaceTo
+              })
+              return true
+            }
+          }
+
           const { state } = view
           const sel = state.selection.main
           if (!sel.empty) return false
@@ -964,6 +1462,7 @@ export const MarkdownEditorWorkspace: React.FC<{
       selection: { anchor: initialAnchor, head: initialHead },
       extensions: [
         history(),
+        highlightActiveLine(),
         smartMarkdownKeymap,
         smartSelectionWrapHandler,
         keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -982,6 +1481,7 @@ export const MarkdownEditorWorkspace: React.FC<{
         createLivePreviewExtension({
           inlineRichMode: editMode === 'inline' && !isVisualAssetFile,
           rootId,
+          getWorkspaceDocuments: () => workspaceDocumentsRef.current,
           onResolveConflict: (hunkIdx, res) => {
             if (res === '3way') {
               setThreeWayModalHunk(hunkIdx)
@@ -1018,6 +1518,61 @@ export const MarkdownEditorWorkspace: React.FC<{
             const nextStr = update.state.doc.toString()
             latestContentRef.current = nextStr
             onChangeContent(nextStr)
+          }
+
+          if (update.selectionSet || update.docChanged) {
+            const sel = update.state.selection.main
+            const docStr = update.state.doc.toString()
+
+            // 2.2 Detect if cursor is inside a Markdown GFM table
+            const detectedTable = detectMarkdownTableAtPosition(docStr, sel.head)
+            setActiveTableInfo(detectedTable)
+
+            // 2.1 Detect `/` Slash Command trigger at start of line or after whitespace
+            if (sel.empty && !detectedTable) {
+              const line = update.state.doc.lineAt(sel.head)
+              const beforeCursor = line.text.slice(0, sel.head - line.from)
+              const slashMatch = beforeCursor.match(/^(?:\s*|.+\s)\/([a-zA-Z0-9_-]*)$/)
+              if (slashMatch) {
+                const query = slashMatch[1] || ''
+                const replaceFrom = sel.head - (query.length + 1)
+                const replaceTo = sel.head
+                const coords = update.view.coordsAtPos(sel.head)
+                const top = coords
+                  ? Math.min(window.innerHeight - 280, coords.bottom + 6)
+                  : 140
+                const left = coords
+                  ? Math.max(16, Math.min(window.innerWidth - 320, coords.left))
+                  : 120
+                setSlashMenuState((prev) => ({
+                  query,
+                  replaceFrom,
+                  replaceTo,
+                  top,
+                  left,
+                  selectedIndex: prev && prev.query === query ? prev.selectedIndex : 0
+                }))
+              } else {
+                setSlashMenuState(null)
+              }
+            } else {
+              setSlashMenuState(null)
+            }
+
+            // 4.1 Typewriter Scrolling: keep active cursor line centered vertically
+            if (typewriterScrollingRef.current && update.view.hasFocus) {
+              const scroller = editorScrollWrapperRef.current
+              const coords = update.view.coordsAtPos(sel.head)
+              if (scroller && coords) {
+                const scrollerRect = scroller.getBoundingClientRect()
+                const lineCenterY = (coords.top + coords.bottom) / 2
+                const targetCenterY = scrollerRect.top + scrollerRect.height / 2
+                const delta = lineCenterY - targetCenterY
+                if (Math.abs(delta) > 18) {
+                  scroller.scrollTop += delta
+                }
+              }
+            }
           }
 
           if (update.selectionSet || update.docChanged || update.viewportChanged) {
@@ -1719,6 +2274,288 @@ export const MarkdownEditorWorkspace: React.FC<{
         )
       )}
 
+      {/* 4.3 In-Document Find & Replace Bar (Cmd/Ctrl + F) */}
+      {showInDocFindBar && !isVisualAssetFile && (
+        <div
+          data-testid="in-doc-find-bar"
+          className="px-4 py-1.5 bg-secondary border-b border-subtle flex flex-wrap items-center justify-between gap-2 text-xs z-30"
+        >
+          <div className="flex items-center gap-1.5 flex-1 min-w-[260px]">
+            <Search className="w-3.5 h-3.5 text-accent shrink-0" />
+            <input
+              ref={inDocFindInputRef}
+              type="text"
+              data-testid="in-doc-find-input"
+              placeholder="Find in document..."
+              value={inDocFindQuery}
+              onChange={(e) => {
+                setInDocFindQuery(e.target.value)
+                setInDocActiveMatchIdx(0)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowInDocFindBar(false)
+                  viewRef.current?.focus()
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  selectInDocMatchAt(
+                    e.shiftKey ? inDocActiveMatchIdx - 1 : inDocActiveMatchIdx + 1,
+                    false
+                  )
+                }
+              }}
+              className="w-44 px-2 py-1 rounded bg-panel border border-subtle text-primary text-xs"
+            />
+            <button
+              type="button"
+              data-testid="in-doc-match-case-btn"
+              title="Match Case (Aa)"
+              onClick={() => setInDocMatchCase((v) => !v)}
+              className={`px-1.5 py-1 rounded border text-[10px] font-mono font-bold ${
+                inDocMatchCase
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-panel border-subtle text-muted hover:text-primary'
+              }`}
+            >
+              Aa
+            </button>
+            <span
+              data-testid="in-doc-find-count"
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-[11px] font-mono text-muted min-w-[68px] text-center"
+            >
+              {inDocFindQuery
+                ? inDocMatches.length > 0
+                  ? `${Math.min(inDocActiveMatchIdx + 1, inDocMatches.length)} / ${inDocMatches.length}`
+                  : '0 results'
+                : 'Type to find'}
+            </span>
+            <button
+              type="button"
+              data-testid="in-doc-find-prev"
+              title="Previous Match (Shift+Enter)"
+              disabled={inDocMatches.length === 0}
+              onClick={() => selectInDocMatchAt(inDocActiveMatchIdx - 1, true)}
+              className="p-1 rounded bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-testid="in-doc-find-next"
+              title="Next Match (Enter)"
+              disabled={inDocMatches.length === 0}
+              onClick={() => selectInDocMatchAt(inDocActiveMatchIdx + 1, true)}
+              className="p-1 rounded bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              data-testid="in-doc-replace-input"
+              placeholder="Replace with..."
+              value={inDocReplaceText}
+              onChange={(e) => setInDocReplaceText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowInDocFindBar(false)
+                  viewRef.current?.focus()
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleInDocReplaceOne()
+                }
+              }}
+              className="w-40 px-2 py-1 rounded bg-panel border border-subtle text-primary text-xs"
+            />
+            <button
+              type="button"
+              data-testid="in-doc-replace-one"
+              disabled={inDocMatches.length === 0}
+              onClick={handleInDocReplaceOne}
+              className="px-2 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
+            >
+              Replace
+            </button>
+            <button
+              type="button"
+              data-testid="in-doc-replace-all"
+              disabled={inDocMatches.length === 0}
+              onClick={handleInDocReplaceAll}
+              className="px-2 py-1 rounded bg-accent text-white font-medium disabled:opacity-40"
+            >
+              Replace All
+            </button>
+            <button
+              type="button"
+              data-testid="in-doc-find-close"
+              title="Close Find Bar (Esc)"
+              onClick={() => {
+                setShowInDocFindBar(false)
+                viewRef.current?.focus()
+              }}
+              className="p-1 rounded hover:bg-panel text-muted hover:text-primary"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2.2 Interactive Table Editor Toolbar (shown automatically when cursor is inside a GFM table) */}
+      {activeTableInfo && !isVisualAssetFile && (
+        <div
+          data-testid="interactive-table-toolbar"
+          className="px-4 py-1 bg-secondary/90 border-b border-subtle flex items-center justify-between gap-2 text-[11px] overflow-x-auto no-scrollbar"
+        >
+          <div className="flex items-center gap-1.5 shrink-0">
+            <TableIcon className="w-3.5 h-3.5 text-accent" />
+            <span className="font-semibold text-primary">
+              Table Controls (Row {activeTableInfo.activeRowIndex + 1}, Col{' '}
+              {activeTableInfo.activeColIndex + 1})
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              data-testid="table-add-row-above"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('add-row-above')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Row Above</span>
+            </button>
+            <button
+              type="button"
+              data-testid="table-add-row-below"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('add-row-below')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Row Below</span>
+            </button>
+            <button
+              type="button"
+              data-testid="table-delete-row"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('delete-row')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger flex items-center gap-1"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Del Row</span>
+            </button>
+            <span className="h-3.5 w-px bg-subtle mx-0.5" />
+            <button
+              type="button"
+              data-testid="table-add-col-left"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('add-col-left')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Col Left</span>
+            </button>
+            <button
+              type="button"
+              data-testid="table-add-col-right"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('add-col-right')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Col Right</span>
+            </button>
+            <button
+              type="button"
+              data-testid="table-delete-col"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('delete-col')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger flex items-center gap-1"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Del Col</span>
+            </button>
+            <span className="h-3.5 w-px bg-subtle mx-0.5" />
+            <button
+              type="button"
+              data-testid="table-align-left"
+              title="Align Column Left"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('align-left')
+              }}
+              className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+            >
+              ⇤
+            </button>
+            <button
+              type="button"
+              data-testid="table-align-center"
+              title="Align Column Center"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('align-center')
+              }}
+              className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+            >
+              ↔
+            </button>
+            <button
+              type="button"
+              data-testid="table-align-right"
+              title="Align Column Right"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('align-right')
+              }}
+              className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+            >
+              ⇥
+            </button>
+            <span className="h-3.5 w-px bg-subtle mx-0.5" />
+            <button
+              type="button"
+              data-testid="table-sort-asc"
+              title="Sort Column A → Z"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('sort-asc')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+            >
+              Sort A→Z
+            </button>
+            <button
+              type="button"
+              data-testid="table-sort-desc"
+              title="Sort Column Z → A"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                handleManipulateTable('sort-desc')
+              }}
+              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+            >
+              Sort Z→A
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Inline AI Creation & Drafting Bar (Cmd/Ctrl + J) */}
       {showInlineAIPrompt && aiEnabled && (
         <div
@@ -1757,6 +2594,116 @@ export const MarkdownEditorWorkspace: React.FC<{
           >
             Generate
           </button>
+        </div>
+      )}
+
+      {/* 2.1 `/` Slash Command Floating Menu */}
+      {slashMenuState && filteredSlashItems.length > 0 && (
+        <div
+          data-testid="slash-command-menu"
+          style={{
+            position: 'fixed',
+            top: `${slashMenuState.top}px`,
+            left: `${slashMenuState.left}px`
+          }}
+          className="z-50 w-72 max-h-72 overflow-y-auto rounded-lg bg-panel border border-subtle shadow-xl py-1.5 text-xs"
+        >
+          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted border-b border-subtle flex items-center justify-between">
+            <span>Slash Commands</span>
+            <span className="font-mono text-accent">/{slashMenuState.query}</span>
+          </div>
+          {filteredSlashItems.map((item, idx) => {
+            const isSelected =
+              idx === Math.min(slashMenuState.selectedIndex, filteredSlashItems.length - 1)
+            return (
+              <button
+                key={item.id}
+                type="button"
+                data-testid={`slash-cmd-item-${item.id}`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  executeSlashCommand(item)
+                }}
+                onMouseEnter={() =>
+                  setSlashMenuState((prev) => (prev ? { ...prev, selectedIndex: idx } : null))
+                }
+                className={`w-full text-left px-3 py-1.5 flex items-center gap-2.5 transition-colors ${
+                  isSelected
+                    ? 'bg-accent/15 text-primary border-l-2 border-accent'
+                    : 'hover:bg-secondary text-primary'
+                }`}
+              >
+                <span className="w-7 h-6 rounded bg-secondary border border-subtle flex items-center justify-center font-mono text-[10px] font-bold text-accent shrink-0">
+                  {item.badge}
+                </span>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-primary truncate">{item.label}</span>
+                  <span className="text-[10px] text-muted truncate">{item.description}</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* 1.2 [[WikiLink]] Hover Page Preview Card */}
+      {wikiHoverPreview && (
+        <div
+          data-testid="wikilink-hover-preview"
+          style={{
+            position: 'fixed',
+            top: `${wikiHoverPreview.top}px`,
+            left: `${wikiHoverPreview.left}px`
+          }}
+          onMouseEnter={() => {
+            if (hoverHideTimerRef.current) {
+              clearTimeout(hoverHideTimerRef.current)
+              hoverHideTimerRef.current = null
+            }
+          }}
+          onMouseLeave={() => {
+            setWikiHoverPreview(null)
+          }}
+          className="z-50 w-80 rounded-lg bg-panel border border-subtle shadow-2xl p-3 text-xs flex flex-col gap-2"
+        >
+          <div className="flex items-start justify-between gap-2 border-b border-subtle pb-1.5">
+            <div className="min-w-0">
+              <div className="font-semibold text-primary truncate flex items-center gap-1.5">
+                <span>📄</span>
+                <span className="truncate">{wikiHoverPreview.title}</span>
+              </div>
+              <div className="text-[10px] font-mono text-muted truncate">
+                {wikiHoverPreview.rootName} · {wikiHoverPreview.relativePath}
+              </div>
+            </div>
+            <button
+              type="button"
+              data-testid="wikilink-hover-open-btn"
+              onClick={() => {
+                const target = wikiHoverPreview.rawTarget.split('#')[0].trim()
+                setWikiHoverPreview(null)
+                onNavigateLink(target, true)
+              }}
+              className="px-2 py-0.5 rounded bg-accent text-white text-[10px] font-medium shrink-0"
+            >
+              Open Note
+            </button>
+          </div>
+          {wikiHoverPreview.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {wikiHoverPreview.tags.map((t) => (
+                <span
+                  key={t}
+                  className="px-1.5 py-0.5 rounded-full bg-accent/15 text-accent text-[10px] font-mono"
+                >
+                  {t.startsWith('#') ? t : `#${t}`}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="text-[11px] text-primary whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto bg-secondary/40 rounded p-2 border border-subtle/60">
+            {wikiHoverPreview.excerpt}
+          </div>
         </div>
       )}
 
@@ -2400,11 +3347,39 @@ export const MarkdownEditorWorkspace: React.FC<{
           )}
         </div>
       ) : (
-        <div ref={splitContainerRef} className="flex-1 flex overflow-hidden relative editor-paper-surface">
+        <div
+          ref={splitContainerRef}
+          onMouseOver={(e) => {
+            const target = e.target as HTMLElement
+            const wikiEl = target.closest('[data-wikilink]') as HTMLElement | null
+            if (wikiEl) {
+              const rawWiki = wikiEl.getAttribute('data-wikilink')
+              if (rawWiki) {
+                openWikiHoverPreview(
+                  decodeURIComponent(rawWiki),
+                  wikiEl.getBoundingClientRect()
+                )
+              }
+            }
+          }}
+          onMouseOut={(e) => {
+            const target = e.target as HTMLElement
+            const wikiEl = target.closest('[data-wikilink]')
+            if (wikiEl) {
+              if (hoverHideTimerRef.current) clearTimeout(hoverHideTimerRef.current)
+              hoverHideTimerRef.current = setTimeout(() => {
+                setWikiHoverPreview(null)
+              }, 220)
+            }
+          }}
+          className="flex-1 flex overflow-hidden relative editor-paper-surface"
+        >
           <div
             ref={editorScrollWrapperRef}
             data-margin-mode={marginMode}
             data-dynamic-margin-px={marginConfig.marginPx}
+            data-focus-mode={focusMode ? 'true' : 'false'}
+            data-typewriter-mode={typewriterScrolling ? 'true' : 'false'}
             style={
               {
                 width: editMode === 'split' ? `${splitPercent}%` : '100%',
@@ -2430,6 +3405,8 @@ export const MarkdownEditorWorkspace: React.FC<{
               data-testid="codemirror-editor-container"
               data-margin-mode={marginMode}
               data-dynamic-margin-px={marginConfig.marginPx}
+              data-focus-mode={focusMode ? 'true' : 'false'}
+              data-typewriter-mode={typewriterScrolling ? 'true' : 'false'}
               style={
                 {
                   '--editor-margin-x': `${marginConfig.marginPx}px`,

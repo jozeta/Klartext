@@ -77,6 +77,17 @@ import {
   SettingsModal,
   type CommandActionItem
 } from '../components/command-palette/CommandPaletteAndSettings'
+import { KnowledgeGraphModal } from '../features/knowledge/KnowledgeGraphModal'
+import {
+  extractGlobalTasks,
+  findUnlinkedMentions,
+  linkUnlinkedMentionInContent,
+  refactorWikiLinksOnRename,
+  toggleTaskAtLineInMarkdown,
+  type GlobalTaskItem,
+  type UnlinkedMentionItem,
+  type WorkspaceDocEntry
+} from '../../shared/markdown/knowledge-features'
 
 export interface OpenDocumentTab {
   key: string
@@ -701,6 +712,7 @@ export const App: React.FC = () => {
 
   const [workspaceMarkdownDocs, setWorkspaceMarkdownDocs] = useState<DynamicCandidateDocument[]>([])
   const [showGitHubWizardModal, setShowGitHubWizardModal] = useState(false)
+  const [showGraphViewModal, setShowGraphViewModal] = useState(false)
   const [dynamicWizardState, setDynamicWizardState] = useState<{
     open: boolean
     targetWorkspace?: DynamicWorkspaceDef | null
@@ -718,6 +730,57 @@ export const App: React.FC = () => {
       return liveContent !== undefined ? { ...doc, content: liveContent } : doc
     })
   }, [workspaceMarkdownDocs, tabs])
+
+  const workspaceDocEntries = useMemo<WorkspaceDocEntry[]>(() => {
+    return dynamicCandidateDocuments.map((d) => {
+      const { frontmatter } = extractFrontmatter(d.content)
+      const rawTags = frontmatter?.tags
+      const tags: string[] = Array.isArray(rawTags)
+        ? rawTags.map((x) => String(x))
+        : typeof rawTags === 'string'
+          ? rawTags
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : []
+      const baseTitle = d.name.replace(/\.(md|markdown|mdx|txt)$/i, '')
+      const title =
+        typeof frontmatter?.title === 'string' && frontmatter.title.trim()
+          ? frontmatter.title.trim()
+          : baseTitle
+      return {
+        rootId: d.rootId,
+        rootName: d.rootName,
+        relativePath: d.relativePath,
+        name: d.name,
+        title,
+        content: d.content,
+        tags
+      }
+    })
+  }, [dynamicCandidateDocuments])
+
+  const unlinkedMentions = useMemo<UnlinkedMentionItem[]>(() => {
+    if (!activeTab) return []
+    const baseTitle = (
+      activeTab.relativePath.split('/').pop() || activeTab.relativePath
+    ).replace(/\.(md|markdown|mdx|txt)$/i, '')
+    const { frontmatter } = extractFrontmatter(activeTab.content)
+    const targetTitle =
+      typeof frontmatter?.title === 'string' && frontmatter.title.trim()
+        ? frontmatter.title.trim()
+        : baseTitle
+    return findUnlinkedMentions({
+      activeDocTitle: targetTitle,
+      activeRootId: activeTab.rootId,
+      activeRelativePath: activeTab.relativePath,
+      documents: workspaceDocEntries
+    })
+  }, [activeTab, workspaceDocEntries])
+
+  const globalTasks = useMemo<GlobalTaskItem[]>(() => {
+    return extractGlobalTasks(workspaceDocEntries)
+  }, [workspaceDocEntries])
 
   const collectWorkspaceTemplateFiles = useCallback(
     async (
@@ -883,6 +946,141 @@ export const App: React.FC = () => {
       setScrollToLine({ line: lineNumber, nonce: Date.now() + Math.random() })
     },
     [openDocument]
+  )
+
+  // 1.3 Convert an Unlinked Mention into a [[WikiLink]] in its source document
+  const handleLinkUnlinkedMention = useCallback(
+    async (mention: UnlinkedMentionItem) => {
+      const docKey = `${mention.sourceRootId}::${mention.sourceRelativePath}`
+      const openTab = tabs.find((t) => t.key === docKey)
+      let currentContent = openTab?.content
+      if (currentContent === undefined) {
+        try {
+          const res = await window.klartext.readDocument(
+            mention.sourceRootId,
+            mention.sourceRelativePath
+          )
+          currentContent = res.content
+        } catch {
+          return
+        }
+      }
+      const nextContent = linkUnlinkedMentionInContent(
+        currentContent,
+        mention.lineNumber,
+        mention.matchedTitle
+      )
+      await window.klartext.writeDocument(
+        mention.sourceRootId,
+        mention.sourceRelativePath,
+        nextContent
+      )
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.key === docKey
+            ? { ...t, content: nextContent, savedContent: nextContent, dirty: false }
+            : t
+        )
+      )
+      setWorkspaceMarkdownDocs((prev) =>
+        prev.map((d) =>
+          d.rootId === mention.sourceRootId && d.relativePath === mention.sourceRelativePath
+            ? { ...d, content: nextContent }
+            : d
+        )
+      )
+      if (activeTab) {
+        window.klartext
+          .findBacklinks(activeTab.rootId, activeTab.relativePath)
+          .then(setBacklinks)
+          .catch(() => {})
+      }
+    },
+    [tabs, activeTab]
+  )
+
+  // 3.2 Toggle a task checkbox directly from the Global Tasks dashboard
+  const handleToggleGlobalTask = useCallback(
+    async (task: GlobalTaskItem) => {
+      const docKey = `${task.rootId}::${task.relativePath}`
+      const openTab = tabs.find((t) => t.key === docKey)
+      let currentContent = openTab?.content
+      if (currentContent === undefined) {
+        try {
+          const res = await window.klartext.readDocument(task.rootId, task.relativePath)
+          currentContent = res.content
+        } catch {
+          return
+        }
+      }
+      const nextContent = toggleTaskAtLineInMarkdown(currentContent, task.lineNumber)
+      await window.klartext.writeDocument(task.rootId, task.relativePath, nextContent)
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.key === docKey
+            ? { ...t, content: nextContent, savedContent: nextContent, dirty: false }
+            : t
+        )
+      )
+      setWorkspaceMarkdownDocs((prev) =>
+        prev.map((d) =>
+          d.rootId === task.rootId && d.relativePath === task.relativePath
+            ? { ...d, content: nextContent }
+            : d
+        )
+      )
+    },
+    [tabs]
+  )
+
+  // 3.1 Open or auto-create a Daily Note (Daily-Notes/YYYY-MM-DD.md)
+  const handleOpenDailyNote = useCallback(
+    async (dateYmd?: string) => {
+      const targetRootId = activeTab?.rootId || roots[0]?.id
+      if (!targetRootId) return
+      const now = new Date()
+      const ymd =
+        dateYmd ||
+        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+      const existing = dynamicCandidateDocuments.find(
+        (d) =>
+          d.name.replace(/\.(md|markdown)$/i, '') === ymd ||
+          d.relativePath.endsWith(`/${ymd}.md`) ||
+          d.relativePath === `${ymd}.md`
+      )
+      if (existing) {
+        await openDocument(existing.rootId, existing.relativePath)
+        return
+      }
+
+      const relPath = `Daily-Notes/${ymd}.md`
+      const initialContent = [
+        '---',
+        `title: "${ymd} Daily Note"`,
+        `date: "${ymd}"`,
+        'tags: ["#daily", "#journal"]',
+        'status: "In Progress"',
+        '---',
+        `# 📅 ${ymd}`,
+        '',
+        '## Top Priorities',
+        '- [ ] Review today\'s focus items',
+        '',
+        '## Notes & Journal',
+        ''
+      ].join('\n')
+
+      try {
+        await window.klartext.createDirectory(targetRootId, 'Daily-Notes').catch(() => {})
+        await window.klartext.createDocument(targetRootId, relPath, initialContent)
+      } catch {
+        // Ignore if file already exists
+      }
+      await refreshWorkspaceAndTrees()
+      await openDocument(targetRootId, relPath)
+    },
+    [activeTab, roots, dynamicCandidateDocuments, openDocument, refreshWorkspaceAndTrees]
   )
 
   // Auto-disappear export notification banner after 10 seconds
@@ -1265,6 +1463,9 @@ export const App: React.FC = () => {
         if (settings) {
           handleUpdateSettings({ zenMode: !settings.zenMode })
         }
+      } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        dispatchEditorCommand('open-in-doc-find')
       } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'b') {
         // Note: Mod+B when not focused inside editor toggles left sidebar
         const activeEl = document.activeElement
@@ -2498,6 +2699,20 @@ export const App: React.FC = () => {
                   <div className="my-1 border-t border-subtle" />
                   <button
                     type="button"
+                    data-testid="edit-menu-find-in-doc"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('open-in-doc-find')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Find &amp; Replace in Document...</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘F</kbd>
+                  </button>
+                  <button
+                    type="button"
                     data-testid="edit-menu-find"
                     onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
@@ -2513,7 +2728,7 @@ export const App: React.FC = () => {
                     className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Find in Workspace...</span>
-                    <kbd className="text-[10px] font-mono text-muted">⌘F</kbd>
+                    <kbd className="text-[10px] font-mono text-muted">⇧⌘F</kbd>
                   </button>
                   <button
                     type="button"
@@ -2995,6 +3210,75 @@ export const App: React.FC = () => {
                       </button>
                     )
                   })}
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Writing Ergonomics &amp; Knowledge Graph
+                  </div>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-focus-mode"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        focusMode: !settings.focusMode
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+                  >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.focusMode ? '✓' : ''}
+                    </span>
+                    <span>Focus Mode (Dim Inactive Paragraphs)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-typewriter"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        typewriterScrolling: !settings.typewriterScrolling
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+                  >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.typewriterScrolling ? '✓' : ''}
+                    </span>
+                    <span>Typewriter Scrolling (Keep Cursor Centered)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-open-graph"
+                    onClick={() => {
+                      setShowViewMenu(false)
+                      setShowGraphViewModal(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-accent font-medium flex items-center gap-2"
+                  >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0">
+                      🕸️
+                    </span>
+                    <span>Interactive 2D Graph View...</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-open-daily-note"
+                    onClick={() => {
+                      setShowViewMenu(false)
+                      void handleOpenDailyNote()
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+                  >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0">
+                      📅
+                    </span>
+                    <span>Open Today&apos;s Daily Note</span>
+                  </button>
 
                   <div className="my-1 border-t border-subtle" />
 
@@ -3721,6 +4005,12 @@ export const App: React.FC = () => {
                 onCreateNoteFromTemplateInFolder={createNoteFromTemplateInFolder}
                 headings={headings}
                 backlinks={backlinks}
+                unlinkedMentions={unlinkedMentions}
+                onLinkUnlinkedMention={handleLinkUnlinkedMention}
+                globalTasks={globalTasks}
+                onToggleGlobalTask={handleToggleGlobalTask}
+                onOpenDailyNote={handleOpenDailyNote}
+                onOpenGraphView={() => setShowGraphViewModal(true)}
                 onOpenDocument={openDocument}
                 onNavigateToLine={navigateToLine}
                 onAddRootDialog={async () => {
@@ -3786,6 +4076,60 @@ export const App: React.FC = () => {
                 }}
                 onRenameFileInRoot={async (rootId, oldRelativePath, newRelativePath) => {
                   await window.klartext.renameDocument(rootId, oldRelativePath, newRelativePath)
+
+                  // Automatically refactor [[WikiLinks]] and ![[Transclusions]] across workspace documents
+                  if (
+                    oldRelativePath !== newRelativePath &&
+                    /\.(md|markdown|mdx)$/i.test(oldRelativePath)
+                  ) {
+                    for (const doc of workspaceMarkdownDocs) {
+                      const targetRel =
+                        doc.rootId === rootId && doc.relativePath === oldRelativePath
+                          ? newRelativePath
+                          : doc.relativePath
+                      const openTab =
+                        tabs.find((t) => t.rootId === doc.rootId && t.relativePath === doc.relativePath) ||
+                        secondaryTabs.find(
+                          (t) => t.rootId === doc.rootId && t.relativePath === doc.relativePath
+                        )
+                      const sourceContent = openTab ? openTab.content : doc.content
+                      const refactored = refactorWikiLinksOnRename(
+                        sourceContent,
+                        oldRelativePath,
+                        newRelativePath
+                      )
+                      if (refactored.changed) {
+                        await window.klartext
+                          .writeDocument(doc.rootId, targetRel, refactored.nextContent)
+                          .catch(() => {})
+                        setTabs((prev) =>
+                          prev.map((t) =>
+                            t.rootId === doc.rootId &&
+                            (t.relativePath === doc.relativePath || t.relativePath === targetRel)
+                              ? {
+                                  ...t,
+                                  content: refactored.nextContent,
+                                  savedContent: refactored.nextContent
+                                }
+                              : t
+                          )
+                        )
+                        setSecondaryTabs((prev) =>
+                          prev.map((t) =>
+                            t.rootId === doc.rootId &&
+                            (t.relativePath === doc.relativePath || t.relativePath === targetRel)
+                              ? {
+                                  ...t,
+                                  content: refactored.nextContent,
+                                  savedContent: refactored.nextContent
+                                }
+                              : t
+                          )
+                        )
+                      }
+                    }
+                  }
+
                   await refreshWorkspaceAndTrees()
                   const oldKey = `${rootId}::${oldRelativePath}`
                   const newKey = `${rootId}::${newRelativePath}`
@@ -4171,6 +4515,9 @@ export const App: React.FC = () => {
                 showLineNumbers={Boolean(settings.showLineNumbers)}
                 wordWrap={settings.wordWrap !== false}
                 marginMode={settings.editorMarginMode || 'medium'}
+                focusMode={Boolean(settings.focusMode)}
+                typewriterScrolling={Boolean(settings.typewriterScrolling)}
+                workspaceDocuments={workspaceDocEntries}
                 spellcheckEnabled={settings.spellcheckEnabled !== false}
                 spellcheckLanguages={currentSpellLangs}
                 customDictionaryWords={settings.customDictionaryWords || []}
@@ -4415,6 +4762,9 @@ export const App: React.FC = () => {
                     showLineNumbers={Boolean(settings.showLineNumbers)}
                     wordWrap={settings.wordWrap !== false}
                     marginMode={settings.editorMarginMode || 'medium'}
+                    focusMode={Boolean(settings.focusMode)}
+                    typewriterScrolling={Boolean(settings.typewriterScrolling)}
+                    workspaceDocuments={workspaceDocEntries}
                     spellcheckEnabled={settings.spellcheckEnabled !== false}
                     spellcheckLanguages={currentSpellLangs}
                     customDictionaryWords={settings.customDictionaryWords || []}
@@ -5144,6 +5494,18 @@ export const App: React.FC = () => {
             setAiInstructionDialog(null)
           }}
           onClose={() => setAiInstructionDialog(null)}
+        />
+      )}
+
+      {showGraphViewModal && (
+        <KnowledgeGraphModal
+          open={showGraphViewModal}
+          documents={workspaceDocEntries}
+          activeDocKey={activeTab ? `${activeTab.rootId}::${activeTab.relativePath}` : null}
+          onSelectDocument={(rootId: string, relativePath: string) => {
+            void openDocument(rootId, relativePath)
+          }}
+          onClose={() => setShowGraphViewModal(false)}
         />
       )}
 
