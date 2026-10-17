@@ -125,6 +125,66 @@ export class MultiRootSearchService {
     return results
   }
 
+  async getDocumentOverviewExcerpts(
+    rootIds?: string[],
+    maxFiles = 6
+  ): Promise<SearchFileResult[]> {
+    const allRoots = this.registry.getState().roots
+    const targetRoots =
+      rootIds && rootIds.length > 0
+        ? allRoots.filter((r) => rootIds.includes(r.id))
+        : allRoots
+
+    const results: SearchFileResult[] = []
+
+    for (const root of targetRoots) {
+      if (results.length >= maxFiles) break
+      const files = await this.collectMarkdownFiles(root.id)
+      for (const relPath of files) {
+        if (results.length >= maxFiles) break
+        try {
+          const absPath = this.registry.pathGuard.resolveScopedPath(root.id, relPath)
+          const content = await fs.promises.readFile(absPath, 'utf-8')
+          const lines = content.split(/\r?\n/)
+          const matches: SearchMatchLine[] = []
+          let inFrontmatter = false
+
+          for (let i = 0; i < lines.length && matches.length < 3; i++) {
+            const trimmed = lines[i].trim()
+            if (i === 0 && trimmed === '---') {
+              inFrontmatter = true
+              continue
+            }
+            if (inFrontmatter) {
+              if (trimmed === '---') inFrontmatter = false
+              continue
+            }
+            if (!trimmed) continue
+            matches.push({
+              lineNumber: i + 1,
+              lineText: lines[i].slice(0, 300),
+              matchStart: 0,
+              matchEnd: Math.min(lines[i].length, 40)
+            })
+          }
+
+          if (matches.length > 0) {
+            results.push({
+              rootId: root.id,
+              rootName: root.name,
+              relativePath: relPath,
+              matches
+            })
+          }
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    }
+
+    return results
+  }
+
   async replaceAcrossRoots(params: {
     search: {
       query: string

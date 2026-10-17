@@ -14,17 +14,26 @@ import {
   Plus,
   HelpCircle,
   FileCode2,
-  Smile
+  Smile,
+  Columns,
+  Copy,
+  ArrowRightLeft,
+  FolderOpen,
+  Trash2
 } from '../components/icons/untitled-icons'
 import type {
   AppSettings,
   BacklinkItem,
+  DynamicFolderDef,
+  DynamicWorkspaceDef,
   EditMode,
   FileTreeNode,
   GitRepoStatus,
   RecoverySnapshot,
   WorkspaceRoot
 } from '../../shared/types'
+import { DEFAULT_NORDIC_SAVED_THEMES } from '../../shared/constants'
+import type { DynamicCandidateDocument } from '../../shared/markdown/dynamic-workspace'
 import {
   extractHeadings,
   extractFrontmatter,
@@ -39,6 +48,10 @@ import {
 } from '../../shared/templates/template-engine'
 import { MultiRootSidebar, type LeftSidebarTab } from '../features/workspace/MultiRootSidebar'
 import {
+  GitHubWorkspaceWizardModal,
+  DynamicWorkspaceWizardModal
+} from '../features/workspace/WorkspaceWizards'
+import {
   MarkdownEditorWorkspace,
   type EditorDispatchedCommand
 } from '../features/editor/MarkdownEditorWorkspace'
@@ -48,6 +61,7 @@ import {
 } from '../features/editor/spellcheck-extension'
 import { LocalAIPanel } from '../features/ai/LocalAIPanel'
 import { TemplatesPanel } from '../features/templates/TemplatesPanel'
+import { FrontmatterPropertiesPanel } from '../features/frontmatter/FrontmatterPropertiesPanel'
 import { HelpModal, type HelpModalTab } from '../components/help/HelpModal'
 import { ExcalidrawCanvasModal } from '../features/diagrams/DiagramWidgets'
 import {
@@ -67,8 +81,6 @@ export interface OpenDocumentTab {
   externalConflictContent?: string
 }
 
-const DEFAULT_FRONTMATTER_KEYS = ['title', 'author', 'date', 'tags', 'status']
-
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [roots, setRoots] = useState<WorkspaceRoot[]>([])
@@ -77,6 +89,22 @@ export const App: React.FC = () => {
 
   const [tabs, setTabs] = useState<OpenDocumentTab[]>([])
   const [activeTabKey, setActiveTabKey] = useState<string | null>(null)
+  const [secondaryTabs, setSecondaryTabs] = useState<OpenDocumentTab[]>([])
+  const [secondaryActiveTabKey, setSecondaryActiveTabKey] = useState<string | null>(null)
+  const [focusedEditorPane, setFocusedEditorPane] = useState<'primary' | 'secondary'>('primary')
+  const [editorWindowsSplitPercent, setEditorWindowsSplitPercent] = useState<number>(50)
+  const [draggedDocTab, setDraggedDocTab] = useState<{
+    fromPane: 'primary' | 'secondary'
+    tab: OpenDocumentTab
+  } | null>(null)
+  const [dragOverPane, setDragOverPane] = useState<'primary' | 'secondary' | null>(null)
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    pane: 'primary' | 'secondary'
+    tab: OpenDocumentTab
+    x: number
+    y: number
+  } | null>(null)
+
   const [editMode, setEditMode] = useState<EditMode>('inline')
   const [leftSidebarTab, setLeftSidebarTab] = useState<LeftSidebarTab>('explorer')
   const [lastActiveRightPanel, setLastActiveRightPanel] = useState<
@@ -216,9 +244,177 @@ export const App: React.FC = () => {
   } | null>(null)
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const activeTab = useMemo(
+  const primaryActiveTab = useMemo(
     () => tabs.find((t) => t.key === activeTabKey) || tabs[0] || null,
     [tabs, activeTabKey]
+  )
+  const secondaryActiveTab = useMemo(
+    () =>
+      secondaryTabs.find((t) => t.key === secondaryActiveTabKey) ||
+      secondaryTabs[0] ||
+      null,
+    [secondaryTabs, secondaryActiveTabKey]
+  )
+  const activeTab = useMemo(() => {
+    if (focusedEditorPane === 'secondary' && secondaryActiveTab) {
+      return secondaryActiveTab
+    }
+    return primaryActiveTab || secondaryActiveTab || null
+  }, [focusedEditorPane, primaryActiveTab, secondaryActiveTab])
+
+  // Automatically close an editor pane when its last tab is closed or all tabs are dragged to the other side
+  useEffect(() => {
+    if (tabs.length === 0 && secondaryTabs.length > 0) {
+      setTabs(secondaryTabs)
+      setActiveTabKey(secondaryActiveTabKey || secondaryTabs[0]?.key || null)
+      setSecondaryTabs([])
+      setSecondaryActiveTabKey(null)
+      setFocusedEditorPane('primary')
+    } else if (secondaryTabs.length === 0 && focusedEditorPane === 'secondary') {
+      setFocusedEditorPane('primary')
+    }
+  }, [tabs.length, secondaryTabs, secondaryActiveTabKey, focusedEditorPane])
+
+  const closeTabInPane = useCallback(
+    (pane: 'primary' | 'secondary', tabKey: string) => {
+      if (pane === 'primary') {
+        setTabs((prev) => {
+          const remaining = prev.filter((t) => t.key !== tabKey)
+          if (activeTabKey === tabKey) {
+            setActiveTabKey(remaining[0]?.key || null)
+          }
+          return remaining
+        })
+      } else {
+        setSecondaryTabs((prev) => {
+          const remaining = prev.filter((t) => t.key !== tabKey)
+          if (secondaryActiveTabKey === tabKey) {
+            setSecondaryActiveTabKey(remaining[0]?.key || null)
+          }
+          return remaining
+        })
+      }
+    },
+    [activeTabKey, secondaryActiveTabKey]
+  )
+
+  const splitTabView = useCallback(
+    (pane: 'primary' | 'secondary', tab: OpenDocumentTab) => {
+      if (pane === 'primary') {
+        setSecondaryTabs((prev) =>
+          prev.some((t) => t.key === tab.key) ? prev : [...prev, { ...tab }]
+        )
+        setSecondaryActiveTabKey(tab.key)
+        setFocusedEditorPane('secondary')
+        if (tabs.length > 1) {
+          const remaining = tabs.filter((t) => t.key !== tab.key)
+          setTabs(remaining)
+          if (activeTabKey === tab.key && remaining[0]) {
+            setActiveTabKey(remaining[0].key)
+          }
+        }
+      } else {
+        setTabs((prev) =>
+          prev.some((t) => t.key === tab.key) ? prev : [...prev, { ...tab }]
+        )
+        setActiveTabKey(tab.key)
+        setFocusedEditorPane('primary')
+        if (secondaryTabs.length > 1) {
+          const remaining = secondaryTabs.filter((t) => t.key !== tab.key)
+          setSecondaryTabs(remaining)
+          if (secondaryActiveTabKey === tab.key && remaining[0]) {
+            setSecondaryActiveTabKey(remaining[0].key)
+          }
+        }
+      }
+    },
+    [tabs, secondaryTabs, activeTabKey, secondaryActiveTabKey]
+  )
+
+  const duplicateTabView = useCallback(
+    (pane: 'primary' | 'secondary', tab: OpenDocumentTab) => {
+      if (pane === 'primary') {
+        setSecondaryTabs((prev) =>
+          prev.some((t) => t.key === tab.key) ? prev : [...prev, { ...tab }]
+        )
+        setSecondaryActiveTabKey(tab.key)
+        setFocusedEditorPane('secondary')
+      } else {
+        setTabs((prev) =>
+          prev.some((t) => t.key === tab.key) ? prev : [...prev, { ...tab }]
+        )
+        setActiveTabKey(tab.key)
+        setFocusedEditorPane('primary')
+      }
+    },
+    []
+  )
+
+  const moveTabToPane = useCallback(
+    (
+      fromPane: 'primary' | 'secondary',
+      toPane: 'primary' | 'secondary',
+      tab: OpenDocumentTab,
+      targetBeforeKey?: string
+    ) => {
+      if (fromPane === toPane) {
+        if (!targetBeforeKey || targetBeforeKey === tab.key) return
+        const reorder = (list: OpenDocumentTab[]) => {
+          const without = list.filter((t) => t.key !== tab.key)
+          const idx = without.findIndex((t) => t.key === targetBeforeKey)
+          if (idx < 0) return [...without, tab]
+          const next = [...without]
+          next.splice(idx, 0, tab)
+          return next
+        }
+        if (toPane === 'primary') setTabs(reorder)
+        else setSecondaryTabs(reorder)
+        return
+      }
+
+      if (fromPane === 'primary' && toPane === 'secondary') {
+        const remainingPrimary = tabs.filter((t) => t.key !== tab.key)
+        setTabs(remainingPrimary)
+        if (activeTabKey === tab.key) {
+          setActiveTabKey(remainingPrimary[0]?.key || null)
+        }
+        setSecondaryTabs((prev) => {
+          const without = prev.filter((t) => t.key !== tab.key)
+          if (targetBeforeKey) {
+            const idx = without.findIndex((t) => t.key === targetBeforeKey)
+            if (idx >= 0) {
+              const next = [...without]
+              next.splice(idx, 0, tab)
+              return next
+            }
+          }
+          return [...without, tab]
+        })
+        setSecondaryActiveTabKey(tab.key)
+        setFocusedEditorPane('secondary')
+      } else if (fromPane === 'secondary' && toPane === 'primary') {
+        const remainingSecondary = secondaryTabs.filter((t) => t.key !== tab.key)
+        setSecondaryTabs(remainingSecondary)
+        if (secondaryActiveTabKey === tab.key) {
+          setSecondaryActiveTabKey(remainingSecondary[0]?.key || null)
+        }
+        setTabs((prev) => {
+          const without = prev.filter((t) => t.key !== tab.key)
+          if (targetBeforeKey) {
+            const idx = without.findIndex((t) => t.key === targetBeforeKey)
+            if (idx >= 0) {
+              const next = [...without]
+              next.splice(idx, 0, tab)
+              return next
+            }
+          }
+          return [...without, tab]
+        })
+        setActiveTabKey(tab.key)
+        setFocusedEditorPane('primary')
+      }
+    },
+    [tabs, secondaryTabs, activeTabKey, secondaryActiveTabKey]
   )
 
   const resolvedTheme: 'light' | 'dark' = useMemo(() => {
@@ -232,8 +428,9 @@ export const App: React.FC = () => {
   const [leftSidebarWidth, setLeftSidebarWidth] = useState<number>(260)
   const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(340)
   const activeSidebarDragRef = useRef<
-    'left' | 'frontmatter' | 'right' | 'templates' | 'help' | null
+    'left' | 'frontmatter' | 'right' | 'templates' | 'help' | 'editor-windows' | null
   >(null)
+  const editorMainContainerRef = useRef<HTMLElement | null>(null)
 
   const updateTabBarOverflow = useCallback(() => {
     const el = tabBarScrollRef.current
@@ -269,6 +466,15 @@ export const App: React.FC = () => {
       if (activeSidebarDragRef.current === 'left') {
         const nextW = Math.max(180, Math.min(520, e.clientX))
         setLeftSidebarWidth(nextW)
+      } else if (activeSidebarDragRef.current === 'editor-windows') {
+        const container = editorMainContainerRef.current
+        if (container) {
+          const rect = container.getBoundingClientRect()
+          if (rect.width > 100) {
+            const pct = ((e.clientX - rect.left) / rect.width) * 100
+            setEditorWindowsSplitPercent(Math.max(20, Math.min(80, Math.round(pct))))
+          }
+        }
       } else {
         const nextW = Math.max(240, Math.min(640, window.innerWidth - e.clientX))
         setRightSidebarWidth(nextW)
@@ -277,7 +483,10 @@ export const App: React.FC = () => {
     const onMouseUp = () => {
       if (activeSidebarDragRef.current === 'left') {
         window.klartext.updateSettings({ leftSidebarWidth }).catch(() => {})
-      } else if (activeSidebarDragRef.current) {
+      } else if (
+        activeSidebarDragRef.current &&
+        activeSidebarDragRef.current !== 'editor-windows'
+      ) {
         window.klartext
           .updateSettings({
             rightSidebarWidth,
@@ -305,7 +514,7 @@ export const App: React.FC = () => {
     setTextInsertTrigger({ text, cursorOffset, nonce: Date.now() + Math.random() })
   }, [])
 
-  // Auto-collapse File, Edit, View, Format, Insert, AI & Help menus when clicking anywhere in the app
+  // Auto-collapse File, Edit, View, Format, Insert, AI, Help & Tab context menus when clicking anywhere in the app
   useEffect(() => {
     if (
       !showFileMenu &&
@@ -314,7 +523,8 @@ export const App: React.FC = () => {
       !showFormatMenu &&
       !showInsertMenu &&
       !showAIMenu &&
-      !showHelpMenu
+      !showHelpMenu &&
+      !tabContextMenu
     )
       return
     const handleGlobalClick = () => {
@@ -325,6 +535,7 @@ export const App: React.FC = () => {
       setShowInsertMenu(false)
       setShowAIMenu(false)
       setShowHelpMenu(false)
+      setTabContextMenu(null)
     }
     window.addEventListener('click', handleGlobalClick)
     return () => window.removeEventListener('click', handleGlobalClick)
@@ -335,7 +546,8 @@ export const App: React.FC = () => {
     showFormatMenu,
     showInsertMenu,
     showAIMenu,
-    showHelpMenu
+    showHelpMenu,
+    tabContextMenu
   ])
 
   // Apply theme, highlight color, custom theme colors, & granular typography CSS variables to documentElement
@@ -475,6 +687,26 @@ export const App: React.FC = () => {
     [handleUpdateSettings]
   )
 
+  const [workspaceMarkdownDocs, setWorkspaceMarkdownDocs] = useState<DynamicCandidateDocument[]>([])
+  const [showGitHubWizardModal, setShowGitHubWizardModal] = useState(false)
+  const [dynamicWizardState, setDynamicWizardState] = useState<{
+    open: boolean
+    targetWorkspace?: DynamicWorkspaceDef | null
+    editingFolder?: DynamicFolderDef | null
+    editingRootRules?: boolean
+  }>({ open: false })
+
+  const dynamicCandidateDocuments = useMemo<DynamicCandidateDocument[]>(() => {
+    const tabMap = new Map<string, string>()
+    for (const t of tabs) {
+      tabMap.set(`${t.rootId}::${t.relativePath}`, t.content)
+    }
+    return workspaceMarkdownDocs.map((doc) => {
+      const liveContent = tabMap.get(`${doc.rootId}::${doc.relativePath}`)
+      return liveContent !== undefined ? { ...doc, content: liveContent } : doc
+    })
+  }, [workspaceMarkdownDocs, tabs])
+
   const collectWorkspaceTemplateFiles = useCallback(
     async (
       rootList: WorkspaceRoot[],
@@ -485,6 +717,14 @@ export const App: React.FC = () => {
         rootName: string
         relativePath: string
         name: string
+      }> = []
+
+      const mdFiles: Array<{
+        rootId: string
+        rootName: string
+        relativePath: string
+        name: string
+        updatedAt?: number
       }> = []
 
       for (const r of rootList) {
@@ -499,18 +739,50 @@ export const App: React.FC = () => {
                   lowerName === '.templates'))
             if (n.isDirectory && n.children) {
               walk(n.children, isTplDir)
-            } else if (!n.isDirectory && isTplDir && lowerName.endsWith('.md')) {
-              candidates.push({
-                rootId: r.id,
-                rootName: r.name,
-                relativePath: n.relativePath,
-                name: n.name.replace(/\.md$/i, '')
-              })
+            } else if (!n.isDirectory) {
+              if (/\.(md|markdown|mdx|txt)$/i.test(lowerName)) {
+                mdFiles.push({
+                  rootId: r.id,
+                  rootName: r.name,
+                  relativePath: n.relativePath,
+                  name: n.name,
+                  updatedAt: n.updatedAt
+                })
+              }
+              if (isTplDir && lowerName.endsWith('.md')) {
+                candidates.push({
+                  rootId: r.id,
+                  rootName: r.name,
+                  relativePath: n.relativePath,
+                  name: n.name.replace(/\.md$/i, '')
+                })
+              }
             }
           }
         }
         walk(trees[r.id] || [], false)
       }
+
+      const loadedMdDocs = await Promise.all(
+        mdFiles.map(async (f): Promise<DynamicCandidateDocument | null> => {
+          try {
+            const { content } = await window.klartext.readDocument(f.rootId, f.relativePath)
+            return {
+              rootId: f.rootId,
+              rootName: f.rootName,
+              relativePath: f.relativePath,
+              name: f.name,
+              content,
+              updatedAt: f.updatedAt
+            }
+          } catch {
+            return null
+          }
+        })
+      )
+      setWorkspaceMarkdownDocs(
+        loadedMdDocs.filter((x): x is DynamicCandidateDocument => x !== null)
+      )
 
       if (candidates.length === 0) {
         setWorkspaceTemplateFiles([])
@@ -649,6 +921,10 @@ export const App: React.FC = () => {
       } else if (action === 'open-folder') {
         await window.klartext.openFolderDialog()
         await refreshWorkspaceAndTrees()
+      } else if (action === 'open-git-workspace-wizard') {
+        setShowGitHubWizardModal(true)
+      } else if (action === 'open-dynamic-workspace-wizard') {
+        setDynamicWizardState({ open: true, targetWorkspace: null, editingFolder: null })
       } else if (action === 'toggle-status-bar' && settings) {
         await handleUpdateSettings({ statusBarVisible: !settings.statusBarVisible })
       } else if (action === 'toggle-toolbar' && settings) {
@@ -681,6 +957,8 @@ export const App: React.FC = () => {
         openRightHelpPanel('formatting')
       } else if (action === 'help:variables') {
         openRightHelpPanel('variables')
+      } else if (action === 'help:ai') {
+        openRightHelpPanel('ai')
       } else if (action === 'help:shortcuts') {
         openRightHelpPanel('shortcuts')
       } else if (action.startsWith('editor:')) {
@@ -714,12 +992,34 @@ export const App: React.FC = () => {
       if (envInfo) {
         setSystemEnvInfo(envInfo)
       }
+      const existingCustomTpls = Array.isArray(loadedSettings.customTemplates)
+        ? loadedSettings.customTemplates
+        : []
+      const mergedCustomTemplates =
+        existingCustomTpls.length > 0
+          ? [
+              ...existingCustomTpls,
+              ...DEFAULT_BUILT_IN_TEMPLATES.filter(
+                (def) => !existingCustomTpls.some((t) => t.id === def.id)
+              )
+            ]
+          : DEFAULT_BUILT_IN_TEMPLATES
+      const existingSavedThemes = Array.isArray(loadedSettings.savedThemes)
+        ? loadedSettings.savedThemes
+        : []
+      const mergedSavedThemes =
+        existingSavedThemes.length > 0
+          ? [
+              ...existingSavedThemes,
+              ...DEFAULT_NORDIC_SAVED_THEMES.filter(
+                (def) => !existingSavedThemes.some((t) => t.id === def.id)
+              )
+            ]
+          : DEFAULT_NORDIC_SAVED_THEMES
       const normalizedSettings: AppSettings = {
         ...loadedSettings,
-        customTemplates:
-          Array.isArray(loadedSettings.customTemplates) && loadedSettings.customTemplates.length > 0
-            ? loadedSettings.customTemplates
-            : DEFAULT_BUILT_IN_TEMPLATES,
+        customTemplates: mergedCustomTemplates,
+        savedThemes: mergedSavedThemes,
         ...(loadedSettings.frontmatterPanelVisible && loadedSettings.rightSidebarOpen
           ? { rightSidebarOpen: false }
           : {})
@@ -1013,13 +1313,15 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeTab, settings, handleUpdateSettings])
 
-  const handleEditorContentChange = (nextContent: string) => {
-    if (!activeTab) return
-    const tabKey = activeTab.key
-    const rootId = activeTab.rootId
-    const relativePath = activeTab.relativePath
+  const handleEditorContentChangeForTab = (
+    targetTab: OpenDocumentTab,
+    nextContent: string
+  ) => {
+    const tabKey = targetTab.key
+    const rootId = targetTab.rootId
+    const relativePath = targetTab.relativePath
 
-    setTabs((prev) =>
+    const applyOptimistic = (prev: OpenDocumentTab[]) =>
       prev.map((t) =>
         t.key === tabKey
           ? {
@@ -1030,7 +1332,8 @@ export const App: React.FC = () => {
             }
           : t
       )
-    )
+    setTabs(applyOptimistic)
+    setSecondaryTabs(applyOptimistic)
 
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(async () => {
@@ -1045,7 +1348,7 @@ export const App: React.FC = () => {
             : t
         )
         await handleUpdateSettings({ customTemplates: nextTpls })
-        setTabs((prev) =>
+        const applySaved = (prev: OpenDocumentTab[]) =>
           prev.map((t) =>
             t.key === tabKey
               ? {
@@ -1056,12 +1359,13 @@ export const App: React.FC = () => {
                 }
               : t
           )
-        )
+        setTabs(applySaved)
+        setSecondaryTabs(applySaved)
         return
       }
       await window.klartext.saveRecoverySnapshot(rootId, relativePath, nextContent)
       await window.klartext.writeDocument(rootId, relativePath, nextContent)
-      setTabs((prev) =>
+      const applySaved = (prev: OpenDocumentTab[]) =>
         prev.map((t) =>
           t.key === tabKey
             ? {
@@ -1072,8 +1376,14 @@ export const App: React.FC = () => {
               }
             : t
         )
-      )
+      setTabs(applySaved)
+      setSecondaryTabs(applySaved)
     }, settings?.autosaveDelayMs || 900)
+  }
+
+  const handleEditorContentChange = (nextContent: string) => {
+    if (!activeTab) return
+    handleEditorContentChangeForTab(activeTab, nextContent)
   }
 
   const openTemplateInEditor = useCallback(
@@ -1159,15 +1469,19 @@ export const App: React.FC = () => {
 
   const handleTriggerAIAction = async (
     action: string,
-    promptOrSelectedText: string,
-    modelOverride?: string
+    promptText: string,
+    modelOverride?: string,
+    selectedSnippet?: string
   ) => {
     if (!activeTab) return
     if (settings && !settings.rightSidebarOpen) {
       await handleUpdateSettings({ rightSidebarOpen: true })
     }
     const requestId = `ai-${Date.now()}`
-    const originalText = activeTab.content
+    const originalText =
+      selectedSnippet && selectedSnippet.trim().length > 0
+        ? selectedSnippet
+        : activeTab.content
     setPendingAIDiff({
       originalText,
       proposedText: '',
@@ -1178,12 +1492,20 @@ export const App: React.FC = () => {
       await window.klartext.startAIStream({
         requestId,
         action,
-        prompt: promptOrSelectedText,
+        prompt: promptText,
         selectedText: originalText,
         modelOverride
       })
-    } catch {
-      // Handled via chunk error event
+    } catch (err: any) {
+      setPendingAIDiff((prev) =>
+        prev && prev.requestId === requestId
+          ? {
+              ...prev,
+              isStreaming: false,
+              error: err?.message || String(err)
+            }
+          : prev
+      )
     }
   }
 
@@ -1532,21 +1854,10 @@ export const App: React.FC = () => {
     return extractFrontmatter(activeTab.content)
   }, [activeTab?.content, activeTab?.relativePath])
 
-  const allFrontmatterKeys = useMemo(() => {
-    const existingKeys = parsedFrontmatter.frontmatter
-      ? Object.keys(parsedFrontmatter.frontmatter)
-      : []
-    const merged = [...DEFAULT_FRONTMATTER_KEYS]
-    for (const k of existingKeys) {
-      if (!merged.includes(k)) merged.push(k)
-    }
-    return merged
-  }, [parsedFrontmatter.frontmatter])
-
-  const updateFrontmatterField = (key: string, value: string) => {
+  const updateFrontmatterField = (key: string, value: unknown) => {
     if (!activeTab) return
-    const currentObj = { ...(parsedFrontmatter.frontmatter || {}) }
-    if (key === 'tags') {
+    const currentObj: Record<string, unknown> = { ...(parsedFrontmatter.frontmatter || {}) }
+    if (key === 'tags' && typeof value === 'string') {
       currentObj[key] = value
         .split(',')
         .map((s) => s.trim())
@@ -1652,18 +1963,48 @@ export const App: React.FC = () => {
               {showFileMenu && (
                 <div
                   data-testid="file-menu-dropdown"
-                  className="absolute left-0 top-7 z-50 w-56 rounded-md bg-panel border border-subtle shadow-lg py-1 text-xs"
+                  className="absolute left-0 top-7 z-50 w-64 rounded-md bg-panel border border-subtle shadow-lg py-1 text-xs"
                 >
                   <button
                     type="button"
+                    data-testid="file-menu-open-workspace"
                     onClick={async () => {
                       setShowFileMenu(false)
                       await window.klartext.openFolderDialog()
                       await refreshWorkspaceAndTrees()
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    Open new workspace...
+                    <span>Open new workspace...</span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘O</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="file-menu-add-git-workspace"
+                    onClick={() => {
+                      setShowFileMenu(false)
+                      setShowGitHubWizardModal(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Add Git workspace...</span>
+                    <GitBranch className="w-3.5 h-3.5 text-accent" />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="file-menu-create-dynamic-workspace"
+                    onClick={() => {
+                      setShowFileMenu(false)
+                      setDynamicWizardState({
+                        open: true,
+                        targetWorkspace: null,
+                        editingFolder: null
+                      })
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Create a new dynamic workspace...</span>
+                    <Sparkles className="w-3.5 h-3.5 text-accent" />
                   </button>
                   <div className="my-1 border-t border-subtle" />
                   <button
@@ -2775,73 +3116,6 @@ export const App: React.FC = () => {
               )}
             </div>
 
-            {/* AI Menu Dropdown (Local AI Panel, Inline Draft, AI Improve) */}
-            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                data-testid="ai-menu-btn"
-                onMouseEnter={() => {
-                  if (isAnyTopMenuOpen) openExclusiveTopMenu('ai')
-                }}
-                onClick={() => openExclusiveTopMenu(showAIMenu ? null : 'ai')}
-                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
-              >
-                <Sparkles className="w-3 h-3 text-accent" />
-                <span>AI</span>
-                <ChevronDown className="w-3 h-3" />
-              </button>
-
-              {showAIMenu && (
-                <div
-                  data-testid="ai-menu-dropdown"
-                  className="absolute left-0 top-7 z-50 w-64 rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
-                >
-                  <button
-                    type="button"
-                    data-testid="toggle-right-sidebar-btn"
-                    onClick={() => {
-                      setShowAIMenu(false)
-                      handleUpdateSettings({ rightSidebarOpen: !settings.rightSidebarOpen })
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Local AI Panel ({settings.ai.activeModel})</span>
-                    <span>{settings.rightSidebarOpen ? '✓' : ''}</span>
-                  </button>
-
-                  <div className="my-1 border-t border-subtle" />
-
-                  <button
-                    type="button"
-                    data-testid="toggle-inline-ai-prompt-btn"
-                    onClick={() => {
-                      setShowAIMenu(false)
-                      dispatchEditorCommand('toggle-inline-ai')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Inline Draft</span>
-                    <kbd className="text-[10px] font-mono text-muted">⌘J</kbd>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="ai-quick-improve-btn"
-                    onClick={() => {
-                      setShowAIMenu(false)
-                      dispatchEditorCommand('ai-improve')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Sparkles className="w-3 h-3 text-accent" />
-                      <span>AI Improve (SV/EN)</span>
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
-
             {/* Help Menu Dropdown (Opens Right Help & Reference Panel) */}
             <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
               <button
@@ -2889,6 +3163,18 @@ export const App: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    data-testid="help-menu-ai"
+                    onClick={() => {
+                      setShowHelpMenu(false)
+                      openRightHelpPanel('ai')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between font-medium"
+                  >
+                    <span>Local AI &amp; Workspace Q&amp;A Guide...</span>
+                    <kbd className="text-[10px] font-mono text-accent">RAG / AI</kbd>
+                  </button>
+                  <button
+                    type="button"
                     data-testid="help-menu-shortcuts"
                     onClick={() => {
                       setShowHelpMenu(false)
@@ -2899,24 +3185,6 @@ export const App: React.FC = () => {
                     <span>Smart Editing &amp; Shortcuts...</span>
                     <kbd className="text-[10px] font-mono text-muted">Keys</kbd>
                   </button>
-                  <div className="my-1 border-t border-subtle" />
-                  <button
-                    type="button"
-                    data-testid="help-menu-open-templates"
-                    onClick={() => {
-                      setShowHelpMenu(false)
-                      handleUpdateSettings({
-                        templatesPanelVisible: !settings.templatesPanelVisible
-                      })
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <FileCode2 className="w-3.5 h-3.5 text-accent" />
-                      <span>Show Right Templates Panel</span>
-                    </span>
-                    <span>{settings.templatesPanelVisible ? '✓' : ''}</span>
-                  </button>
                 </div>
               )}
             </div>
@@ -2926,6 +3194,19 @@ export const App: React.FC = () => {
           {settings.pageTabsPosition === 'top-menu' && tabs.length > 0 && (
             <div
               data-testid="document-tab-bar"
+              onDragOver={(e) => {
+                if (draggedDocTab) {
+                  e.preventDefault()
+                  setDragOverPane('primary')
+                }
+              }}
+              onDrop={(e) => {
+                if (!draggedDocTab) return
+                e.preventDefault()
+                moveTabToPane(draggedDocTab.fromPane, 'primary', draggedDocTab.tab)
+                setDraggedDocTab(null)
+                setDragOverPane(null)
+              }}
               className="flex-1 flex items-center gap-1 text-xs min-w-0 whitespace-nowrap titlebar-drag-region ml-2 mr-2 self-end pt-1"
             >
               {tabBarHasOverflow && (
@@ -2948,14 +3229,60 @@ export const App: React.FC = () => {
                 className="flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap min-w-0 max-w-full titlebar-no-drag"
               >
                 {tabs.map((tab) => {
-                  const isCurrent = tab.key === activeTab?.key
+                  const isCurrent = tab.key === primaryActiveTab?.key
                   const fileNameOnly = tab.relativePath.split('/').pop() || tab.relativePath
                   return (
                     <div
                       key={tab.key}
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedDocTab({ fromPane: 'primary', tab })
+                        e.dataTransfer.effectAllowed = 'move'
+                        e.dataTransfer.setData(
+                          'application/x-klartext-doc-tab',
+                          JSON.stringify({ fromPane: 'primary', key: tab.key })
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedDocTab(null)
+                        setDragOverPane(null)
+                      }}
+                      onDragOver={(e) => {
+                        if (draggedDocTab) {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setDragOverPane('primary')
+                        }
+                      }}
+                      onDrop={(e) => {
+                        if (!draggedDocTab) return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        moveTabToPane(
+                          draggedDocTab.fromPane,
+                          'primary',
+                          draggedDocTab.tab,
+                          tab.key
+                        )
+                        setDraggedDocTab(null)
+                        setDragOverPane(null)
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setTabContextMenu({
+                          pane: 'primary',
+                          tab,
+                          x: e.clientX,
+                          y: e.clientY
+                        })
+                      }}
                       title={`${tab.rootName} — ${tab.relativePath}`}
                       data-testid={`doc-tab-${tab.rootId}-${tab.relativePath}`}
-                      onClick={() => setActiveTabKey(tab.key)}
+                      onClick={() => {
+                        setActiveTabKey(tab.key)
+                        setFocusedEditorPane('primary')
+                      }}
                       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-t-md border-t border-x cursor-pointer shrink-0 max-w-[180px] titlebar-no-drag ${
                         isCurrent
                           ? 'bg-panel border-subtle text-primary font-medium'
@@ -2966,17 +3293,13 @@ export const App: React.FC = () => {
                         {fileNameOnly}
                         {tab.dirty ? ' •' : ''}
                       </span>
-                      {tabs.length > 1 && (
+                      {(tabs.length > 1 || secondaryTabs.length > 0) && (
                         <button
                           type="button"
                           data-testid={`close-tab-${tab.rootId}-${tab.relativePath}`}
                           onClick={(e) => {
                             e.stopPropagation()
-                            const remaining = tabs.filter((t) => t.key !== tab.key)
-                            setTabs(remaining)
-                            if (isCurrent && remaining[0]) {
-                              setActiveTabKey(remaining[0].key)
-                            }
+                            closeTabInPane('primary', tab.key)
                           }}
                           className="text-muted hover:text-danger shrink-0 titlebar-no-drag"
                         >
@@ -3237,6 +3560,26 @@ export const App: React.FC = () => {
                 onUpdateCollapsedDirs={(next) =>
                   handleUpdateSettings({ collapsedDirs: next })
                 }
+                workspaceSortOrder={settings.workspaceSortOrder || 'name-asc'}
+                workspaceFoldersOnTop={settings.workspaceFoldersOnTop !== false}
+                workspaceCustomOrder={settings.workspaceCustomOrder || {}}
+                stickyItems={settings.stickyItems || {}}
+                onUpdateWorkspaceSortOrder={(next) =>
+                  handleUpdateSettings({ workspaceSortOrder: next })
+                }
+                onUpdateWorkspaceFoldersOnTop={(next) =>
+                  handleUpdateSettings({ workspaceFoldersOnTop: next })
+                }
+                onUpdateWorkspaceCustomOrder={(next, switchToCustom) =>
+                  handleUpdateSettings(
+                    switchToCustom
+                      ? { workspaceCustomOrder: next, workspaceSortOrder: 'custom' }
+                      : { workspaceCustomOrder: next }
+                  )
+                }
+                onUpdateStickyItems={(next) =>
+                  handleUpdateSettings({ stickyItems: next })
+                }
                 folderIcons={settings.folderIcons || {}}
                 folderColors={settings.folderColors || {}}
                 onUpdateFolderIcon={(folderKey, iconName) => {
@@ -3327,49 +3670,76 @@ export const App: React.FC = () => {
                   const newFolderKey = `${rootId}/${newRelativePath}`
                   const oldFolderPrefix = `${oldRelativePath}/`
 
-                  // Migrate folder icons, colors & collapsed state if a folder was renamed
+                  // Migrate folder icons, colors, collapsed state, sticky items & custom sort order
                   const currentIcons = settings.folderIcons || {}
                   const currentColors = settings.folderColors || {}
                   const currentCollapsedDirs = settings.collapsedDirs || {}
+                  const currentStickyItems = settings.stickyItems || {}
+                  const currentCustomOrder = settings.workspaceCustomOrder || {}
                   const nextIcons = { ...currentIcons }
                   const nextColors = { ...currentColors }
                   const nextCollapsedDirs = { ...currentCollapsedDirs }
-                  let folderSettingsChanged = false
+                  const nextStickyItems = { ...currentStickyItems }
+                  const nextCustomOrder: Record<string, string[]> = { ...currentCustomOrder }
 
                   for (const k of Object.keys(currentIcons)) {
                     if (k === oldKey || k === oldFolderKey) {
                       nextIcons[newFolderKey] = nextIcons[k]
                       delete nextIcons[k]
-                      folderSettingsChanged = true
                     } else if (k.startsWith(`${oldFolderKey}/`)) {
                       const updated = `${newFolderKey}/${k.slice(oldFolderKey.length + 1)}`
                       nextIcons[updated] = nextIcons[k]
                       delete nextIcons[k]
-                      folderSettingsChanged = true
                     }
                   }
                   for (const k of Object.keys(currentColors)) {
                     if (k === oldKey || k === oldFolderKey) {
                       nextColors[newFolderKey] = nextColors[k]
                       delete nextColors[k]
-                      folderSettingsChanged = true
                     } else if (k.startsWith(`${oldFolderKey}/`)) {
                       const updated = `${newFolderKey}/${k.slice(oldFolderKey.length + 1)}`
                       nextColors[updated] = nextColors[k]
                       delete nextColors[k]
-                      folderSettingsChanged = true
                     }
                   }
                   for (const k of Object.keys(currentCollapsedDirs)) {
                     if (k === oldKey || k === oldFolderKey) {
                       nextCollapsedDirs[newFolderKey] = nextCollapsedDirs[k]
                       delete nextCollapsedDirs[k]
-                      folderSettingsChanged = true
                     } else if (k.startsWith(`${oldFolderKey}/`)) {
                       const updated = `${newFolderKey}/${k.slice(oldFolderKey.length + 1)}`
                       nextCollapsedDirs[updated] = nextCollapsedDirs[k]
                       delete nextCollapsedDirs[k]
-                      folderSettingsChanged = true
+                    }
+                  }
+                  for (const k of Object.keys(currentStickyItems)) {
+                    if (k === oldKey || k === oldFolderKey) {
+                      nextStickyItems[newFolderKey] = nextStickyItems[k]
+                      delete nextStickyItems[k]
+                    } else if (k.startsWith(`${oldFolderKey}/`)) {
+                      const updated = `${newFolderKey}/${k.slice(oldFolderKey.length + 1)}`
+                      nextStickyItems[updated] = nextStickyItems[k]
+                      delete nextStickyItems[k]
+                    }
+                  }
+                  for (const dirOrderKey of Object.keys(currentCustomOrder)) {
+                    const list = currentCustomOrder[dirOrderKey] || []
+                    const updatedList = list.map((item) => {
+                      if (item === oldRelativePath) return newRelativePath
+                      if (item.startsWith(oldFolderPrefix)) {
+                        return `${newRelativePath}/${item.slice(oldFolderPrefix.length)}`
+                      }
+                      return item
+                    })
+                    if (dirOrderKey === oldFolderKey) {
+                      nextCustomOrder[newFolderKey] = updatedList
+                      delete nextCustomOrder[dirOrderKey]
+                    } else if (dirOrderKey.startsWith(`${oldFolderKey}/`)) {
+                      const updatedDirKey = `${newFolderKey}/${dirOrderKey.slice(oldFolderKey.length + 1)}`
+                      nextCustomOrder[updatedDirKey] = updatedList
+                      delete nextCustomOrder[dirOrderKey]
+                    } else {
+                      nextCustomOrder[dirOrderKey] = updatedList
                     }
                   }
 
@@ -3386,17 +3756,17 @@ export const App: React.FC = () => {
                         : `${newRelativePath}/${selectedFolder.relativePath.slice(oldFolderPrefix.length)}`
                     updatedSelectedFolder = { rootId, relativePath: nextRel }
                     setSelectedFolder(updatedSelectedFolder)
-                    folderSettingsChanged = true
                   }
 
-                  if (folderSettingsChanged) {
-                    handleUpdateSettings({
-                      folderIcons: nextIcons,
-                      folderColors: nextColors,
-                      collapsedDirs: nextCollapsedDirs,
-                      selectedFolder: updatedSelectedFolder
-                    })
-                  }
+                  handleUpdateSettings({
+                    folderIcons: nextIcons,
+                    folderColors: nextColors,
+                    collapsedDirs: nextCollapsedDirs,
+                    stickyItems: nextStickyItems,
+                    workspaceCustomOrder: nextCustomOrder,
+                    workspaceSortOrder: 'custom',
+                    selectedFolder: updatedSelectedFolder
+                  })
 
                   setTabs((prev) =>
                     prev.map((t) => {
@@ -3438,6 +3808,47 @@ export const App: React.FC = () => {
                   await window.klartext.gitAbortMerge(rootId)
                   await refreshWorkspaceAndTrees()
                 }}
+                dynamicWorkspaces={settings.dynamicWorkspaces || []}
+                dynamicCandidateDocuments={dynamicCandidateDocuments}
+                onOpenAddDynamicFolder={(workspace) =>
+                  setDynamicWizardState({
+                    open: true,
+                    targetWorkspace: workspace,
+                    editingFolder: null,
+                    editingRootRules: false
+                  })
+                }
+                onOpenEditDynamicFolder={(workspace, folder) =>
+                  setDynamicWizardState({
+                    open: true,
+                    targetWorkspace: workspace,
+                    editingFolder: folder,
+                    editingRootRules: false
+                  })
+                }
+                onOpenEditDynamicRootRules={(workspace) =>
+                  setDynamicWizardState({
+                    open: true,
+                    targetWorkspace: workspace,
+                    editingFolder: null,
+                    editingRootRules: true
+                  })
+                }
+                onDeleteDynamicFolder={(workspaceId, folderId) => {
+                  const currentList = settings.dynamicWorkspaces || []
+                  const nextList = currentList.map((ws) =>
+                    ws.id === workspaceId
+                      ? { ...ws, folders: ws.folders.filter((f) => f.id !== folderId) }
+                      : ws
+                  )
+                  handleUpdateSettings({ dynamicWorkspaces: nextList })
+                }}
+                onRemoveDynamicWorkspace={(workspaceId) => {
+                  const currentList = settings.dynamicWorkspaces || []
+                  handleUpdateSettings({
+                    dynamicWorkspaces: currentList.filter((ws) => ws.id !== workspaceId)
+                  })
+                }}
               />
             </div>
             <div
@@ -3452,188 +3863,502 @@ export const App: React.FC = () => {
           </>
         )}
 
-        {/* Center Document Tabs + Editor */}
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-panel min-w-0">
-          {/* Document Tab Bar (Single-row tabs with ellipsis truncation + < > scroll buttons when overflowing + window drag region to the right of the last tab) */}
-          {!settings.zenMode && settings.pageTabsPosition !== 'top-menu' && tabs.length > 0 && (
-            <div
-              data-testid="document-tab-bar"
-              className="flex items-center bg-app border-b border-subtle px-1.5 pt-1 gap-1 text-xs shrink-0 whitespace-nowrap titlebar-drag-region"
-            >
-              {tabBarHasOverflow && (
-                <button
-                  type="button"
-                  data-tooltip="Scroll Tabs Left"
-                  data-testid="tab-bar-scroll-left"
-                  onClick={() => {
-                    tabBarScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })
-                  }}
-                  className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+        {/* Center Document Tabs + Dual Side-by-Side Editor Windows */}
+        <main
+          ref={editorMainContainerRef}
+          data-testid="editor-main-container"
+          className="flex-1 flex flex-row h-full overflow-hidden bg-panel min-w-0"
+        >
+          {/* Primary (Left) Editor Window */}
+          <div
+            data-testid="editor-pane-primary"
+            style={
+              secondaryTabs.length > 0
+                ? { width: `${editorWindowsSplitPercent}%` }
+                : undefined
+            }
+            onMouseDown={() => {
+              if (focusedEditorPane !== 'primary') {
+                setFocusedEditorPane('primary')
+              }
+            }}
+            onDragOver={(e) => {
+              if (draggedDocTab) {
+                e.preventDefault()
+                if (dragOverPane !== 'primary') setDragOverPane('primary')
+              }
+            }}
+            onDrop={(e) => {
+              if (!draggedDocTab) return
+              e.preventDefault()
+              moveTabToPane(draggedDocTab.fromPane, 'primary', draggedDocTab.tab)
+              setDraggedDocTab(null)
+              setDragOverPane(null)
+            }}
+            className={`${
+              secondaryTabs.length > 0 ? 'shrink-0' : 'flex-1'
+            } flex flex-col h-full overflow-hidden bg-panel min-w-0 ${
+              dragOverPane === 'primary' && draggedDocTab?.fromPane === 'secondary'
+                ? 'ring-2 ring-inset ring-accent/60'
+                : ''
+            }`}
+          >
+            {/* Primary Document Tab Bar */}
+            {!settings.zenMode &&
+              (settings.pageTabsPosition !== 'top-menu' || secondaryTabs.length > 0) &&
+              tabs.length > 0 && (
+                <div
+                  data-testid="document-tab-bar"
+                  className="flex items-center bg-app border-b border-subtle px-1.5 pt-1 gap-1 text-xs shrink-0 whitespace-nowrap titlebar-drag-region"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-              )}
-
-              <div
-                ref={tabBarScrollRef}
-                onScroll={updateTabBarOverflow}
-                className="flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap min-w-0 max-w-full titlebar-no-drag"
-              >
-                {tabs.map((tab) => {
-                  const isCurrent = tab.key === activeTab?.key
-                  const fileNameOnly = tab.relativePath.split('/').pop() || tab.relativePath
-                  return (
-                    <div
-                      key={tab.key}
-                      title={`${tab.rootName} — ${tab.relativePath}`}
-                      data-testid={`doc-tab-${tab.rootId}-${tab.relativePath}`}
-                      onClick={() => setActiveTabKey(tab.key)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-md border-t border-x cursor-pointer shrink-0 max-w-[180px] titlebar-no-drag ${
-                        isCurrent
-                          ? 'bg-panel border-subtle text-primary font-medium'
-                          : 'bg-secondary/50 border-transparent text-muted hover:text-primary'
-                      }`}
+                  {tabBarHasOverflow && (
+                    <button
+                      type="button"
+                      data-tooltip="Scroll Tabs Left"
+                      data-testid="tab-bar-scroll-left"
+                      onClick={() => {
+                        tabBarScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })
+                      }}
+                      className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
                     >
-                      <span className="truncate whitespace-nowrap block max-w-[140px]">
-                        {fileNameOnly}
-                        {tab.dirty ? ' •' : ''}
-                      </span>
-                      {tabs.length > 1 && (
-                        <button
-                          type="button"
-                          data-testid={`close-tab-${tab.rootId}-${tab.relativePath}`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const remaining = tabs.filter((t) => t.key !== tab.key)
-                            setTabs(remaining)
-                            if (isCurrent && remaining[0]) {
-                              setActiveTabKey(remaining[0].key)
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <div
+                    ref={tabBarScrollRef}
+                    onScroll={updateTabBarOverflow}
+                    className="flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap min-w-0 max-w-full titlebar-no-drag"
+                  >
+                    {tabs.map((tab) => {
+                      const isCurrent = tab.key === primaryActiveTab?.key
+                      const fileNameOnly = tab.relativePath.split('/').pop() || tab.relativePath
+                      return (
+                        <div
+                          key={tab.key}
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggedDocTab({ fromPane: 'primary', tab })
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData(
+                              'application/x-klartext-doc-tab',
+                              JSON.stringify({ fromPane: 'primary', key: tab.key })
+                            )
+                          }}
+                          onDragEnd={() => {
+                            setDraggedDocTab(null)
+                            setDragOverPane(null)
+                          }}
+                          onDragOver={(e) => {
+                            if (draggedDocTab) {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setDragOverPane('primary')
                             }
                           }}
-                          className="text-muted hover:text-danger shrink-0 titlebar-no-drag"
+                          onDrop={(e) => {
+                            if (!draggedDocTab) return
+                            e.preventDefault()
+                            e.stopPropagation()
+                            moveTabToPane(
+                              draggedDocTab.fromPane,
+                              'primary',
+                              draggedDocTab.tab,
+                              tab.key
+                            )
+                            setDraggedDocTab(null)
+                            setDragOverPane(null)
+                          }}
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setTabContextMenu({
+                              pane: 'primary',
+                              tab,
+                              x: e.clientX,
+                              y: e.clientY
+                            })
+                          }}
+                          title={`${tab.rootName} — ${tab.relativePath} (Right-click for Split / Duplicate / Options)`}
+                          data-testid={`doc-tab-${tab.rootId}-${tab.relativePath}`}
+                          onClick={() => {
+                            setActiveTabKey(tab.key)
+                            setFocusedEditorPane('primary')
+                          }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-md border-t border-x cursor-pointer shrink-0 max-w-[180px] titlebar-no-drag ${
+                            isCurrent
+                              ? 'bg-panel border-subtle text-primary font-medium'
+                              : 'bg-secondary/50 border-transparent text-muted hover:text-primary'
+                          }`}
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+                          <span className="truncate whitespace-nowrap block max-w-[140px]">
+                            {fileNameOnly}
+                            {tab.dirty ? ' •' : ''}
+                          </span>
+                          {(tabs.length > 1 || secondaryTabs.length > 0) && (
+                            <button
+                              type="button"
+                              data-testid={`close-tab-${tab.rootId}-${tab.relativePath}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                closeTabInPane('primary', tab.key)
+                              }}
+                              className="text-muted hover:text-danger shrink-0 titlebar-no-drag"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
 
-              {tabBarHasOverflow && (
-                <button
-                  type="button"
-                  data-tooltip="Scroll Tabs Right"
-                  data-testid="tab-bar-scroll-right"
-                  onClick={() => {
-                    tabBarScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })
-                  }}
-                  className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                  {tabBarHasOverflow && (
+                    <button
+                      type="button"
+                      data-tooltip="Scroll Tabs Right"
+                      data-testid="tab-bar-scroll-right"
+                      onClick={() => {
+                        tabBarScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })
+                      }}
+                      className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {/* Draggable empty space to the right of the last page tab so dragging moves the app window */}
+                  <div
+                    data-testid="tab-bar-drag-spacer"
+                    className="flex-1 self-stretch min-w-[16px] titlebar-drag-region"
+                  />
+                </div>
               )}
 
-              {/* Draggable empty space to the right of the last page tab so dragging moves the app window */}
-              <div
-                data-testid="tab-bar-drag-spacer"
-                className="flex-1 self-stretch min-w-[16px] titlebar-drag-region"
-              />
-            </div>
-          )}
-
-          {activeTab ? (
-            <MarkdownEditorWorkspace
-              rootId={activeTab.rootId}
-              relativePath={activeTab.relativePath}
-              content={activeTab.content}
-              editMode={editMode}
-              theme={resolvedTheme}
-              floatingToolbarEnabled={settings.floatingToolbarEnabled}
-              formattingToolbarVisible={Boolean(settings.formattingToolbarVisible)}
-              aiEnabled={settings.ai.enabled}
-              showLineNumbers={Boolean(settings.showLineNumbers)}
-              wordWrap={settings.wordWrap !== false}
-              spellcheckEnabled={settings.spellcheckEnabled !== false}
-              spellcheckLanguages={currentSpellLangs}
-              customDictionaryWords={settings.customDictionaryWords || []}
-              scrollToLine={scrollToLine}
-              editorCommandTrigger={editorCommandTrigger}
-              textInsertTrigger={textInsertTrigger}
-              initialSplitPercent={settings.splitViewPercent ?? 50}
-              onChangeSplitPercent={(percent) =>
-                handleUpdateSettings({ splitViewPercent: percent })
-              }
-              onChangeContent={handleEditorContentChange}
-              onPasteOrDropAsset={handlePasteOrDropAsset}
-              onOpenExcalidrawModal={(drawingRelPath) =>
-                setExcalidrawTarget({
-                  rootId: activeTab.rootId,
-                  relativePath: drawingRelPath
-                })
-              }
-              onTriggerAIQuickAction={(action, selectedText) =>
-                handleTriggerAIAction(action, selectedText)
-              }
-              onResolveConflictHunk={(hunkIndex, resolution) =>
-                handleResolveConflict(
-                  activeTab.rootId,
-                  activeTab.relativePath,
-                  resolution,
-                  hunkIndex
-                )
-              }
-              onNavigateLink={async (target, isWiki) => {
-                if (target.startsWith('http://') || target.startsWith('https://')) {
-                  await window.klartext.openExternalUrl(target)
-                  return
+            {primaryActiveTab ? (
+              <MarkdownEditorWorkspace
+                rootId={primaryActiveTab.rootId}
+                relativePath={primaryActiveTab.relativePath}
+                content={primaryActiveTab.content}
+                editMode={editMode}
+                theme={resolvedTheme}
+                floatingToolbarEnabled={settings.floatingToolbarEnabled}
+                formattingToolbarVisible={Boolean(settings.formattingToolbarVisible)}
+                aiEnabled={settings.ai.enabled}
+                showLineNumbers={Boolean(settings.showLineNumbers)}
+                wordWrap={settings.wordWrap !== false}
+                spellcheckEnabled={settings.spellcheckEnabled !== false}
+                spellcheckLanguages={currentSpellLangs}
+                customDictionaryWords={settings.customDictionaryWords || []}
+                scrollToLine={focusedEditorPane === 'primary' ? scrollToLine : null}
+                editorCommandTrigger={
+                  focusedEditorPane === 'primary' ? editorCommandTrigger : null
                 }
-                const [filePart, hashPart] = target.split('#')
-                if (filePart) {
-                  const clean =
-                    isWiki && !filePart.includes('.') ? `${filePart}.md` : filePart.replace(/^\.\//, '')
-                  const foundInAll =
-                    allWorkspaceFiles.find(
-                      (f) =>
-                        f.rootId === activeTab.rootId &&
-                        (f.relativePath === clean ||
-                          f.relativePath.toLowerCase() === `${clean.toLowerCase()}.md`)
-                    ) ||
-                    allWorkspaceFiles.find(
-                      (f) =>
-                        f.relativePath === clean ||
-                        f.relativePath.toLowerCase() === `${clean.toLowerCase()}.md`
-                    )
-                  const targetRoot = foundInAll?.rootId || activeTab.rootId
-                  const targetRel = foundInAll?.relativePath || (clean.endsWith('.md') ? clean : `${clean}.md`)
-                  await openDocument(targetRoot, targetRel)
+                textInsertTrigger={
+                  focusedEditorPane === 'primary' ? textInsertTrigger : null
                 }
-                if (hashPart) {
-                  setScrollToLine({ line: 1, nonce: Date.now() })
+                initialSplitPercent={settings.splitViewPercent ?? 50}
+                onChangeSplitPercent={(percent) =>
+                  handleUpdateSettings({ splitViewPercent: percent })
                 }
-              }}
-              onToggleSpellcheck={(enabled) =>
-                handleUpdateSettings({ spellcheckEnabled: enabled })
-              }
-              onChangeSpellcheckLanguage={(lang) => {
-                const exists = currentSpellLangs.includes(lang)
-                const next = exists ? currentSpellLangs : [...currentSpellLangs, lang]
-                handleUpdateSettings({ spellcheckLanguages: next })
-              }}
-              onAddWordToDictionary={(word) => {
-                const existing = settings.customDictionaryWords || []
-                if (!existing.includes(word)) {
-                  handleUpdateSettings({
-                    customDictionaryWords: [...existing, word]
+                onChangeContent={(nextContent) =>
+                  handleEditorContentChangeForTab(primaryActiveTab, nextContent)
+                }
+                onPasteOrDropAsset={handlePasteOrDropAsset}
+                onOpenExcalidrawModal={(drawingRelPath) =>
+                  setExcalidrawTarget({
+                    rootId: primaryActiveTab.rootId,
+                    relativePath: drawingRelPath
                   })
                 }
-              }}
-              onOpenIconPicker={() => setPaletteMode('icons')}
-            />
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-muted text-sm">
-              Select or create a Markdown document in any root folder.
-            </div>
+                onTriggerAIQuickAction={(action, arg) =>
+                  action === 'draft'
+                    ? handleTriggerAIAction(action, arg)
+                    : handleTriggerAIAction(action, '', undefined, arg)
+                }
+                onResolveConflictHunk={(hunkIndex, resolution) =>
+                  handleResolveConflict(
+                    primaryActiveTab.rootId,
+                    primaryActiveTab.relativePath,
+                    resolution,
+                    hunkIndex
+                  )
+                }
+                onNavigateLink={async (target, isWiki) => {
+                  if (target.startsWith('http://') || target.startsWith('https://')) {
+                    await window.klartext.openExternalUrl(target)
+                    return
+                  }
+                  const [filePart, hashPart] = target.split('#')
+                  if (filePart) {
+                    const clean =
+                      isWiki && !filePart.includes('.')
+                        ? `${filePart}.md`
+                        : filePart.replace(/^\.\//, '')
+                    const foundInAll =
+                      allWorkspaceFiles.find(
+                        (f) =>
+                          f.rootId === primaryActiveTab.rootId &&
+                          (f.relativePath === clean ||
+                            f.relativePath.toLowerCase() === `${clean.toLowerCase()}.md`)
+                      ) ||
+                      allWorkspaceFiles.find(
+                        (f) =>
+                          f.relativePath === clean ||
+                          f.relativePath.toLowerCase() === `${clean.toLowerCase()}.md`
+                      )
+                    const targetRoot = foundInAll?.rootId || primaryActiveTab.rootId
+                    const targetRel =
+                      foundInAll?.relativePath ||
+                      (clean.endsWith('.md') ? clean : `${clean}.md`)
+                    await openDocument(targetRoot, targetRel)
+                  }
+                  if (hashPart) {
+                    setScrollToLine({ line: 1, nonce: Date.now() })
+                  }
+                }}
+                onToggleSpellcheck={(enabled) =>
+                  handleUpdateSettings({ spellcheckEnabled: enabled })
+                }
+                onChangeSpellcheckLanguage={(lang) => {
+                  const exists = currentSpellLangs.includes(lang)
+                  const next = exists ? currentSpellLangs : [...currentSpellLangs, lang]
+                  handleUpdateSettings({ spellcheckLanguages: next })
+                }}
+                onAddWordToDictionary={(word) => {
+                  const existing = settings.customDictionaryWords || []
+                  if (!existing.includes(word)) {
+                    handleUpdateSettings({
+                      customDictionaryWords: [...existing, word]
+                    })
+                  }
+                }}
+                onOpenIconPicker={() => setPaletteMode('icons')}
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-muted text-sm">
+                Select or create a Markdown document in any root folder.
+              </div>
+            )}
+          </div>
+
+          {/* Secondary (Right) Side-by-Side Editor Window */}
+          {secondaryTabs.length > 0 && (
+            <>
+              <div
+                data-testid="editor-windows-resizer"
+                title="Drag to resize side-by-side editor windows"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  activeSidebarDragRef.current = 'editor-windows'
+                }}
+                className="w-1 h-full cursor-col-resize bg-subtle hover:bg-accent transition-colors shrink-0 z-20"
+              />
+
+              <div
+                data-testid="editor-pane-secondary"
+                onMouseDown={() => {
+                  if (focusedEditorPane !== 'secondary') {
+                    setFocusedEditorPane('secondary')
+                  }
+                }}
+                onDragOver={(e) => {
+                  if (draggedDocTab) {
+                    e.preventDefault()
+                    if (dragOverPane !== 'secondary') setDragOverPane('secondary')
+                  }
+                }}
+                onDrop={(e) => {
+                  if (!draggedDocTab) return
+                  e.preventDefault()
+                  moveTabToPane(draggedDocTab.fromPane, 'secondary', draggedDocTab.tab)
+                  setDraggedDocTab(null)
+                  setDragOverPane(null)
+                }}
+                className={`flex-1 flex flex-col h-full overflow-hidden bg-panel min-w-0 border-l border-subtle ${
+                  dragOverPane === 'secondary' && draggedDocTab?.fromPane === 'primary'
+                    ? 'ring-2 ring-inset ring-accent/60'
+                    : ''
+                }`}
+              >
+                {/* Secondary Window Tab Bar */}
+                {!settings.zenMode && (
+                  <div
+                    data-testid="secondary-document-tab-bar"
+                    className="flex items-center bg-app border-b border-subtle px-1.5 pt-1 gap-1 text-xs shrink-0 whitespace-nowrap titlebar-drag-region"
+                  >
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap min-w-0 max-w-full titlebar-no-drag">
+                      {secondaryTabs.map((tab) => {
+                        const isCurrent = tab.key === secondaryActiveTab?.key
+                        const fileNameOnly =
+                          tab.relativePath.split('/').pop() || tab.relativePath
+                        return (
+                          <div
+                            key={tab.key}
+                            draggable
+                            onDragStart={(e) => {
+                              setDraggedDocTab({ fromPane: 'secondary', tab })
+                              e.dataTransfer.effectAllowed = 'move'
+                              e.dataTransfer.setData(
+                                'application/x-klartext-doc-tab',
+                                JSON.stringify({ fromPane: 'secondary', key: tab.key })
+                              )
+                            }}
+                            onDragEnd={() => {
+                              setDraggedDocTab(null)
+                              setDragOverPane(null)
+                            }}
+                            onDragOver={(e) => {
+                              if (draggedDocTab) {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setDragOverPane('secondary')
+                              }
+                            }}
+                            onDrop={(e) => {
+                              if (!draggedDocTab) return
+                              e.preventDefault()
+                              e.stopPropagation()
+                              moveTabToPane(
+                                draggedDocTab.fromPane,
+                                'secondary',
+                                draggedDocTab.tab,
+                                tab.key
+                              )
+                              setDraggedDocTab(null)
+                              setDragOverPane(null)
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setTabContextMenu({
+                                pane: 'secondary',
+                                tab,
+                                x: e.clientX,
+                                y: e.clientY
+                              })
+                            }}
+                            title={`${tab.rootName} — ${tab.relativePath}`}
+                            data-testid={`secondary-doc-tab-${tab.rootId}-${tab.relativePath}`}
+                            onClick={() => {
+                              setSecondaryActiveTabKey(tab.key)
+                              setFocusedEditorPane('secondary')
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-md border-t border-x cursor-pointer shrink-0 max-w-[180px] titlebar-no-drag ${
+                              isCurrent
+                                ? 'bg-panel border-subtle text-primary font-medium'
+                                : 'bg-secondary/50 border-transparent text-muted hover:text-primary'
+                            }`}
+                          >
+                            <span className="truncate whitespace-nowrap block max-w-[140px]">
+                              {fileNameOnly}
+                              {tab.dirty ? ' •' : ''}
+                            </span>
+                            <button
+                              type="button"
+                              data-testid={`close-secondary-tab-${tab.rootId}-${tab.relativePath}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                closeTabInPane('secondary', tab.key)
+                              }}
+                              className="text-muted hover:text-danger shrink-0 titlebar-no-drag"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="flex-1 self-stretch min-w-[16px] titlebar-drag-region" />
+                  </div>
+                )}
+
+                {secondaryActiveTab && (
+                  <MarkdownEditorWorkspace
+                    rootId={secondaryActiveTab.rootId}
+                    relativePath={secondaryActiveTab.relativePath}
+                    content={secondaryActiveTab.content}
+                    editMode={editMode}
+                    theme={resolvedTheme}
+                    floatingToolbarEnabled={settings.floatingToolbarEnabled}
+                    formattingToolbarVisible={Boolean(settings.formattingToolbarVisible)}
+                    aiEnabled={settings.ai.enabled}
+                    showLineNumbers={Boolean(settings.showLineNumbers)}
+                    wordWrap={settings.wordWrap !== false}
+                    spellcheckEnabled={settings.spellcheckEnabled !== false}
+                    spellcheckLanguages={currentSpellLangs}
+                    customDictionaryWords={settings.customDictionaryWords || []}
+                    scrollToLine={focusedEditorPane === 'secondary' ? scrollToLine : null}
+                    editorCommandTrigger={
+                      focusedEditorPane === 'secondary' ? editorCommandTrigger : null
+                    }
+                    textInsertTrigger={
+                      focusedEditorPane === 'secondary' ? textInsertTrigger : null
+                    }
+                    initialSplitPercent={settings.splitViewPercent ?? 50}
+                    onChangeSplitPercent={(percent) =>
+                      handleUpdateSettings({ splitViewPercent: percent })
+                    }
+                    onChangeContent={(nextContent) =>
+                      handleEditorContentChangeForTab(secondaryActiveTab, nextContent)
+                    }
+                    onPasteOrDropAsset={handlePasteOrDropAsset}
+                    onOpenExcalidrawModal={(drawingRelPath) =>
+                      setExcalidrawTarget({
+                        rootId: secondaryActiveTab.rootId,
+                        relativePath: drawingRelPath
+                      })
+                    }
+                    onTriggerAIQuickAction={(action, arg) =>
+                      action === 'draft'
+                        ? handleTriggerAIAction(action, arg)
+                        : handleTriggerAIAction(action, '', undefined, arg)
+                    }
+                    onResolveConflictHunk={(hunkIndex, resolution) =>
+                      handleResolveConflict(
+                        secondaryActiveTab.rootId,
+                        secondaryActiveTab.relativePath,
+                        resolution,
+                        hunkIndex
+                      )
+                    }
+                    onNavigateLink={async (target, isWiki) => {
+                      if (target.startsWith('http://') || target.startsWith('https://')) {
+                        await window.klartext.openExternalUrl(target)
+                        return
+                      }
+                      const [filePart] = target.split('#')
+                      if (filePart) {
+                        const clean =
+                          isWiki && !filePart.includes('.')
+                            ? `${filePart}.md`
+                            : filePart.replace(/^\.\//, '')
+                        const targetRel = clean.endsWith('.md') ? clean : `${clean}.md`
+                        await openDocument(secondaryActiveTab.rootId, targetRel)
+                      }
+                    }}
+                    onToggleSpellcheck={(enabled) =>
+                      handleUpdateSettings({ spellcheckEnabled: enabled })
+                    }
+                    onChangeSpellcheckLanguage={(lang) => {
+                      const exists = currentSpellLangs.includes(lang)
+                      const next = exists ? currentSpellLangs : [...currentSpellLangs, lang]
+                      handleUpdateSettings({ spellcheckLanguages: next })
+                    }}
+                    onAddWordToDictionary={(word) => {
+                      const existing = settings.customDictionaryWords || []
+                      if (!existing.includes(word)) {
+                        handleUpdateSettings({
+                          customDictionaryWords: [...existing, word]
+                        })
+                      }
+                    }}
+                    onOpenIconPicker={() => setPaletteMode('icons')}
+                  />
+                )}
+              </div>
+            </>
           )}
         </main>
 
@@ -3677,87 +4402,18 @@ export const App: React.FC = () => {
                 <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                   {/* 1. Frontmatter Properties Window */}
                   {settings.frontmatterPanelVisible && (
-                    <aside
-                      data-testid="right-frontmatter-window"
-                      className="h-full w-full bg-app border-l border-subtle flex flex-col overflow-hidden select-none"
-                    >
-                      <div className="flex items-center justify-between px-3 py-2 bg-panel border-b border-subtle text-xs">
-                        <div className="flex items-center gap-1.5 font-semibold text-primary">
-                          <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
-                          <span>Frontmatter Properties</span>
-                        </div>
-                        <button
-                          type="button"
-                          title="Hide Frontmatter Window"
-                          data-testid="close-frontmatter-window-btn"
-                          onClick={() => handleUpdateSettings({ frontmatterPanelVisible: false })}
-                          className="p-0.5 rounded hover:bg-secondary text-muted hover:text-primary"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
-                        {!parsedFrontmatter.frontmatter && (
-                          <div className="text-[11px] text-muted bg-panel border border-subtle rounded p-2">
-                            No YAML frontmatter in this document yet. Type in any field below to create it automatically.
-                          </div>
-                        )}
-
-                        {allFrontmatterKeys.map((key) => {
-                          const rawVal = parsedFrontmatter.frontmatter?.[key]
-                          const strVal = Array.isArray(rawVal)
-                            ? rawVal.join(', ')
-                            : rawVal !== undefined && rawVal !== null
-                              ? String(rawVal)
-                              : ''
-                          return (
-                            <div key={key} className="space-y-1">
-                              <label className="block text-[11px] font-medium text-muted capitalize">
-                                {key}
-                              </label>
-                              <input
-                                type="text"
-                                data-testid={`frontmatter-input-${key}`}
-                                placeholder={`Enter ${key}...`}
-                                value={strVal}
-                                onChange={(e) => updateFrontmatterField(key, e.target.value)}
-                                className="w-full px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
-                              />
-                            </div>
-                          )
-                        })}
-
-                        {/* Add custom frontmatter property */}
-                        <div className="pt-2 border-t border-subtle space-y-1.5">
-                          <label className="block text-[10px] font-semibold uppercase text-muted">
-                            Add Custom Property
-                          </label>
-                          <div className="flex gap-1">
-                            <input
-                              type="text"
-                              placeholder="Property key..."
-                              value={customFrontmatterKey}
-                              onChange={(e) => setCustomFrontmatterKey(e.target.value)}
-                              className="flex-1 px-2 py-1 rounded bg-panel border border-subtle text-primary"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const k = customFrontmatterKey.trim()
-                                if (k) {
-                                  updateFrontmatterField(k, '')
-                                  setCustomFrontmatterKey('')
-                                }
-                              }}
-                              className="px-2 py-1 rounded bg-accent text-white"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </aside>
+                    <FrontmatterPropertiesPanel
+                      activeTabKey={activeTab?.key || null}
+                      frontmatter={parsedFrontmatter.frontmatter}
+                      allDocumentContents={[
+                        ...tabs.map((t) => t.content),
+                        ...secondaryTabs.map((t) => t.content)
+                      ]}
+                      settings={settings}
+                      onUpdateSettings={handleUpdateSettings}
+                      onUpdateFrontmatterField={updateFrontmatterField}
+                      onClose={() => handleUpdateSettings({ frontmatterPanelVisible: false })}
+                    />
                   )}
 
                   {/* 2. Templates Panel (<% %> Dynamic Variables) */}
@@ -3826,10 +4482,26 @@ export const App: React.FC = () => {
                         onStartAIAction={handleTriggerAIAction}
                         onCancelStream={(requestId) => window.klartext.cancelAIStream(requestId)}
                         onAcceptDiff={(proposedText) => {
-                          handleEditorContentChange(proposedText)
+                          if (
+                            activeTab &&
+                            pendingAIDiff &&
+                            pendingAIDiff.originalText !== activeTab.content &&
+                            activeTab.content.includes(pendingAIDiff.originalText)
+                          ) {
+                            handleEditorContentChange(
+                              activeTab.content.replace(
+                                pendingAIDiff.originalText,
+                                proposedText
+                              )
+                            )
+                          } else {
+                            handleEditorContentChange(proposedText)
+                          }
                           setPendingAIDiff(null)
                         }}
                         onRejectDiff={() => setPendingAIDiff(null)}
+                        onOpenHelpAI={() => openRightHelpPanel('ai')}
+                        onOpenCitation={(rootId, relPath) => openDocument(rootId, relPath)}
                       />
                     )}
 
@@ -4093,6 +4765,216 @@ export const App: React.FC = () => {
         />
       )}
 
+      {/* Document Tab Right-Click Context Menu */}
+      {tabContextMenu && (
+        <div
+          data-testid="tab-context-menu"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: `${Math.min(window.innerHeight - 280, Math.max(8, tabContextMenu.y))}px`,
+            left: `${Math.min(window.innerWidth - 240, Math.max(8, tabContextMenu.x))}px`,
+            zIndex: 9999
+          }}
+          className="w-56 py-1 rounded-md bg-panel border border-subtle shadow-xl text-xs select-none"
+        >
+          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted border-b border-subtle truncate">
+            {tabContextMenu.tab.relativePath.split('/').pop() ||
+              tabContextMenu.tab.relativePath}
+          </div>
+
+          <button
+            type="button"
+            data-testid="tab-context-split"
+            onClick={() => {
+              splitTabView(tabContextMenu.pane, tabContextMenu.tab)
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between gap-2"
+          >
+            <span className="flex items-center gap-2">
+              <Columns className="w-3.5 h-3.5 text-accent" />
+              <span>Split View Side by Side</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="tab-context-duplicate"
+            onClick={() => {
+              duplicateTabView(tabContextMenu.pane, tabContextMenu.tab)
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between gap-2"
+          >
+            <span className="flex items-center gap-2">
+              <Copy className="w-3.5 h-3.5 text-accent" />
+              <span>Duplicate View (Both Windows)</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="tab-context-move-other"
+            onClick={() => {
+              const targetPane =
+                tabContextMenu.pane === 'primary' ? 'secondary' : 'primary'
+              moveTabToPane(tabContextMenu.pane, targetPane, tabContextMenu.tab)
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between gap-2"
+          >
+            <span className="flex items-center gap-2">
+              <ArrowRightLeft className="w-3.5 h-3.5 text-muted" />
+              <span>
+                Move to {tabContextMenu.pane === 'primary' ? 'Right' : 'Left'} Window
+              </span>
+            </span>
+          </button>
+
+          <div className="my-1 border-t border-subtle" />
+
+          <button
+            type="button"
+            data-testid="tab-context-copy-path"
+            onClick={() => {
+              navigator.clipboard?.writeText(tabContextMenu.tab.relativePath).catch(() => {})
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+          >
+            <Copy className="w-3.5 h-3.5 text-muted" />
+            <span>Copy Relative Path</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="tab-context-reveal"
+            onClick={() => {
+              const parts = tabContextMenu.tab.relativePath.split('/').filter(Boolean)
+              const folderRel = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+              setSelectedFolder({
+                rootId: tabContextMenu.tab.rootId,
+                relativePath: folderRel
+              })
+              setLeftSidebarTab('explorer')
+              handleUpdateSettings({ leftSidebarOpen: true, leftSidebarTab: 'explorer' })
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-muted" />
+            <span>Reveal in Explorer</span>
+          </button>
+
+          <div className="my-1 border-t border-subtle" />
+
+          <button
+            type="button"
+            data-testid="tab-context-close-others"
+            onClick={() => {
+              const targetKey = tabContextMenu.tab.key
+              if (tabContextMenu.pane === 'primary') {
+                setTabs((prev) => prev.filter((t) => t.key === targetKey))
+                setActiveTabKey(targetKey)
+              } else {
+                setSecondaryTabs((prev) => prev.filter((t) => t.key === targetKey))
+                setSecondaryActiveTabKey(targetKey)
+              }
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+          >
+            <X className="w-3.5 h-3.5 text-muted" />
+            <span>Close Other Tabs</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="tab-context-close-right"
+            onClick={() => {
+              const targetKey = tabContextMenu.tab.key
+              if (tabContextMenu.pane === 'primary') {
+                setTabs((prev) => {
+                  const idx = prev.findIndex((t) => t.key === targetKey)
+                  return idx >= 0 ? prev.slice(0, idx + 1) : prev
+                })
+                setActiveTabKey(targetKey)
+              } else {
+                setSecondaryTabs((prev) => {
+                  const idx = prev.findIndex((t) => t.key === targetKey)
+                  return idx >= 0 ? prev.slice(0, idx + 1) : prev
+                })
+                setSecondaryActiveTabKey(targetKey)
+              }
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+          >
+            <ChevronRight className="w-3.5 h-3.5 text-muted" />
+            <span>Close Tabs to the Right</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="tab-context-close"
+            onClick={() => {
+              closeTabInPane(tabContextMenu.pane, tabContextMenu.tab.key)
+              setTabContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-danger flex items-center gap-2"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Close Tab</span>
+          </button>
+        </div>
+      )}
+
+      {showGitHubWizardModal && (
+        <GitHubWorkspaceWizardModal
+          defaultParentDir={
+            roots[0]?.path
+              ? roots[0].path.split('/').slice(0, -1).join('/') || '/tmp'
+              : '/tmp'
+          }
+          onClose={() => setShowGitHubWizardModal(false)}
+          onCloneSuccess={async () => {
+            setShowGitHubWizardModal(false)
+            await refreshWorkspaceAndTrees()
+          }}
+        />
+      )}
+
+      {dynamicWizardState.open && (
+        <DynamicWorkspaceWizardModal
+          targetWorkspace={dynamicWizardState.targetWorkspace}
+          editingFolder={dynamicWizardState.editingFolder}
+          editingRootRules={dynamicWizardState.editingRootRules}
+          knownTags={settings.frontmatterKnownTags || []}
+          statusOptions={
+            settings.frontmatterStatusOptions || [
+              'Draft',
+              'In Progress',
+              'In Review',
+              'Approved',
+              'Published',
+              'Archived'
+            ]
+          }
+          candidateDocuments={dynamicCandidateDocuments}
+          onClose={() => setDynamicWizardState({ open: false })}
+          onSaveWorkspace={(savedWs) => {
+            const currentList = settings.dynamicWorkspaces || []
+            const exists = currentList.some((w) => w.id === savedWs.id)
+            const nextList = exists
+              ? currentList.map((w) => (w.id === savedWs.id ? savedWs : w))
+              : [...currentList, savedWs]
+            handleUpdateSettings({ dynamicWorkspaces: nextList })
+            setDynamicWizardState({ open: false })
+          }}
+        />
+      )}
+
       {/* Top-Level Global Tooltip Portal (Always Above All Stacking Contexts & Overflow Containers) */}
       {portalTooltip && (
         <div
@@ -4114,4 +4996,5 @@ export const App: React.FC = () => {
     </div>
   )
 }
+
 

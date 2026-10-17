@@ -1,12 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { BookOpen, Code2, Sparkles, Keyboard, Copy, Check, X, Search } from '../icons/untitled-icons'
+import {
+  BookOpen,
+  Code2,
+  Sparkles,
+  Keyboard,
+  Copy,
+  Check,
+  X,
+  Search,
+  Server
+} from '../icons/untitled-icons'
 import {
   TEMPLATE_VARIABLES_DOCS,
   evaluateTemplateVariables,
   type TemplateEvaluationContext
 } from '../../../shared/templates/template-engine'
 
-export type HelpModalTab = 'formatting' | 'variables' | 'shortcuts'
+export type HelpModalTab = 'formatting' | 'variables' | 'shortcuts' | 'ai'
 
 const FORMATTING_REFERENCE_SECTIONS = [
   {
@@ -62,10 +72,29 @@ const SHORTCUTS_REFERENCE = [
   { action: 'Switch to Source / Live Preview / Split Mode', keys: '⌘1 / ⌘2 / ⌘3' },
   { action: 'Quick Switcher (Open File Across Roots)', keys: '⌘P' },
   { action: 'Command Palette', keys: '⌘K' },
+  { action: 'Insert Icon Search (Command Palette)', keys: '⇧⌘I' },
   { action: 'Toggle Zen / Focus Mode', keys: '⇧⌘F' },
   { action: 'Inline Local AI Draft Bar', keys: '⌘J' },
   { action: 'Next / Previous Cell in Markdown Table', keys: 'Tab / Shift+Tab' },
   { action: 'Continue or Exit List / Task / Blockquote', keys: 'Enter' }
+]
+
+const AI_SETUP_COMMANDS = [
+  {
+    label: 'Recommended Bilingual Model (16 GB+ RAM)',
+    cmd: 'ollama pull gemma4:12b',
+    note: 'Best balance for Swedish & English rewriting, Klarspråk, and Multi-Root Q&A.'
+  },
+  {
+    label: 'Fast Bilingual Model (8–16 GB RAM)',
+    cmd: 'ollama pull qwen3:8b',
+    note: 'Fast local reasoning, summarization, and SV/EN translation.'
+  },
+  {
+    label: 'Lightweight Entry Model (8 GB RAM)',
+    cmd: 'ollama pull gemma3:4b',
+    note: 'Low memory footprint for quick grammar & särskrivning fixes.'
+  }
 ]
 
 export const HelpModal: React.FC<{
@@ -140,12 +169,12 @@ export const HelpModal: React.FC<{
 
         {/* Navigation Tabs */}
         <div className="px-2.5 py-2 bg-secondary/40 border-b border-subtle space-y-2 shrink-0">
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-4 gap-1">
             <button
               type="button"
               data-testid="help-tab-formatting"
               onClick={() => setActiveTab('formatting')}
-              className={`flex items-center justify-center gap-1 px-2 py-1 rounded font-medium text-[11px] truncate ${
+              className={`flex items-center justify-center gap-1 px-1.5 py-1 rounded font-medium text-[11px] truncate ${
                 activeTab === 'formatting'
                   ? 'bg-accent text-white'
                   : 'bg-panel text-muted hover:text-primary border border-subtle'
@@ -158,20 +187,33 @@ export const HelpModal: React.FC<{
               type="button"
               data-testid="help-tab-variables"
               onClick={() => setActiveTab('variables')}
-              className={`flex items-center justify-center gap-1 px-2 py-1 rounded font-medium text-[11px] truncate ${
+              className={`flex items-center justify-center gap-1 px-1.5 py-1 rounded font-medium text-[11px] truncate ${
                 activeTab === 'variables'
                   ? 'bg-accent text-white'
                   : 'bg-panel text-muted hover:text-primary border border-subtle'
               }`}
             >
               <Sparkles className="w-3 h-3 shrink-0" />
-              <span className="truncate">Variables (&lt;% %&gt;)</span>
+              <span className="truncate">Variables</span>
+            </button>
+            <button
+              type="button"
+              data-testid="help-tab-ai"
+              onClick={() => setActiveTab('ai')}
+              className={`flex items-center justify-center gap-1 px-1.5 py-1 rounded font-medium text-[11px] truncate ${
+                activeTab === 'ai'
+                  ? 'bg-accent text-white'
+                  : 'bg-panel text-muted hover:text-primary border border-subtle'
+              }`}
+            >
+              <Server className="w-3 h-3 shrink-0" />
+              <span className="truncate">Local AI &amp; Q&amp;A</span>
             </button>
             <button
               type="button"
               data-testid="help-tab-shortcuts"
               onClick={() => setActiveTab('shortcuts')}
-              className={`flex items-center justify-center gap-1 px-2 py-1 rounded font-medium text-[11px] truncate ${
+              className={`flex items-center justify-center gap-1 px-1.5 py-1 rounded font-medium text-[11px] truncate ${
                 activeTab === 'shortcuts'
                   ? 'bg-accent text-white'
                   : 'bg-panel text-muted hover:text-primary border border-subtle'
@@ -311,6 +353,129 @@ export const HelpModal: React.FC<{
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'ai' && (
+            <div className="space-y-4" data-testid="help-ai-section">
+              {/* Overview Card */}
+              <div className="p-2.5 rounded-md bg-secondary/60 border border-subtle space-y-1.5 text-[11px]">
+                <div className="font-semibold text-primary flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" />
+                  <span>Local AI Assistant &amp; Multi-Root Workspace Q&amp;A (SV / EN)</span>
+                </div>
+                <p className="text-muted leading-relaxed">
+                  Klartext runs AI 100% locally over loopback (<code className="font-mono text-accent">127.0.0.1</code>) so your notes and security documents never leave your machine. If no external Ollama or LM Studio server is running, Klartext automatically falls back to its built-in bilingual (Swedish &amp; English) rewrite, grammar/särskrivning, and RAG engine.
+                </p>
+              </div>
+
+              {/* Section 1: Multi-Root Workspace Q&A (Local RAG) */}
+              <div className="space-y-2">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+                  1. Multi-Root Workspace Q&amp;A (Local RAG) — How It Works
+                </h3>
+                <div className="p-2.5 rounded-md bg-panel border border-subtle space-y-2 text-[11px]">
+                  <p className="text-primary leading-relaxed">
+                    <strong>Multi-Root Workspace Q&amp;A</strong> lets you ask questions in <strong>Svenska</strong> or <strong>English</strong> across all mounted root folders simultaneously and get answers grounded in your actual Markdown files.
+                  </p>
+                  <div className="space-y-1 text-muted">
+                    <div>
+                      <strong className="text-primary">Where to find it:</strong> Open the <strong>Local AI Assistant</strong> panel on the right and click to expand <strong>Local AI Setup &amp; Connection</strong>.
+                    </div>
+                    <div>
+                      <strong className="text-primary">How it works under the hood:</strong>
+                      <ol className="list-decimal list-inside space-y-1 pt-1 pl-1">
+                        <li>
+                          <strong>Cross-Root Search:</strong> Extracts key Swedish &amp; English terms from your question and scans all mounted workspace roots (<code className="font-mono">.md</code>, <code className="font-mono">.txt</code>, <code className="font-mono">.yaml</code>, <code className="font-mono">.json</code>). For broad overview questions, it automatically gathers top document summaries across roots.
+                        </li>
+                        <li>
+                          <strong>Grounded Context &amp; Provenance:</strong> Collects matching excerpts with line numbers and tags each excerpt with <code className="font-mono text-accent">[Root Name / File Path]</code>.
+                        </li>
+                        <li>
+                          <strong>Answer &amp; Clickable Citations:</strong> Synthesizes a concise answer using your active local model (or built-in offline synthesis) and renders clickable <code className="font-mono text-accent">[Root / File]</code> source badges that open the cited file directly in the editor.
+                        </li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: How to Set Up Local AI (Ollama / LM Studio) */}
+              <div className="space-y-2">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+                  2. Setting Up Local AI (Ollama or LM Studio)
+                </h3>
+                <div className="p-2.5 rounded-md bg-panel border border-subtle space-y-2 text-[11px]">
+                  <ol className="list-decimal list-inside space-y-1.5 text-muted leading-relaxed">
+                    <li>
+                      <strong className="text-primary">Install a Local Runtime:</strong> Download <strong>Ollama</strong> (<code className="font-mono text-accent">https://ollama.com</code>, default port <code className="font-mono">11434</code>) or <strong>LM Studio</strong> (OpenAI-compatible server on port <code className="font-mono">1234</code>).
+                    </li>
+                    <li>
+                      <strong className="text-primary">Pull a Recommended SV/EN Model:</strong> Run one of the commands below in your terminal (or expand <strong>Hardware &amp; Model Advisor</strong> in the AI panel to see recommendations tailored to your Mac&apos;s RAM):
+                    </li>
+                  </ol>
+
+                  <div className="space-y-1.5 pt-1">
+                    {AI_SETUP_COMMANDS.map((item) => {
+                      const isCopied = copiedToken === item.cmd
+                      return (
+                        <div
+                          key={item.cmd}
+                          className="p-2 rounded bg-app border border-subtle space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-primary text-[11px]">
+                              {item.label}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyToken(item.cmd)}
+                              className="px-1.5 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary inline-flex items-center gap-1 text-[10px] font-mono shrink-0"
+                            >
+                              {isCopied ? (
+                                <>
+                                  <Check className="w-2.5 h-2.5 text-success" />
+                                  <span>Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-2.5 h-2.5 text-muted" />
+                                  <span>{item.cmd}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="text-[10px] text-muted">{item.note}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <ol start={3} className="list-decimal list-inside space-y-1.5 text-muted leading-relaxed pt-1">
+                    <li>
+                      <strong className="text-primary">Connect &amp; Test in Klartext:</strong> Open the right <strong>Local AI Assistant</strong> panel, expand <strong>Local AI Setup &amp; Connection</strong>, verify the endpoint (<code className="font-mono text-accent">http://127.0.0.1:11434</code> for Ollama or <code className="font-mono text-accent">http://127.0.0.1:1234</code> for LM Studio), and click <strong>Test</strong>.
+                    </li>
+                    <li>
+                      <strong className="text-primary">Select Active Model:</strong> Choose your discovered model from the <strong>Active Local Model</strong> dropdown. If your configured model is not yet pulled, Klartext automatically falls back to any installed Ollama model or its built-in bilingual engine.
+                    </li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Section 3: Rewriting Swedish & English Text */}
+              <div className="space-y-2">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+                  3. Bilingual Rewriting &amp; Särskrivning (Svenska &amp; English)
+                </h3>
+                <div className="p-2.5 rounded-md bg-panel border border-subtle space-y-1.5 text-[11px] text-muted leading-relaxed">
+                  <div>
+                    <strong className="text-primary">Selection vs. Full Document:</strong> Select any sentence or paragraph in the editor to rewrite only that selection via the floating toolbar (<Sparkles className="w-3 h-3 inline text-accent" />), or use the buttons in the Local AI panel to rewrite the active document while preserving YAML frontmatter.
+                  </div>
+                  <div>
+                    <strong className="text-primary">Clean Proposal Review:</strong> Proposed rewrites appear in the <strong>Review Proposed Rewrite</strong> card without strikethrough clutter. Click <strong>Compare Original</strong> if you want to inspect the original text side-by-side, then click <strong>Accept Edit (Enter)</strong> to apply or <strong>Reject (Esc)</strong> to discard.
+                  </div>
+                </div>
               </div>
             </div>
           )}

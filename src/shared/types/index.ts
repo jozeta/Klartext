@@ -1,23 +1,37 @@
 import type {
   AppSettings,
+  CustomFrontmatterFilterRule,
+  CustomFrontmatterPropertyDef,
   CustomThemeColors,
+  DynamicFilterRule,
+  DynamicFolderDef,
+  DynamicWorkspaceDef,
   EditMode,
+  FrontmatterFieldType,
   GitPullStrategy,
   SavedTheme,
   ThemeMode,
   WorkspaceManifest,
-  WorkspaceRoot
+  WorkspaceRoot,
+  WorkspaceSortOrder
 } from '../schemas'
 
 export type {
   AppSettings,
+  CustomFrontmatterFilterRule,
+  CustomFrontmatterPropertyDef,
   CustomThemeColors,
+  DynamicFilterRule,
+  DynamicFolderDef,
+  DynamicWorkspaceDef,
   EditMode,
+  FrontmatterFieldType,
   GitPullStrategy,
   SavedTheme,
   ThemeMode,
   WorkspaceManifest,
-  WorkspaceRoot
+  WorkspaceRoot,
+  WorkspaceSortOrder
 }
 
 export interface FileTreeNode {

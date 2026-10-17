@@ -58,12 +58,11 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await starterBadge.hover()
       await expect(page.getByTestId('root-path-tooltip')).toContainText('Starter-Workspace')
 
-      // Verify "Mount Root Folder by Path" icon is removed and Open Folder Dialog icon is named "Open new workspace"
+      // Verify "Mount Root Folder by Path" and "Open new workspace" icons are removed from left panel header
       await expect(page.getByTestId('toggle-add-root-path-btn')).toHaveCount(0)
-      await expect(page.getByTestId('add-folder-dialog-btn')).toHaveAttribute(
-        'aria-label',
-        'Open new workspace'
-      )
+      await expect(page.getByTestId('add-folder-dialog-btn')).toHaveCount(0)
+      // Verify AI menu is removed from top row menus
+      await expect(page.getByTestId('ai-menu-btn')).toHaveCount(0)
 
       // Scenario 1: Mount two additional root folders & save/reopen .klartext-workspace manifest
       await page.evaluate(
@@ -75,6 +74,36 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       )
       await expect(page.getByText('root-beta')).toBeVisible()
       await expect(page.getByText('root-gamma')).toBeVisible()
+
+      // Verify File menu has "Add Git workspace..." and "Create a new dynamic workspace..." wizards
+      await page.getByTestId('file-menu-btn').click()
+      await expect(page.getByTestId('file-menu-add-git-workspace')).toBeVisible()
+      await expect(page.getByTestId('file-menu-create-dynamic-workspace')).toBeVisible()
+      await page.getByTestId('file-menu-add-git-workspace').click()
+      await expect(page.getByTestId('github-workspace-wizard-modal')).toBeVisible()
+      await page.getByTestId('github-wizard-repo-input').fill('octocat/Hello-World')
+      await page.getByTestId('github-wizard-next-btn').click()
+      await expect(page.getByTestId('github-wizard-folder-name-input')).toHaveValue('Hello-World')
+      await page.keyboard.press('Escape')
+      await page
+        .getByTestId('github-workspace-wizard-modal')
+        .locator('button', { hasText: 'Cancel' })
+        .click()
+      await expect(page.getByTestId('github-workspace-wizard-modal')).toHaveCount(0)
+
+      // Create a Dynamic Workspace with a Dynamic Folder via the wizard and verify wildcard matching
+      await page.getByTestId('file-menu-btn').click()
+      await page.getByTestId('file-menu-create-dynamic-workspace').click()
+      await expect(page.getByTestId('dynamic-workspace-wizard-modal')).toBeVisible()
+      await page.getByTestId('dynamic-wizard-workspace-name-input').fill('Nordic Dynamic Hub')
+      await page.getByTestId('dynamic-wizard-folder-name-input').fill('Beta & Welcome Docs')
+      await page.getByTestId('dynamic-wizard-next-btn').click()
+      await page.getByTestId('dynamic-wizard-title-input').fill('*Beta*')
+      await expect(page.getByTestId('dynamic-wizard-live-preview')).toContainText('BetaDoc.md')
+      await page.getByTestId('dynamic-wizard-submit-btn').click()
+      await expect(page.getByTestId('dynamic-workspace-wizard-modal')).toHaveCount(0)
+      await expect(page.getByText('Nordic Dynamic Hub')).toBeVisible()
+      await expect(page.getByText('Beta & Welcome Docs')).toBeVisible()
 
       // Verify creating a new folder in a workspace does NOT create a new .md file inside it
       await page.getByTestId('new-folder-btn-root-starter').click()
@@ -132,7 +161,22 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       expect(evaluatedNoteContent).toContain('New-Folder')
       expect(evaluatedNoteContent).not.toContain('<% folder_name %>')
 
-      // Verify drag-and-drop folders moves the folder and its content into the target folder
+      // Verify workspace sort controls (Name A-Z, Name Z-A, Custom dropdown + Folders on top checkbox)
+      await expect(page.getByTestId('workspace-sort-controls')).toBeVisible()
+      await expect(page.getByTestId('workspace-sort-order-select')).toBeVisible()
+      await expect(page.getByTestId('workspace-folders-on-top-checkbox')).toBeChecked()
+      await page.getByTestId('workspace-sort-order-select').selectOption('name-desc')
+      await expect(page.getByTestId('workspace-sort-order-select')).toHaveValue('name-desc')
+      await page.getByTestId('workspace-sort-order-select').selectOption('name-asc')
+      await expect(page.getByTestId('workspace-sort-order-select')).toHaveValue('name-asc')
+
+      // Verify right-click Sticky option on file and folder pins them to top of folder (folders first, then files, sorted A-Z)
+      await page.getByTestId('tree-file-root-starter-Welcome.md').click({ button: 'right' })
+      await expect(page.getByTestId('context-menu-toggle-sticky')).toBeVisible()
+      await page.getByTestId('context-menu-toggle-sticky').click()
+      await expect(page.getByTestId('tree-sticky-badge-root-starter-Welcome.md')).toBeVisible()
+
+      // Verify drag-and-drop folders moves the folder and its content into the target folder and automatically switches sort order to Custom
       await page.getByTestId('tree-file-root-starter-Welcome.md').click()
       await page.getByTestId('new-folder-btn-root-starter').click()
       await page.getByTestId('inline-rename-folder-input-root-starter').fill('Archive-Target')
@@ -141,6 +185,7 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('tree-folder-root-starter-New-Folder').dispatchEvent('dragstart')
       await page.getByTestId('tree-folder-root-starter-Archive-Target').dispatchEvent('dragover')
       await page.getByTestId('tree-folder-root-starter-Archive-Target').dispatchEvent('drop')
+      await expect(page.getByTestId('workspace-sort-order-select')).toHaveValue('custom')
       await expect
         .poll(() =>
           fs.existsSync(
@@ -214,9 +259,10 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await expect(page.getByTestId('copy-rich-html-btn')).toBeVisible()
       await page.getByTestId('copy-rich-html-btn').click()
 
-      // Verify Help menu opens the right-sided Help panel (`right-help-panel` / `help-reference-modal`) + right panel bottom control strip (`right-sidebar-bottom-controls`)
+      // Verify Help menu opens the right-sided Help panel (`right-help-panel` / `help-reference-modal`) and does NOT contain Show Right Templates Panel
       await page.getByTestId('help-menu-btn').click()
       await expect(page.getByTestId('help-menu-dropdown')).toBeVisible()
+      await expect(page.getByTestId('help-menu-open-templates')).toHaveCount(0)
       await page.getByTestId('help-menu-variables').click()
       await expect(page.getByTestId('right-help-panel')).toBeVisible()
       await expect(page.getByTestId('help-reference-modal')).toBeVisible()
@@ -325,12 +371,28 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       expect(movedRes.migratedAssets).toContain('assets/images/beta-chart.png')
       expect(fs.existsSync(path.join(rootCDir, 'assets/images/beta-chart.png'))).toBe(true)
 
-      // Scenario 8 & 9: Mermaid diagram live SVG rendering, Visual Mermaid Builder round-trip, & graceful diagnostic on invalid syntax
+      // Scenario 8 & 9: Mermaid diagram live SVG rendering, Mermaid Live Studio (19 diagram types including Packet TCP), & graceful diagnostic on invalid syntax
       await page.getByTestId(`doc-tab-root-starter-Welcome.md`).click()
       await expect(page.getByTestId('mermaid-widget').first()).toBeVisible()
       await page.getByTestId('mermaid-open-visual-builder').first().click()
       await expect(page.getByTestId('visual-mermaid-builder-modal')).toBeVisible()
+      await expect(page.getByTestId('mermaid-preset-gallery')).toBeVisible()
       await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('Multi-Root Workspace')
+
+      // Switch to Packet (TCP) preset in Mermaid Live Studio and append a bit field
+      await page.getByTestId('mermaid-preset-packet').click()
+      await expect(page.getByTestId('mermaid-packet-builder-bar')).toBeVisible()
+      await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('title: "TCP Packet"')
+      await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('0-15: "Source Port"')
+      await page.getByTestId('mermaid-packet-add-field-btn').click()
+      await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('256-271: "Custom Header Field"')
+
+      // Verify Zoom & Grid controls in Live Preview
+      await page.getByTestId('mermaid-zoom-in-btn').click()
+      await expect(page.getByTestId('mermaid-zoom-level')).toContainText('115%')
+      await page.getByTestId('mermaid-zoom-reset-btn').click()
+      await expect(page.getByTestId('mermaid-zoom-level')).toContainText('100%')
+
       await page.getByTestId('mermaid-builder-insert-btn').click()
       await expect(page.getByTestId('visual-mermaid-builder-modal')).toHaveCount(0)
 
@@ -491,23 +553,48 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId(`git-resolve-both-${repo2Id}-GammaDoc.md`).click()
       await expect(page.getByTestId(`git-conflicted-group-${repo2Id}`)).toHaveCount(0)
 
-      // Scenario 15: Local AI Assistant, Hardware Advisor, Bilingual Rewrite, and Diff Accept (via AI menu)
-      await page.getByTestId('ai-menu-btn').click()
-      await expect(page.getByTestId('ai-menu-dropdown')).toBeVisible()
-      await expect(page.getByTestId('toggle-inline-ai-prompt-btn')).toBeVisible()
-      await expect(page.getByTestId('ai-quick-improve-btn')).toBeVisible()
-      await page.getByTestId('toggle-right-sidebar-btn').click()
+      // Scenario 15: Local AI Assistant, Collapsible Setup & Hardware Advisor, Multi-Root Q&A, Bilingual Rewrite, and Diff Accept
+      await expect(page.getByTestId('ai-menu-btn')).toHaveCount(0)
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-toggle-ai').click()
       await expect(page.getByTestId('right-ai-panel')).toBeVisible()
       await expect(page.getByTestId('hardware-advisor-card')).toBeVisible()
       await expect(page.getByTestId('detected-ram-badge')).toContainText('GB RAM')
+
+      // Verify Format as GFM Table and Generate Mermaid Diagram were removed from AI panel
+      await expect(page.getByTestId('ai-action-format-table')).toHaveCount(0)
+      await expect(page.getByTestId('ai-action-mermaid')).toHaveCount(0)
+
+      // Verify Local AI Setup & Connection and Hardware Advisor are collapsed by default
+      await expect(page.getByTestId('local-ai-connection-body')).toHaveCount(0)
+      await expect(page.getByTestId('hardware-advisor-body')).toHaveCount(0)
+
+      // Expand Hardware & Model Advisor and verify body renders
+      await page.getByTestId('toggle-hardware-advisor-btn').click()
+      await expect(page.getByTestId('hardware-advisor-body')).toBeVisible()
+
+      // Expand Local AI Setup & Connection, test connection, and verify Multi-Root Workspace Q&A inside it
+      await page.getByTestId('toggle-local-ai-setup-btn').click()
+      await expect(page.getByTestId('local-ai-connection-body')).toBeVisible()
+      await expect(page.getByTestId('ai-rag-section')).toBeVisible()
 
       await page.getByTestId('ai-endpoint-input').fill(`http://127.0.0.1:${ollamaPort}`)
       await page.getByTestId('ai-test-connection-btn').click()
       await expect(page.getByTestId('ai-connection-badge')).toContainText('Connected')
 
+      // Verify Multi-Root Workspace Q&A button works and returns answer + citations
+      await page.getByTestId('ai-rag-question-input').fill('Vad står det i dokumenten?')
+      await page.getByTestId('ai-rag-ask-btn').click()
+      await expect(page.getByTestId('ai-rag-answer-card')).toBeVisible()
+      await expect(page.getByTestId('ai-rag-answer-text')).not.toBeEmpty()
+
+      // Verify AI Improve produces clean rewrite without strikethrough
       await page.getByTestId('ai-action-improve').click()
       await expect(page.getByTestId('ai-diff-review-card')).toBeVisible()
       await expect(page.getByTestId('ai-diff-proposed-text')).toContainText('användargränssnitt')
+      await expect(
+        page.getByTestId('ai-diff-review-card').locator('.line-through')
+      ).toHaveCount(0)
       await page.getByTestId('ai-diff-accept-btn').click()
       await expect(page.getByTestId('ai-diff-review-card')).toHaveCount(0)
 
@@ -554,6 +641,13 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       const helpPanelBox = await page.getByTestId('right-panel-container').boundingBox()
       expect(helpPanelBox!.width).toBe(fmPanelBox!.width)
 
+      // Verify Local AI & Multi-Root Workspace Q&A documentation in Help Panel
+      await page.getByTestId('help-tab-ai').click()
+      await expect(page.getByTestId('help-ai-section')).toBeVisible()
+      await expect(page.getByTestId('help-ai-section')).toContainText(
+        'Multi-Root Workspace Q&A (Local RAG)'
+      )
+
       // Switch back to Frontmatter and verify Toggle Right Panel button hides and re-opens the last activated right panel
       await page.getByTestId('right-panel-tab-frontmatter').click()
       await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
@@ -577,12 +671,30 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('icon-picker-item-Sparkles').click()
       await expect(page.getByTestId('icon-picker-modal')).toHaveCount(0)
 
-      // Verify Saved Themes, Theme Preview Window, and 12 Highlight Colors + Custom Highlight Color in Settings
+      // Verify Saved Themes (including the 6 curated Nordic dark & light themes), Theme Preview Window, and 12 Highlight Colors + Custom Highlight Color in Settings
       await page.getByTestId('file-menu-btn').click()
       await page.getByTestId('open-settings-btn').click()
       await expect(page.getByTestId('settings-modal')).toBeVisible()
       await page.getByTestId('settings-tab-visual').click()
       await expect(page.getByTestId('theme-preview-window')).toBeVisible()
+      await expect(page.getByTestId('settings-saved-themes-select')).toContainText(
+        'Abisko Midnight (Dark)'
+      )
+      await expect(page.getByTestId('settings-saved-themes-select')).toContainText(
+        'Sarek Granite (Dark)'
+      )
+      await expect(page.getByTestId('settings-saved-themes-select')).toContainText(
+        'Gotland Dusk (Dark)'
+      )
+      await expect(page.getByTestId('settings-saved-themes-select')).toContainText(
+        'Stockholm Linen (Light)'
+      )
+      await expect(page.getByTestId('settings-saved-themes-select')).toContainText(
+        'Uppsala Birch (Light)'
+      )
+      await expect(page.getByTestId('settings-saved-themes-select')).toContainText(
+        'Skagen Mist (Light)'
+      )
       await expect(page.getByTestId('highlight-color-palette')).toBeVisible()
       await page.getByTestId('highlight-color-swatch-emerald-mint').click()
       await page.getByTestId('custom-highlight-hex-input').fill('#FF3399')
@@ -648,12 +760,60 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
           .toBe('true')
       }
 
+      // Verify Tab Right-Click Menu: Split / Duplicate View into 2 side-by-side windows, and closing the last page closes that window
+      const firstDocTab = page.locator('[data-testid^="doc-tab-"]').first()
+      await expect(firstDocTab).toBeVisible()
+      await firstDocTab.click({ button: 'right' })
+      await expect(page.getByTestId('tab-context-menu')).toBeVisible()
+      await expect(page.getByTestId('tab-context-split')).toBeVisible()
+      await expect(page.getByTestId('tab-context-duplicate')).toBeVisible()
+      await page.getByTestId('tab-context-duplicate').click()
+      await expect(page.getByTestId('editor-pane-primary')).toBeVisible()
+      await expect(page.getByTestId('editor-pane-secondary')).toBeVisible()
+      // Close the last tab in the secondary window and verify the secondary window closes automatically
+      await page.locator('[data-testid^="close-secondary-tab-"]').first().click()
+      await expect(page.getByTestId('editor-pane-secondary')).toHaveCount(0)
+
+      // Verify Frontmatter Properties: Calendar Date Picker, Tags Dropdown, Editable Status Dropdown, and Global Typed Custom Properties
+      await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
+      // 1. Date field calendar picker
+      await page.getByTestId('frontmatter-date-picker-btn-date').click()
+      await expect(page.getByTestId('frontmatter-calendar-popover-date')).toBeVisible()
+      await page.getByTestId('calendar-today-btn-date').click()
+      await expect(page.getByTestId('frontmatter-calendar-popover-date')).toHaveCount(0)
+
+      // 2. Tags dropdown with previously entered tags
+      await page.getByTestId('frontmatter-tags-dropdown-btn-tags').click()
+      await expect(page.getByTestId('frontmatter-tags-dropdown-tags')).toBeVisible()
+      await page.getByTestId('frontmatter-tag-suggestion-tags-security').click()
+      await page.getByTestId('frontmatter-tags-dropdown-btn-tags').click()
+
+      // 3. Status dropdown with add (+) and remove (x) options
+      await page.getByTestId('frontmatter-dropdown-btn-status').click()
+      await expect(page.getByTestId('frontmatter-dropdown-menu-status')).toBeVisible()
+      await page.getByTestId('frontmatter-option-new-input-status').fill('Security Cleared')
+      await page.getByTestId('frontmatter-option-add-btn-status').click()
+      await expect(
+        page.getByTestId('frontmatter-option-select-status-Security Cleared')
+      ).toBeVisible()
+      await page.getByTestId('frontmatter-dropdown-btn-status').click()
+
+      // 4. Add Global Custom Property with Date type
+      await page.getByTestId('frontmatter-custom-key-input').fill('review_date')
+      await page.getByTestId('frontmatter-custom-type-select').selectOption('date')
+      await page.getByTestId('frontmatter-custom-global-checkbox').check()
+      await page.getByTestId('frontmatter-custom-add-btn').click()
+      await expect(page.getByTestId('frontmatter-date-picker-btn-review_date')).toBeVisible()
+
       // Verify all settings, panel visibility, sidebar tab, saved themes, and open tabs are persisted
       const persistedSettings = await page.evaluate(() => window.klartext.getSettings())
       expect(persistedSettings.frontmatterPanelVisible).toBe(true)
       expect(persistedSettings.lastActiveRightPanel).toBe('frontmatter')
       expect(persistedSettings.leftSidebarTab).toBe('git')
       expect(persistedSettings.savedThemes?.some((t) => t.name === 'My Nordic Theme')).toBe(true)
+      expect(
+        persistedSettings.globalFrontmatterProperties?.some((p) => p.key === 'review_date')
+      ).toBe(true)
       expect(Array.isArray(persistedSettings.openTabs)).toBe(true)
       expect(persistedSettings.openTabs.length).toBeGreaterThan(0)
     } finally {

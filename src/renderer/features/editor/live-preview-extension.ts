@@ -1157,6 +1157,7 @@ export type MarkdownFormatCommand =
   | 'math-inline'
   | 'math-block'
   | 'details'
+  | 'collapsible'
   | 'hr'
   | 'frontmatter'
   | 'toc'

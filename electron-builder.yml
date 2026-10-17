@@ -3,6 +3,7 @@ productName: Klartext
 directories:
   buildResources: build
   output: dist
+asar: false
 files:
   - out/**/*
   - package.json

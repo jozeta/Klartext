@@ -36,11 +36,35 @@ const FONT_FAMILY_OPTIONS = [
     value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
   },
   {
-    label: 'Editorial Serif (Georgia / Charter)',
-    value: 'Charter, Georgia, Cambria, "Times New Roman", serif'
+    label: 'Arctic Geometric Sans (Avenir Next / Nunito Sans)',
+    value: '"Avenir Next", Avenir, "Nunito Sans", -apple-system, sans-serif'
   },
   {
-    label: 'Humanist Sans (Avenir / Gill Sans)',
+    label: 'Scandinavian Grotesque (Helvetica Neue)',
+    value: '"Helvetica Neue", Helvetica, Arial, sans-serif'
+  },
+  {
+    label: 'Nordic Display Humanist (Optima / Avenir)',
+    value: 'Optima, "Avenir Next", sans-serif'
+  },
+  {
+    label: 'Nordic Classic Sans (Gill Sans / Avenir)',
+    value: '"Gill Sans", "Avenir Next", sans-serif'
+  },
+  {
+    label: 'Editorial Serif (Charter / Georgia)',
+    value: 'Charter, "Bitstream Charter", Georgia, serif'
+  },
+  {
+    label: 'Classic Book Serif (Palatino / Book Antiqua)',
+    value: 'Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif'
+  },
+  {
+    label: 'Sober Literary Serif (Baskerville / Georgia)',
+    value: 'Baskerville, Georgia, serif'
+  },
+  {
+    label: 'Humanist Sans (Avenir / Segoe UI)',
     value: '"Avenir Next", Avenir, "Segoe UI", sans-serif'
   },
   {
@@ -53,6 +77,18 @@ const CODE_FONT_OPTIONS = [
   {
     label: 'JetBrains Mono / Fira Code / SF Mono',
     value: '"JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace'
+  },
+  {
+    label: 'SF Mono / Menlo / Monaco',
+    value: '"SF Mono", Menlo, Monaco, Consolas, monospace'
+  },
+  {
+    label: 'IBM Plex Mono / JetBrains Mono',
+    value: '"IBM Plex Mono", "JetBrains Mono", Menlo, monospace'
+  },
+  {
+    label: 'Fira Code / JetBrains Mono',
+    value: '"Fira Code", "JetBrains Mono", Monaco, monospace'
   },
   {
     label: 'Menlo / Monaco / Consolas',

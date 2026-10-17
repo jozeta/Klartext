@@ -713,8 +713,417 @@ tags: [bug, triage]
 - [ ] Root cause identified
 - [ ] Unit / E2E regression test added
 `
+  },
+  {
+    id: 'tpl-sec-incident',
+    name: 'Security Incident Response Report.md',
+    description: 'IT Security incident triage, timeline, IOCs, containment actions, and remediation plan',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Security Incident: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "In Progress"
+severity: "High"
+tags: [security, incident, soc, ir]
+---
+
+# Security Incident Response: <% title %>
+
+| Field | Details |
+| :--- | :--- |
+| **Incident ID** | \`INC-<% date_compact %>-<% short_id %>\` |
+| **Lead Responder** | <% user %> (\`<% hostname %>\`) |
+| **Detected At** | <% datetime %> (<% timezone %>) |
+| **Severity** | High / Critical / Medium / Low |
+| **Status** | Triage / Containment / Eradication / Recovered |
+
+> [!CAUTION]
+> **Confidentiality Notice (TLP:AMBER):** Handle all Indicators of Compromise (IOCs) and logs according to incident response procedures.
+
+## 1. Executive Summary & Impact
+<% cursor %>
+
+## 2. Indicators of Compromise (IOCs)
+- **Source IPs / Domains:** \`\`
+- **Affected Hosts / Services:** \`<% hostname %>\` (\`<% ip_local %>\`)
+- **File Hashes (SHA-256):** \`<% sha256 %>\`
+- **Compromised Accounts / Tokens:** 
+
+## 3. Incident Timeline (UTC / Local)
+| Timestamp | Event / Observation | Actor / Source |
+| :--- | :--- | :--- |
+| \`<% datetime %>\` | Initial alert triggered | SIEM / EDR |
+| \`<% time %>\` | Triage initiated by <% user %> | IR Team |
+
+## 4. Containment & Eradication Checklist
+- [ ] Isolate affected host(s) or network segment
+- [ ] Revoke active sessions, API keys, and credentials
+- [ ] Capture volatile memory / forensic disk snapshot
+- [ ] Block malicious IPs/domains at firewall / DNS
+- [ ] Patch root vulnerability and verify system integrity
+
+## 5. Root Cause & Lessons Learned
+- **Root Vector:** 
+- **Follow-up Hardening Actions:** 
+`
+  },
+  {
+    id: 'tpl-sec-pentest',
+    name: 'Penetration Test & Vulnerability Assessment.md',
+    description: 'IT Security vulnerability assessment, CVSS scoring, PoC steps, and remediation guidance',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Pentest Finding: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "In Review"
+tags: [security, pentest, vulnerability, audit]
+---
+
+# Vulnerability Assessment: <% title %>
+
+- **Finding ID:** \`VULN-<% year %>-<% short_id %>\`
+- **Assessor:** <% user %>
+- **Date:** <% date %>
+- **Target Scope / Asset:** \`<% root_name %> / <% folder_name %>\`
+- **CVSS v3.1 Base Score:** \`8.1 (High)\` · Vector: \`CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N\`
+
+## 1. Vulnerability Overview
+<% cursor %>
+
+## 2. Proof of Concept (PoC) & Reproduction
+\`\`\`bash
+# Reproduction command / request
+curl -i -s -k -X GET "https://target.internal/api/v1/resource"
+\`\`\`
+
+## 3. Business & Technical Impact
+- **Confidentiality:** 
+- **Integrity:** 
+- **Availability:** 
+
+## 4. Remediation & Verification
+> [!IMPORTANT]
+> Apply input validation, parameterized queries, or least-privilege access controls before closing this finding.
+
+- [ ] Fix implemented on branch \`<% git_branch %>\`
+- [ ] Retested and verified by Security Engineering
+`
+  },
+  {
+    id: 'tpl-sec-threat-model',
+    name: 'STRIDE Threat Model & Risk Matrix.md',
+    description: 'Security architecture threat modeling using STRIDE, trust boundaries, and mitigation controls',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Threat Model: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "Draft"
+tags: [security, threat-model, architecture]
+---
+
+# Threat Model (STRIDE): <% title %>
+
+- **Architect / Reviewer:** <% user %>
+- **Date:** <% date %> (Quarter <% quarter %>)
+- **Repository / Branch:** \`<% root_name %>\` (\`<% git_branch %>\`)
+
+## 1. System Architecture & Trust Boundaries
+
+\`\`\`mermaid
+flowchart LR
+  User["External User"] -->|TLS 1.3| Edge["API Gateway"]
+  subgraph TrustBoundary["Internal Trusted Zone"]
+    Edge --> Auth["Auth Service"]
+    Edge --> App["Core Service"]
+    App --> DB[("Encrypted DB")]
+  end
+\`\`\`
+
+## 2. STRIDE Threat Analysis Matrix
+| Category | Threat Description | Likelihood | Impact | Mitigation / Security Control |
+| :--- | :--- | :--- | :--- | :--- |
+| **Spoofing** | <% cursor %> | Medium | High | Enforce MFA / mTLS authentication |
+| **Tampering** | Unauthorized payload modification | Low | High | HMAC signatures & strict schema validation |
+| **Repudiation** | Missing audit trail for sensitive actions | Medium | Medium | Immutable structured audit logging |
+| **Information Disclosure** | Sensitive PII or secrets leaked in logs/errors | Medium | High | Field-level encryption & log scrubbing |
+| **Denial of Service** | Resource exhaustion on public endpoints | High | Medium | Rate limiting, timeouts & circuit breakers |
+| **Elevation of Privilege** | Broken object-level authorization (BOLA/IDOR) | Low | Critical | Deny-by-default RBAC policy enforcement |
+
+## 3. Security Sign-Off Checklist
+- [ ] Secrets managed via hardware keychain / vault (zero hardcoded keys)
+- [ ] Dependencies scanned for known CVEs
+- [ ] Principle of least privilege verified across all IAM roles
+`
+  },
+  {
+    id: 'tpl-sec-hardening',
+    name: 'Security Audit & Hardening Checklist.md',
+    description: 'CIS / OWASP system, application, and infrastructure security hardening audit checklist',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Security Hardening Audit: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "In Progress"
+tags: [security, audit, compliance, hardening]
+---
+
+# Security Hardening & Compliance Audit: <% title %>
+
+- **Auditor:** <% user %> · **Host:** \`<% hostname %>\` (<% os %> <% arch %>)
+- **Audit Date:** <% date %> · **Reference ID:** \`AUD-<% short_id %>\`
+
+## 1. Identity & Access Management (IAM)
+- [ ] <% cursor %>Multi-Factor Authentication (MFA) enforced for all administrative accounts
+- [ ] Unused accounts, stale SSH keys, and expired API tokens revoked
+- [ ] Role-Based Access Control (RBAC) follows strict least privilege
+
+## 2. Network & Transport Security
+- [ ] TLS 1.2 / 1.3 enforced with strong cipher suites; HSTS enabled
+- [ ] Firewall rules restrict ingress to required ports only
+- [ ] Internal services isolated on private subnets / mTLS
+
+## 3. Application & Data Protection
+- [ ] All user inputs validated via strict schemas (Zod / JSON Schema)
+- [ ] Content Security Policy (CSP) & context isolation enabled
+- [ ] Encryption at rest (AES-256) verified for databases and backups
+
+## 4. Logging, Monitoring & Incident Readiness
+- [ ] Centralized audit logging active with tamper protection
+- [ ] Automated alerting configured for anomalous authentication / privilege escalation
+- [ ] Backup restoration drill completed within the last 90 days
+`
+  },
+  {
+    id: 'tpl-meeting-1on1',
+    name: '1-on-1 Sync Meeting.md',
+    description: 'Recurring 1-on-1 check-in covering wins, blockers, career growth, and feedback',
+    updatedAt: 1760000000000,
+    content: `---
+title: "1:1 Sync — <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "Draft"
+tags: [meeting, 1on1, coaching]
+---
+
+# 1-on-1 Sync: <% title %>
+
+- **Date:** <% weekday %>, <% date %> (<% time %>)
+- **Participants:** <% user %> & 
+
+## 1. Top of Mind & Check-In
+- How are energy levels and workload feeling this week (W<% week_number %>)?
+- <% cursor %>
+
+## 2. Wins & Progress Since Last Sync
+- 
+
+## 3. Roadblocks & Support Needed
+- 
+
+## 4. Career Growth & Feedback
+- 
+
+## 5. Action Items for Next 1-on-1 (<% next_week %>)
+- [ ] **@<% user %>** — 
+- [ ] 
+`
+  },
+  {
+    id: 'tpl-meeting-sprint',
+    name: 'Sprint Planning & Retrospective.md',
+    description: 'Agile sprint goals, capacity planning, retrospective (Went Well / Improve), and commitments',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Sprint W<% week_number %> Planning & Retro"
+date: "<% date %>"
+author: "<% user %>"
+status: "In Progress"
+tags: [meeting, sprint, agile, retro]
+---
+
+# Sprint W<% week_number %> Planning & Retrospective (<% quarter %> <% year %>)
+
+- **Date:** <% date %> · **Facilitator:** <% user %>
+- **Workspace:** <% root_name %> / <% folder_name %>
+
+## 1. Sprint Goal
+> [!NOTE]
+> <% cursor %>Define the primary outcome this sprint delivers for users.
+
+## 2. Sprint Retrospective (Previous Sprint)
+| What Went Well | What Could Be Improved | Actionable Experiments |
+| :--- | :--- | :--- |
+| • | • | • |
+
+## 3. Committed Deliverables & Owners
+- [ ] **[P0]** 
+- [ ] **[P1]** 
+- [ ] **[P2]** 
+
+## 4. Risks, Dependencies & Out-of-Office
+- 
+`
+  },
+  {
+    id: 'tpl-meeting-executive',
+    name: 'Executive & Stakeholder Review.md',
+    description: 'High-level status update, KPI metrics, strategic decisions needed, and budget/timeline risks',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Stakeholder Review: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "In Review"
+tags: [meeting, executive, strategy]
+---
+
+# Executive & Stakeholder Review: <% title %>
+
+- **Date:** <% date_long %> · **Presenter:** <% user %>
+- **Overall Health:** Green / Yellow / Red
+
+## 1. TL;DR Executive Summary
+<% cursor %>
+
+## 2. Key Milestones & Metrics
+| Milestone / Metric | Target | Current | Status |
+| :--- | :--- | :--- | :--- |
+| Milestone 1 | \`<% next_month %>\` | On Track | Green |
+| Milestone 2 | \`<% quarter %>\` | At Risk | Yellow |
+
+## 3. Key Decisions Required Today
+1. **Decision 1:** 
+   - *Recommendation:* 
+
+## 4. Next Steps & Owners
+- [ ] 
+`
+  },
+  {
+    id: 'tpl-adr',
+    name: 'ADR - Architecture Decision Record.md',
+    description: 'Document technical decisions, evaluated options, trade-offs, and long-term consequences',
+    updatedAt: 1760000000000,
+    content: `---
+title: "ADR: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "Approved"
+tags: [architecture, adr, decision]
+---
+
+# ADR-<% short_id %>: <% title %>
+
+- **Date:** <% date %> · **Author:** <% user %>
+- **Status:** Proposed / Accepted / Superseded
+- **Git Branch:** \`<% git_branch %>\`
+
+## 1. Context & Problem Statement
+<% cursor %>
+
+## 2. Decision Drivers
+- 
+- 
+
+## 3. Considered Options
+1. **Option A (Selected):** 
+2. **Option B:** 
+3. **Option C:** 
+
+## 4. Decision Outcome & Consequences
+- **Positive Consequences:** 
+- **Trade-offs & Mitigations:** 
+`
+  },
+  {
+    id: 'tpl-postmortem',
+    name: 'Post-Mortem & Root Cause Analysis (RCA).md',
+    description: 'Blameless operational post-mortem with 5 Whys analysis, impact metrics, and preventative actions',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Post-Mortem: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "In Review"
+tags: [postmortem, rca, incident, ops]
+---
+
+# Blameless Post-Mortem (RCA): <% title %>
+
+- **Date of Incident:** <% date %>
+- **Author:** <% user %>
+- **Duration / Customer Impact:** 
+
+## 1. Incident Summary
+<% cursor %>
+
+## 2. Root Cause Analysis (The 5 Whys)
+1. **Why did the service degrade?** 
+2. **Why did that condition occur?** 
+3. **Why wasn't it caught by automated checks?** 
+4. **Why did recovery take as long as it did?** 
+5. **What systemic factor allowed this?** 
+
+## 3. What Went Well vs. Where We Got Lucky
+- **Went Well:** 
+- **Where We Got Lucky:** 
+
+## 4. Preventative Action Items
+- [ ] **[Prevent]** 
+- [ ] **[Detect]** 
+- [ ] **[Mitigate]** 
+`
+  },
+  {
+    id: 'tpl-release-runbook',
+    name: 'Production Release & Rollback Runbook.md',
+    description: 'Step-by-step deployment checklist, pre-flight checks, smoke tests, and emergency rollback plan',
+    updatedAt: 1760000000000,
+    content: `---
+title: "Release Runbook: <% title %>"
+date: "<% date %>"
+author: "<% user %>"
+status: "Approved"
+tags: [release, runbook, devops]
+---
+
+# Production Release Runbook: <% title %>
+
+- **Release Manager:** <% user %>
+- **Scheduled Window:** <% date %> at <% time %> (<% timezone %>)
+- **Target Branch / Version:** \`<% git_branch %>\` · v<% app_version %>
+
+## 1. Pre-Flight Readiness Checklist
+- [ ] <% cursor %>All CI/CD unit & E2E suites green
+- [ ] Database migrations reviewed for backward compatibility
+- [ ] Security & dependency checks passed
+
+## 2. Deployment Steps
+1. Tag release commit and trigger production build pipeline
+2. Roll out canary instance and monitor error rates for 15 minutes
+3. Complete full rollout across production nodes
+
+## 3. Post-Deploy Verification (Smoke Tests)
+- [ ] Health endpoint returns \`200 OK\`
+- [ ] Core user workflows verified in production
+- [ ] Telemetry, logs, and latency metrics nominal
+
+## 4. Emergency Rollback Procedure
+> [!WARNING]
+> Trigger immediate rollback if error rate exceeds 1% or P95 latency doubles for >5 minutes.
+
+\`\`\`bash
+git revert HEAD --no-edit && ./scripts/deploy-rollback.sh
+\`\`\`
+`
   }
 ]
+
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')

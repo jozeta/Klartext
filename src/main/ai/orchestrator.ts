@@ -7,7 +7,64 @@ import type {
 import { MultiRootPathGuard } from '../security/path-guard'
 import { calculateHardwareTierAdvice } from './hardware-advisor'
 import { buildSystemPromptForAction, sanitizeAndCleanAIOutput } from './prompts'
+import {
+  generateBuiltInBilingualFallback,
+  isLikelySwedishText
+} from './bilingual-fallback'
 import { MultiRootSearchService } from '../search/search-service'
+
+const RAG_STOP_WORDS = new Set([
+  'vad',
+  'hur',
+  'var',
+  'när',
+  'vem',
+  'vilka',
+  'vilket',
+  'vilken',
+  'finns',
+  'står',
+  'det',
+  'som',
+  'att',
+  'och',
+  'eller',
+  'för',
+  'med',
+  'från',
+  'till',
+  'inom',
+  'under',
+  'över',
+  'hos',
+  'kan',
+  'ska',
+  'har',
+  'inte',
+  'detta',
+  'denna',
+  'dessa',
+  'alla',
+  'what',
+  'how',
+  'where',
+  'when',
+  'who',
+  'which',
+  'the',
+  'and',
+  'for',
+  'are',
+  'with',
+  'about',
+  'from',
+  'this',
+  'that',
+  'does',
+  'have',
+  'into',
+  'from'
+])
 
 export class LocalAIOrchestrator {
   private activeControllers = new Map<string, AbortController>()
@@ -126,12 +183,13 @@ export class LocalAIOrchestrator {
       selectedText: string
       tone?: string
       modelOverride?: string
+      disableBuiltInFallback?: boolean
     },
     onChunk: (event: AIStreamChunkEvent) => void
   ): Promise<string> {
     const aiSettings = this.getSettings().ai
     const baseUrl = this.getValidatedBaseUrl()
-    const model = params.modelOverride || aiSettings.activeModel || 'gemma4:12b'
+    let model = params.modelOverride || aiSettings.activeModel || 'gemma4:12b'
     const systemPrompt = buildSystemPromptForAction(params.action, params.tone)
     const userMessage = [
       params.prompt ? `Instruction: ${params.prompt}` : '',
@@ -147,7 +205,7 @@ export class LocalAIOrchestrator {
     try {
       if (aiSettings.provider === 'ollama') {
         const url = new URL('/api/chat', baseUrl)
-        const res = await fetch(url.toString(), {
+        let res = await fetch(url.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
@@ -161,6 +219,28 @@ export class LocalAIOrchestrator {
             ]
           })
         })
+
+        // If configured model is not pulled in Ollama (404), auto-detect first installed model
+        if (res.status === 404) {
+          const installed = await this.listModels().catch(() => [])
+          if (installed.length > 0 && installed[0].name !== model) {
+            model = installed[0].name
+            res = await fetch(url.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
+              body: JSON.stringify({
+                model,
+                stream: true,
+                keep_alive: aiSettings.keepAlive || '5m',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: userMessage }
+                ]
+              })
+            })
+          }
+        }
 
         if (!res.ok || !res.body) {
           throw new Error(`Local AI request failed with status ${res.status}`)
@@ -258,9 +338,13 @@ export class LocalAIOrchestrator {
         }
       }
 
-      const cleanedFullText = sanitizeAndCleanAIOutput(accumulated, {
+      let cleanedFullText = sanitizeAndCleanAIOutput(accumulated, {
         preserveMermaidFence: params.action === 'mermaid'
       })
+
+      if (!cleanedFullText && !params.disableBuiltInFallback) {
+        cleanedFullText = generateBuiltInBilingualFallback(params)
+      }
 
       onChunk({
         requestId: params.requestId,
@@ -271,6 +355,21 @@ export class LocalAIOrchestrator {
       return cleanedFullText
     } catch (err: any) {
       const isAbort = err?.name === 'AbortError'
+      if (!isAbort && !params.disableBuiltInFallback) {
+        const fallbackText = generateBuiltInBilingualFallback(params)
+        onChunk({
+          requestId: params.requestId,
+          chunk: fallbackText,
+          done: false
+        })
+        onChunk({
+          requestId: params.requestId,
+          chunk: '',
+          done: true,
+          cleanedFullText: fallbackText
+        })
+        return fallbackText
+      }
       const errorMessage = isAbort ? 'Generation cancelled by user' : err?.message || String(err)
       onChunk({
         requestId: params.requestId,
@@ -296,19 +395,30 @@ export class LocalAIOrchestrator {
     answer: string
     citations: Array<{ rootId: string; rootName: string; relativePath: string; excerpt: string }>
   }> {
-    const terms = params.question
-      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    const rawWords = params.question
+      .replace(/[^\p{L}\p{N}\s_-]/gu, ' ')
       .split(/\s+/)
-      .filter((w) => w.length >= 3)
-      .slice(0, 5)
+      .map((w) => w.trim())
+      .filter((w) => w.length >= 2)
 
-    const pattern = terms.length > 0 ? terms.join('|') : params.question
-    const searchHits = await this.searchService.searchAcrossRoots({
+    const filteredTerms = rawWords
+      .filter((w) => !RAG_STOP_WORDS.has(w.toLowerCase()))
+      .slice(0, 6)
+
+    const terms = filteredTerms.length > 0 ? filteredTerms : rawWords.slice(0, 5)
+    const escapedTerms = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const pattern = escapedTerms.length > 0 ? escapedTerms.join('|') : params.question.trim()
+
+    let searchHits = await this.searchService.searchAcrossRoots({
       query: pattern,
       rootIds: params.rootIds,
-      isRegex: terms.length > 1,
+      isRegex: escapedTerms.length > 1,
       caseSensitive: false
     })
+
+    if (searchHits.length === 0) {
+      searchHits = await this.searchService.getDocumentOverviewExcerpts(params.rootIds, 6)
+    }
 
     const topHits = searchHits.slice(0, 6)
     const citations = topHits.map((hit) => ({
@@ -332,20 +442,45 @@ export class LocalAIOrchestrator {
     const prompt = `Answer the question based strictly on the workspace sources below. Cite sources as [Root Name / File Path].\n\nQuestion: ${params.question}\n\nWorkspace Context:\n${contextText || 'No matching documents found.'}`
 
     let finalAnswer = ''
-    await this.streamGeneration(
-      {
-        requestId,
-        action: 'custom',
-        prompt,
-        selectedText: '',
-        modelOverride: params.modelOverride
-      },
-      (ev) => {
-        if (ev.done && ev.cleanedFullText) {
-          finalAnswer = ev.cleanedFullText
+    try {
+      await this.streamGeneration(
+        {
+          requestId,
+          action: 'custom',
+          prompt,
+          selectedText: '',
+          modelOverride: params.modelOverride,
+          disableBuiltInFallback: true
+        },
+        (ev) => {
+          if (ev.done && ev.cleanedFullText) {
+            finalAnswer = ev.cleanedFullText
+          }
         }
+      )
+    } catch {
+      // Fallback to local grounded RAG synthesis when external Ollama/LM Studio server is offline
+    }
+
+    if (!finalAnswer.trim()) {
+      const isSv = isLikelySwedishText(params.question)
+      if (citations.length === 0) {
+        finalAnswer = isSv
+          ? 'Inga matchande dokument hittades i dina monterade arbetsytor för denna fråga.'
+          : 'No matching documents were found across your mounted workspace roots for this question.'
+      } else {
+        const header = isSv
+          ? `Baserat på ${citations.length} dokument i dina monterade arbetsytor:`
+          : `Based on ${citations.length} document${citations.length === 1 ? '' : 's'} across your mounted workspace roots:`
+        const bullets = citations
+          .map(
+            (c) =>
+              `- **[${c.rootName} / ${c.relativePath}]**: ${c.excerpt.replace(/L\d+:\s*/g, '')}`
+          )
+          .join('\n')
+        finalAnswer = `${header}\n\n${bullets}`
       }
-    )
+    }
 
     return {
       answer: finalAnswer,

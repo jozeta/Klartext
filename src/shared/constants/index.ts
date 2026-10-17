@@ -131,3 +131,205 @@ export const DEFAULT_KEYBINDINGS: Record<string, string> = {
   'format.bold': 'Mod+B',
   'format.italic': 'Mod+I'
 }
+
+export const DEFAULT_NORDIC_SAVED_THEMES = [
+  {
+    id: 'nordic-dark-abisko',
+    name: 'Abisko Midnight (Dark)',
+    baseMode: 'dark' as const,
+    highlightColor: '#5E81AC',
+    lightPaperInDarkMode: false,
+    customColors: {
+      bgApp: '#11161D',
+      bgPanel: '#161C24',
+      bgEditor: '#131920',
+      textPrimary: '#D8DEE9'
+    },
+    typography: {
+      bodyFontFamily: '"Avenir Next", Avenir, "Nunito Sans", -apple-system, sans-serif',
+      bodyColor: '#D8DEE9',
+      monoFontFamily: '"SF Mono", Menlo, Monaco, Consolas, monospace',
+      codeFontSizePx: 14,
+      fontSizePx: 16,
+      lineHeight: 1.65,
+      maxLineWidthCh: 82,
+      fullWidth: false,
+      typewriterScrolling: false,
+      headings: {
+        h1: { fontFamily: 'Optima, "Avenir Next", sans-serif', color: '#88C0D0', fontSizeEm: 1.85 },
+        h2: { fontFamily: 'Optima, "Avenir Next", sans-serif', color: '#81A1C1', fontSizeEm: 1.45 },
+        h3: { color: '#8FBCBB', fontSizeEm: 1.2 },
+        h4: { fontSizeEm: 1.08 },
+        h5: { fontSizeEm: 1.0 },
+        h6: { fontSizeEm: 0.92 }
+      }
+    },
+    updatedAt: 1792258200001
+  },
+  {
+    id: 'nordic-dark-sarek',
+    name: 'Sarek Granite (Dark)',
+    baseMode: 'dark' as const,
+    highlightColor: '#7C9A82',
+    lightPaperInDarkMode: false,
+    customColors: {
+      bgApp: '#141716',
+      bgPanel: '#191D1B',
+      bgEditor: '#161A18',
+      textPrimary: '#DCE2DE'
+    },
+    typography: {
+      bodyFontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+      bodyColor: '#DCE2DE',
+      monoFontFamily: '"IBM Plex Mono", "JetBrains Mono", Menlo, monospace',
+      codeFontSizePx: 14,
+      fontSizePx: 16,
+      lineHeight: 1.65,
+      maxLineWidthCh: 82,
+      fullWidth: false,
+      typewriterScrolling: false,
+      headings: {
+        h1: { fontFamily: 'Baskerville, Georgia, serif', color: '#A3BE8C', fontSizeEm: 1.9 },
+        h2: { fontFamily: 'Baskerville, Georgia, serif', color: '#8FA895', fontSizeEm: 1.45 },
+        h3: { color: '#B5C4B9', fontSizeEm: 1.2 },
+        h4: { fontSizeEm: 1.08 },
+        h5: { fontSizeEm: 1.0 },
+        h6: { fontSizeEm: 0.92 }
+      }
+    },
+    updatedAt: 1792258200002
+  },
+  {
+    id: 'nordic-dark-gotland',
+    name: 'Gotland Dusk (Dark)',
+    baseMode: 'dark' as const,
+    highlightColor: '#B48EAD',
+    lightPaperInDarkMode: false,
+    customColors: {
+      bgApp: '#16151A',
+      bgPanel: '#1C1B22',
+      bgEditor: '#18171D',
+      textPrimary: '#E2DFEA'
+    },
+    typography: {
+      bodyFontFamily: 'Charter, "Bitstream Charter", Georgia, serif',
+      bodyColor: '#E2DFEA',
+      monoFontFamily: '"Fira Code", "JetBrains Mono", Monaco, monospace',
+      codeFontSizePx: 14,
+      fontSizePx: 16,
+      lineHeight: 1.7,
+      maxLineWidthCh: 80,
+      fullWidth: false,
+      typewriterScrolling: false,
+      headings: {
+        h1: { fontFamily: 'Palatino, "Palatino Linotype", Georgia, serif', color: '#D0B8CE', fontSizeEm: 1.85 },
+        h2: { fontFamily: 'Palatino, "Palatino Linotype", Georgia, serif', color: '#B48EAD', fontSizeEm: 1.45 },
+        h3: { color: '#9E95B0', fontSizeEm: 1.2 },
+        h4: { fontSizeEm: 1.08 },
+        h5: { fontSizeEm: 1.0 },
+        h6: { fontSizeEm: 0.92 }
+      }
+    },
+    updatedAt: 1792258200003
+  },
+  {
+    id: 'nordic-light-stockholm',
+    name: 'Stockholm Linen (Light)',
+    baseMode: 'light' as const,
+    highlightColor: '#3B6E8C',
+    lightPaperInDarkMode: false,
+    customColors: {
+      bgApp: '#F4F1EA',
+      bgPanel: '#EBE7DF',
+      bgEditor: '#FAF8F5',
+      textPrimary: '#23282E'
+    },
+    typography: {
+      bodyFontFamily: 'Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif',
+      bodyColor: '#23282E',
+      monoFontFamily: '"SF Mono", Menlo, Monaco, Consolas, monospace',
+      codeFontSizePx: 14,
+      fontSizePx: 16,
+      lineHeight: 1.7,
+      maxLineWidthCh: 80,
+      fullWidth: false,
+      typewriterScrolling: false,
+      headings: {
+        h1: { fontFamily: 'Optima, "Avenir Next", sans-serif', color: '#1F3A4D', fontSizeEm: 1.85 },
+        h2: { fontFamily: 'Optima, "Avenir Next", sans-serif', color: '#2C5168', fontSizeEm: 1.45 },
+        h3: { color: '#3B6E8C', fontSizeEm: 1.2 },
+        h4: { fontSizeEm: 1.08 },
+        h5: { fontSizeEm: 1.0 },
+        h6: { fontSizeEm: 0.92 }
+      }
+    },
+    updatedAt: 1792258200004
+  },
+  {
+    id: 'nordic-light-uppsala',
+    name: 'Uppsala Birch (Light)',
+    baseMode: 'light' as const,
+    highlightColor: '#4A6B5D',
+    lightPaperInDarkMode: false,
+    customColors: {
+      bgApp: '#F2F4F2',
+      bgPanel: '#E6EAE6',
+      bgEditor: '#F9FBF9',
+      textPrimary: '#1E2622'
+    },
+    typography: {
+      bodyFontFamily: '"Avenir Next", Avenir, "Nunito Sans", -apple-system, sans-serif',
+      bodyColor: '#1E2622',
+      monoFontFamily: '"IBM Plex Mono", "JetBrains Mono", Menlo, monospace',
+      codeFontSizePx: 14,
+      fontSizePx: 16,
+      lineHeight: 1.65,
+      maxLineWidthCh: 82,
+      fullWidth: false,
+      typewriterScrolling: false,
+      headings: {
+        h1: { fontFamily: '"Gill Sans", "Avenir Next", sans-serif', color: '#294237', fontSizeEm: 1.85 },
+        h2: { fontFamily: '"Gill Sans", "Avenir Next", sans-serif', color: '#3A594B', fontSizeEm: 1.45 },
+        h3: { color: '#4A6B5D', fontSizeEm: 1.2 },
+        h4: { fontSizeEm: 1.08 },
+        h5: { fontSizeEm: 1.0 },
+        h6: { fontSizeEm: 0.92 }
+      }
+    },
+    updatedAt: 1792258200005
+  },
+  {
+    id: 'nordic-light-skagen',
+    name: 'Skagen Mist (Light)',
+    baseMode: 'light' as const,
+    highlightColor: '#8C5A3C',
+    lightPaperInDarkMode: false,
+    customColors: {
+      bgApp: '#F3F4F6',
+      bgPanel: '#E8ECEF',
+      bgEditor: '#FFFFFF',
+      textPrimary: '#1F242B'
+    },
+    typography: {
+      bodyFontFamily: 'Baskerville, Georgia, serif',
+      bodyColor: '#1F242B',
+      monoFontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace',
+      codeFontSizePx: 14,
+      fontSizePx: 16,
+      lineHeight: 1.68,
+      maxLineWidthCh: 80,
+      fullWidth: false,
+      typewriterScrolling: false,
+      headings: {
+        h1: { fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif', color: '#2A3441', fontSizeEm: 1.85 },
+        h2: { fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif', color: '#5A4638', fontSizeEm: 1.45 },
+        h3: { color: '#8C5A3C', fontSizeEm: 1.2 },
+        h4: { fontSizeEm: 1.08 },
+        h5: { fontSizeEm: 1.0 },
+        h6: { fontSizeEm: 0.92 }
+      }
+    },
+    updatedAt: 1792258200006
+  }
+]
+

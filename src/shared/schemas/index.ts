@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_NORDIC_SAVED_THEMES } from '../constants'
 
 export const EditModeSchema = z.enum(['source', 'inline', 'split'])
 export type EditMode = z.infer<typeof EditModeSchema>
@@ -117,18 +118,57 @@ export const SavedThemeSchema = z.object({
   customColors: CustomThemeColorsSchema.optional(),
   lightPaperInDarkMode: z.boolean().default(false),
   typography: TypographySettingsSchema.optional(),
-  updatedAt: z.number().default(() => Date.now())
+  updatedAt: z.number().optional()
 })
 export type SavedTheme = z.infer<typeof SavedThemeSchema>
+
+export const WorkspaceSortOrderSchema = z.enum(['name-asc', 'name-desc', 'custom'])
+export type WorkspaceSortOrder = z.infer<typeof WorkspaceSortOrderSchema>
+
+export const CustomFrontmatterFilterRuleSchema = z.object({
+  key: z.string(),
+  valuePattern: z.string()
+})
+export type CustomFrontmatterFilterRule = z.infer<typeof CustomFrontmatterFilterRuleSchema>
+
+export const DynamicFilterRuleSchema = z.object({
+  tagsPattern: z.string().default(''),
+  titlePattern: z.string().default(''),
+  authorPattern: z.string().default(''),
+  statusPattern: z.string().default(''),
+  dateFrom: z.string().default(''),
+  dateTo: z.string().default(''),
+  customFrontmatterFilters: z.array(CustomFrontmatterFilterRuleSchema).default([])
+})
+export type DynamicFilterRule = z.infer<typeof DynamicFilterRuleSchema>
+
+export const DynamicFolderDefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  icon: z.string().optional(),
+  color: z.string().optional(),
+  rules: DynamicFilterRuleSchema.default({})
+})
+export type DynamicFolderDef = z.infer<typeof DynamicFolderDefSchema>
+
+export const DynamicWorkspaceDefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  mode: z.enum(['root-content', 'dynamic-folders']).default('dynamic-folders'),
+  rootRules: DynamicFilterRuleSchema.default({}),
+  folders: z.array(DynamicFolderDefSchema).default([])
+})
+export type DynamicWorkspaceDef = z.infer<typeof DynamicWorkspaceDefSchema>
 
 export const AppSettingsSchema = z.object({
   theme: ThemeModeSchema.default('system'),
   accentColorOverride: z.string().optional(),
   highlightColor: z.string().optional(),
   customHighlightColors: z.array(z.string()).default([]),
-  savedThemes: z.array(SavedThemeSchema).default([]),
+  savedThemes: z.array(SavedThemeSchema).default(DEFAULT_NORDIC_SAVED_THEMES),
   activeSavedThemeId: z.string().nullable().default(null),
   customThemeColors: CustomThemeColorsSchema.optional(),
+  dynamicWorkspaces: z.array(DynamicWorkspaceDefSchema).default([]),
   defaultEditMode: EditModeSchema.default('inline'),
   floatingToolbarEnabled: z.boolean().default(true),
   formattingToolbarVisible: z.boolean().default(false),
@@ -157,6 +197,10 @@ export const AppSettingsSchema = z.object({
   helpPanelVisible: z.boolean().default(false),
   helpSidebarWidth: z.number().min(200).max(760).default(380),
   lastActiveRightPanel: z.enum(['frontmatter', 'ai', 'templates', 'help']).default('frontmatter'),
+  workspaceSortOrder: WorkspaceSortOrderSchema.default('name-asc'),
+  workspaceFoldersOnTop: z.boolean().default(true),
+  workspaceCustomOrder: z.record(z.string(), z.array(z.string())).default({}),
+  stickyItems: z.record(z.string(), z.boolean()).default({}),
   folderIcons: z.record(z.string(), z.string()).default({}),
   folderColors: z.record(z.string(), z.string()).default({}),
   collapsedDirs: z.record(z.string(), z.boolean()).default({}),
@@ -179,6 +223,41 @@ export const AppSettingsSchema = z.object({
       })
     )
     .optional(),
+  frontmatterStatusOptions: z
+    .array(z.string())
+    .default(['Draft', 'In Progress', 'In Review', 'Approved', 'Published', 'Archived']),
+  frontmatterKnownTags: z
+    .array(z.string())
+    .default([
+      'meeting',
+      'notes',
+      'daily',
+      'rfc',
+      'security',
+      'architecture',
+      'incident',
+      'audit',
+      'todo'
+    ]),
+  globalFrontmatterProperties: z
+    .array(
+      z.object({
+        key: z.string(),
+        type: z.enum(['text', 'date', 'dropdown', 'tags', 'number', 'checkbox']).default('text'),
+        options: z.array(z.string()).default([])
+      })
+    )
+    .default([]),
+  localFrontmatterPropertyTypes: z
+    .record(
+      z.string(),
+      z.object({
+        key: z.string(),
+        type: z.enum(['text', 'date', 'dropdown', 'tags', 'number', 'checkbox']).default('text'),
+        options: z.array(z.string()).default([])
+      })
+    )
+    .default({}),
   splitViewPercent: z.number().min(20).max(80).default(50),
   statusBarVisible: z.boolean().default(true),
   sidebarControlBarVisible: z.boolean().default(true),
@@ -207,6 +286,12 @@ export const AppSettingsSchema = z.object({
   ai: AISettingsSchema.default({}),
   keybindings: z.record(z.string(), z.string()).default({})
 })
+export type FrontmatterFieldType = 'text' | 'date' | 'dropdown' | 'tags' | 'number' | 'checkbox'
+export interface CustomFrontmatterPropertyDef {
+  key: string
+  type: FrontmatterFieldType
+  options: string[]
+}
 export type AppSettings = z.infer<typeof AppSettingsSchema>
 
 // IPC Request Schemas
@@ -298,6 +383,7 @@ export const AIStreamRequestSchema = z.object({
     'tone',
     'translate-sv-en',
     'translate-en-sv',
+    'translate-sv',
     'format-table',
     'format-list',
     'mermaid',

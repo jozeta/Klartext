@@ -496,7 +496,7 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
       {
         gitCommit: 'a1b2c3d',
         uptime: '4d 12h',
-        cpuCores: '12'
+        cpuCores: 12
       },
       async (requested) => {
         const out: Record<string, string> = {}
@@ -520,6 +520,258 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
     expect(asyncEval.output).toContain('Env: production')
     expect(asyncEval.output).toContain('Sys: a1b2c3d | 4d 12h | 12 cores')
   })
+
+  it('sorts workspace tree nodes by Name A-Z, Name Z-A, Custom Order, Folders on Top, and Sticky items (folders first then files, stickies sorted A-Z)', async () => {
+    const {
+      sortWorkspaceTreeNodes,
+      isWorkspaceItemSticky
+    } = await import('../../renderer/features/workspace/MultiRootSidebar')
+
+    const sampleNodes = [
+      { name: 'Beta-Folder', relativePath: 'Beta-Folder', rootId: 'r1', isDirectory: true },
+      { name: 'Alpha-Folder', relativePath: 'Alpha-Folder', rootId: 'r1', isDirectory: true },
+      { name: 'Zeta-Folder', relativePath: 'Zeta-Folder', rootId: 'r1', isDirectory: true },
+      { name: 'charlie.md', relativePath: 'charlie.md', rootId: 'r1', isDirectory: false },
+      { name: 'alpha.md', relativePath: 'alpha.md', rootId: 'r1', isDirectory: false },
+      { name: 'omega.md', relativePath: 'omega.md', rootId: 'r1', isDirectory: false }
+    ]
+
+    // 1. Default Name A-Z with Folders on Top
+    const sortedAsc = sortWorkspaceTreeNodes('r1', '', sampleNodes, {
+      sortOrder: 'name-asc',
+      foldersOnTop: true
+    })
+    expect(sortedAsc.map((n) => n.name)).toEqual([
+      'Alpha-Folder',
+      'Beta-Folder',
+      'Zeta-Folder',
+      'alpha.md',
+      'charlie.md',
+      'omega.md'
+    ])
+
+    // 2. Name Z-A with Folders on Top
+    const sortedDesc = sortWorkspaceTreeNodes('r1', '', sampleNodes, {
+      sortOrder: 'name-desc',
+      foldersOnTop: true
+    })
+    expect(sortedDesc.map((n) => n.name)).toEqual([
+      'Zeta-Folder',
+      'Beta-Folder',
+      'Alpha-Folder',
+      'omega.md',
+      'charlie.md',
+      'alpha.md'
+    ])
+
+    // 3. Name A-Z with Folders on Top UNCHECKED (interleaved folders & files)
+    const sortedInterleaved = sortWorkspaceTreeNodes('r1', '', sampleNodes, {
+      sortOrder: 'name-asc',
+      foldersOnTop: false
+    })
+    expect(sortedInterleaved.map((n) => n.name)).toEqual([
+      'Alpha-Folder',
+      'alpha.md',
+      'Beta-Folder',
+      'charlie.md',
+      'omega.md',
+      'Zeta-Folder'
+    ])
+
+    // 4. Custom Sort Order with Folders on Top
+    const sortedCustom = sortWorkspaceTreeNodes('r1', '', sampleNodes, {
+      sortOrder: 'custom',
+      foldersOnTop: true,
+      customOrder: {
+        'r1/': ['Zeta-Folder', 'Alpha-Folder', 'Beta-Folder', 'omega.md', 'alpha.md', 'charlie.md']
+      }
+    })
+    expect(sortedCustom.map((n) => n.name)).toEqual([
+      'Zeta-Folder',
+      'Alpha-Folder',
+      'Beta-Folder',
+      'omega.md',
+      'alpha.md',
+      'charlie.md'
+    ])
+
+    // 5. Sticky items: Sticky folders first (sorted A-Z), then Sticky files (sorted A-Z), even when non-sticky sort is Z-A and foldersOnTop is false
+    const stickyMap = {
+      'r1/Zeta-Folder': true,
+      'r1/Beta-Folder': true,
+      'r1/omega.md': true,
+      'r1/charlie.md': true
+    }
+    expect(isWorkspaceItemSticky('r1', 'Zeta-Folder', stickyMap)).toBe(true)
+    const sortedWithStickies = sortWorkspaceTreeNodes('r1', '', sampleNodes, {
+      sortOrder: 'name-desc',
+      foldersOnTop: false,
+      stickyItems: stickyMap
+    })
+    expect(sortedWithStickies.map((n) => n.name)).toEqual([
+      // Sticky folders sorted A-Z
+      'Beta-Folder',
+      'Zeta-Folder',
+      // Sticky files sorted A-Z
+      'charlie.md',
+      'omega.md',
+      // Remaining non-sticky items sorted Z-A (alpha.md > Alpha-Folder)
+      'alpha.md',
+      'Alpha-Folder'
+    ])
+  })
+
+  it('includes IT Security, Meetings, and Engineering built-in templates and validates Frontmatter Property schemas', async () => {
+    const { DEFAULT_BUILT_IN_TEMPLATES } = await import('../../shared/templates/template-engine')
+    const { AppSettingsSchema } = await import('../../shared/schemas')
+
+    const templateIds = DEFAULT_BUILT_IN_TEMPLATES.map((t) => t.id)
+    expect(templateIds).toContain('tpl-sec-incident')
+    expect(templateIds).toContain('tpl-sec-pentest')
+    expect(templateIds).toContain('tpl-sec-threat-model')
+    expect(templateIds).toContain('tpl-sec-hardening')
+    expect(templateIds).toContain('tpl-meeting-1on1')
+    expect(templateIds).toContain('tpl-meeting-sprint')
+    expect(templateIds).toContain('tpl-meeting-executive')
+    expect(templateIds).toContain('tpl-adr')
+    expect(templateIds).toContain('tpl-postmortem')
+    expect(templateIds).toContain('tpl-release-runbook')
+
+    const parsedSettings = AppSettingsSchema.parse({
+      frontmatterStatusOptions: ['Draft', 'In Progress', 'Approved', 'Security Verified'],
+      frontmatterKnownTags: ['security', 'soc', 'pentest', 'meeting'],
+      globalFrontmatterProperties: [
+        { key: 'review_date', type: 'date', options: [] },
+        { key: 'classification', type: 'dropdown', options: ['TLP:CLEAR', 'TLP:AMBER', 'TLP:RED'] }
+      ]
+    })
+    expect(parsedSettings.frontmatterStatusOptions).toContain('Security Verified')
+    expect(parsedSettings.globalFrontmatterProperties).toHaveLength(2)
+    expect(parsedSettings.globalFrontmatterProperties[0].type).toBe('date')
+    expect(parsedSettings.globalFrontmatterProperties[1].options).toContain('TLP:AMBER')
+  })
+
+  it('rewrites Swedish and English text cleanly without strikethroughs and fixes Swedish särskrivningar', async () => {
+    const {
+      generateBuiltInBilingualFallback,
+      isLikelySwedishText
+    } = await import('../../main/ai/bilingual-fallback')
+    const { sanitizeAndCleanAIOutput } = await import('../../main/ai/prompts')
+
+    const swInput =
+      '---\ntitle: Rapport\n---\nvi behöver kolla på våran användar gränssnitt och informations säkerhet i dagsläget'
+    expect(isLikelySwedishText(swInput)).toBe(true)
+
+    const rewrittenSv = generateBuiltInBilingualFallback({
+      action: 'improve',
+      prompt: 'Skriv om texten',
+      selectedText: swInput
+    })
+    expect(rewrittenSv).toContain('title: Rapport')
+    expect(rewrittenSv).toContain('användargränssnitt')
+    expect(rewrittenSv).toContain('informationssäkerhet')
+    expect(rewrittenSv).toContain('granska')
+    expect(rewrittenSv).toContain('för närvarande')
+    expect(rewrittenSv).not.toContain('~~')
+
+    // Ensure accidental whole-block ~~strikethrough~~ from an LLM is unwrapped cleanly
+    const accidentalStrike = '~~Detta är en omskriven svensk text utan genomstrykning.~~'
+    expect(sanitizeAndCleanAIOutput(accidentalStrike)).toBe(
+      'Detta är en omskriven svensk text utan genomstrykning.'
+    )
+  })
+
+  it('includes 6 sober Nordic saved themes (3 dark and 3 light) with distinct fonts and colors', async () => {
+    const { DEFAULT_NORDIC_SAVED_THEMES } = await import('../../shared/constants')
+    const { AppSettingsSchema } = await import('../../shared/schemas')
+
+    expect(DEFAULT_NORDIC_SAVED_THEMES).toHaveLength(6)
+    const darkThemes = DEFAULT_NORDIC_SAVED_THEMES.filter((t) => t.baseMode === 'dark')
+    const lightThemes = DEFAULT_NORDIC_SAVED_THEMES.filter((t) => t.baseMode === 'light')
+    expect(darkThemes).toHaveLength(3)
+    expect(lightThemes).toHaveLength(3)
+
+    for (const theme of DEFAULT_NORDIC_SAVED_THEMES) {
+      expect(theme.customColors?.bgApp).toBeTruthy()
+      expect(theme.customColors?.bgEditor).toBeTruthy()
+      expect(theme.customColors?.textPrimary).toBeTruthy()
+      expect(theme.typography?.bodyFontFamily).toBeTruthy()
+      expect(theme.typography?.monoFontFamily).toBeTruthy()
+    }
+
+    const parsed = AppSettingsSchema.parse({})
+    expect(parsed.savedThemes.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('filters documents in Dynamic Workspaces and Dynamic Folders using wildcards and all frontmatter properties', async () => {
+    const {
+      matchesDynamicFilterRule,
+      matchWildcardPattern
+    } = await import('../../shared/markdown/dynamic-workspace')
+
+    expect(matchWildcardPattern('sec-incident-2026', 'sec-*')).toBe(true)
+    expect(matchWildcardPattern('sec-incident-2026', '*2026')).toBe(true)
+    expect(matchWildcardPattern('sec-incident-2026', 'rfc-*')).toBe(false)
+
+    const sampleDocs = [
+      {
+        rootId: 'r1',
+        rootName: 'SecOps',
+        relativePath: 'incidents/inc-01.md',
+        name: 'inc-01.md',
+        content: [
+          '---',
+          'title: Firewall Breach Analysis',
+          'date: 2026-10-15',
+          'author: Alice Lindqvist',
+          'status: In Progress',
+          'tags: [security, incident-p1, soc]',
+          'tlp: TLP:AMBER+STRICT',
+          'severity: P1-Critical',
+          '---',
+          '# Firewall Breach Analysis',
+          'Details here.'
+        ].join('\n')
+      },
+      {
+        rootId: 'r2',
+        rootName: 'Product',
+        relativePath: 'roadmap-2026.md',
+        name: 'roadmap-2026.md',
+        content: [
+          '---',
+          'title: Q4 Architecture Roadmap',
+          'date: 2026-11-01',
+          'author: Erik Sjöberg',
+          'status: Approved',
+          'tags: [architecture, planning]',
+          'tlp: TLP:CLEAR',
+          '---',
+          '# Q4 Architecture Roadmap'
+        ].join('\n')
+      }
+    ]
+
+    // Wildcard tag + date range + custom frontmatter property
+    const secRule = {
+      tagsPattern: 'inc*, soc',
+      titlePattern: '*Breach*',
+      authorPattern: 'Alice*',
+      statusPattern: '*Progress*',
+      dateFrom: '2026-10-01',
+      dateTo: '2026-10-31',
+      customFrontmatterFilters: [
+        { key: 'tlp', valuePattern: 'TLP:AMBER*' },
+        { key: 'sev*', valuePattern: 'P1*' }
+      ]
+    }
+
+    expect(matchesDynamicFilterRule(sampleDocs[0], secRule)).toBe(true)
+    expect(matchesDynamicFilterRule(sampleDocs[1], secRule)).toBe(false)
+  })
 })
+
+
+
 
 

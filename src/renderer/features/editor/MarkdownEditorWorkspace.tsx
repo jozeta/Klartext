@@ -1851,11 +1851,11 @@ export const MarkdownEditorWorkspace: React.FC<{
               : 'opacity-0 pointer-events-none'
           }`}
         >
-          {/* Row 1: Inline Text Styles, Headings, Collapsible & Blockquote (+ AI Rewrite when enabled) */}
+          {/* Row 1: Inline Text Styles, Headings, Collapsible & Blockquote (+ AI Improve Text & AI Fix Grammar when enabled) */}
           <div
             data-testid="floating-toolbar-row-1"
             style={{
-              gridTemplateColumns: `repeat(${aiEnabled ? 14 : 13}, minmax(26px, 1fr))`
+              gridTemplateColumns: `repeat(${aiEnabled ? 15 : 13}, minmax(26px, 1fr))`
             }}
             className="w-full grid gap-0.5 items-center"
           >
@@ -2016,30 +2016,48 @@ export const MarkdownEditorWorkspace: React.FC<{
               <ChevronRightSquare className="w-3.5 h-3.5" />
             </button>
             {aiEnabled && (
-              <button
-                type="button"
-                data-tooltip="AI Rewrite"
-                aria-label="AI Rewrite"
-                data-testid="floating-ai-improve"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  onTriggerAIQuickAction(
-                    'improve',
-                    (activeFloatingCoords || fadingOutCoords)!.selectedText
-                  )
-                }}
-                className="p-1 rounded bg-accent text-white font-medium flex items-center justify-center"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  data-tooltip="AI Improve Text"
+                  aria-label="AI Improve Text"
+                  data-testid="floating-ai-improve"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    onTriggerAIQuickAction(
+                      'improve',
+                      (activeFloatingCoords || fadingOutCoords)!.selectedText
+                    )
+                  }}
+                  className="p-1 rounded bg-accent text-white font-medium flex items-center justify-center"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  data-tooltip="AI Fix Grammar"
+                  aria-label="AI Fix Grammar"
+                  data-testid="floating-ai-grammar"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    onTriggerAIQuickAction(
+                      'grammar',
+                      (activeFloatingCoords || fadingOutCoords)!.selectedText
+                    )
+                  }}
+                  className="p-1 rounded bg-secondary text-accent hover:bg-accent hover:text-white font-medium flex items-center justify-center"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                </button>
+              </>
             )}
           </div>
 
-          {/* Row 2: Callouts, Lists, Tables, Blocks, Links, Media, Icons, Diagrams & Clear (+ AI Translate when enabled) */}
+          {/* Row 2: Callouts, Lists, Tables, Blocks, Links, Media, Icons, Diagrams & Clear (+ AI Translate EN->SV & SV->EN when enabled) */}
           <div
             data-testid="floating-toolbar-row-2"
             style={{
-              gridTemplateColumns: `repeat(${aiEnabled ? 14 : 13}, minmax(26px, 1fr))`,
+              gridTemplateColumns: `repeat(${aiEnabled ? 15 : 13}, minmax(26px, 1fr))`,
               borderColor: 'color-mix(in srgb, var(--border-subtle) 15%, transparent)'
             }}
             className="w-full grid gap-0.5 items-center border-t border-subtle/15 pt-1"
@@ -2203,22 +2221,40 @@ export const MarkdownEditorWorkspace: React.FC<{
               <Workflow className="w-3.5 h-3.5" />
             </button>
             {aiEnabled && (
-              <button
-                type="button"
-                data-tooltip="Translate"
-                aria-label="Translate"
-                data-testid="floating-ai-translate-sv"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  onTriggerAIQuickAction(
-                    'translate-sv',
-                    (activeFloatingCoords || fadingOutCoords)!.selectedText
-                  )
-                }}
-                className="p-1 rounded bg-secondary text-primary hover:border-accent flex items-center justify-center"
-              >
-                <Languages className="w-3.5 h-3.5" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  data-tooltip="AI Translate EN -> SV"
+                  aria-label="AI Translate EN -> SV"
+                  data-testid="floating-ai-translate-en-sv"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    onTriggerAIQuickAction(
+                      'translate-en-sv',
+                      (activeFloatingCoords || fadingOutCoords)!.selectedText
+                    )
+                  }}
+                  className="p-1 rounded bg-secondary text-primary hover:border-accent flex items-center justify-center text-[9px] font-bold tracking-tighter"
+                >
+                  EN→SV
+                </button>
+                <button
+                  type="button"
+                  data-tooltip="AI Translate SV -> EN"
+                  aria-label="AI Translate SV -> EN"
+                  data-testid="floating-ai-translate-sv-en"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    onTriggerAIQuickAction(
+                      'translate-sv-en',
+                      (activeFloatingCoords || fadingOutCoords)!.selectedText
+                    )
+                  }}
+                  className="p-1 rounded bg-secondary text-primary hover:border-accent flex items-center justify-center text-[9px] font-bold tracking-tighter"
+                >
+                  SV→EN
+                </button>
+              </>
             )}
           </div>
         </div>

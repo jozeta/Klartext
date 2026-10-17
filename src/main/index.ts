@@ -253,6 +253,14 @@ app.whenReady().then(() => {
           accelerator: 'CmdOrCtrl+O',
           click: () => sendMenuAction('open-folder')
         },
+        {
+          label: 'Add Git Workspace...',
+          click: () => sendMenuAction('open-git-workspace-wizard')
+        },
+        {
+          label: 'Create a New Dynamic Workspace...',
+          click: () => sendMenuAction('open-dynamic-workspace-wizard')
+        },
         { type: 'separator' },
         {
           label: 'Export to Standalone HTML...',
@@ -482,13 +490,12 @@ app.whenReady().then(() => {
           click: () => sendMenuAction('help:variables')
         },
         {
+          label: 'Local AI & Workspace Q&A Guide...',
+          click: () => sendMenuAction('help:ai')
+        },
+        {
           label: 'Smart Editing & Shortcuts...',
           click: () => sendMenuAction('help:shortcuts')
-        },
-        { type: 'separator' },
-        {
-          label: 'Toggle Right Templates Panel (<% %>)',
-          click: () => sendMenuAction('toggle-templates')
         }
       ]
     }

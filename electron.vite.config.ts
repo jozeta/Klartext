@@ -47,6 +47,13 @@ export default defineConfig({
         '@shared': resolve('src/shared')
       }
     },
+    build: {
+      rollupOptions: {
+        output: {
+          inlineDynamicImports: true
+        }
+      }
+    },
     plugins: [react()]
   }
 })

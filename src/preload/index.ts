@@ -90,7 +90,7 @@ export const klartextApi = {
   evaluatePowerTemplate: (payload: {
     expressions: string[]
     cwd?: string
-  }): Promise<{ powerVariables: Record<string, string> }> =>
+  }): Promise<Record<string, string>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TEMPLATE_EVALUATE_POWER, payload),
   checkCrossRootAssets: (sourceRootId: string, sourceRelativePath: string): Promise<string[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.DOC_CHECK_CROSS_ROOT_ASSETS, {

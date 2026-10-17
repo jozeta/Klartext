@@ -101,10 +101,15 @@ export const Upload: UntitledIconComponent = UntitledIcons.Upload01
 export const Smile: UntitledIconComponent = UntitledIcons.FaceSmile
 export const Sun: UntitledIconComponent = UntitledIcons.Sun
 export const Moon: UntitledIconComponent = UntitledIcons.Moon01
+export const Pin: UntitledIconComponent = UntitledIcons.Pin01
+export const ArrowUp: UntitledIconComponent = UntitledIcons.ArrowUp
+export const ArrowDown: UntitledIconComponent = UntitledIcons.ArrowDown
+export const ArrowUpDown: UntitledIconComponent = UntitledIcons.SwitchVertical01
 
 export interface UntitledCatalogIconItem {
   id: string
   name: string
+  label?: string
   kebab: string
   category: string
   Icon: UntitledIconComponent

@@ -43,19 +43,103 @@ import {
   Database,
   Briefcase,
   Tag,
-   type LucideIcon
+  Pin,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  type LucideIcon
 } from '../../components/icons/untitled-icons'
 import type {
   BacklinkItem,
+  DynamicFolderDef,
+  DynamicWorkspaceDef,
   EditMode,
   FileTreeNode,
   GitRepoStatus,
   SearchFileResult,
-  WorkspaceRoot
+  WorkspaceRoot,
+  WorkspaceSortOrder
 } from '../../../shared/types'
 import type { HeadingItem } from '../../../shared/markdown/pipeline'
+import {
+  formatDynamicRuleSummary,
+  matchesDynamicFilterRule,
+  type DynamicCandidateDocument
+} from '../../../shared/markdown/dynamic-workspace'
 
 export type LeftSidebarTab = 'explorer' | 'search' | 'outline' | 'backlinks' | 'git'
+
+export interface WorkspaceTreeSortOptions {
+  sortOrder: WorkspaceSortOrder
+  foldersOnTop: boolean
+  customOrder?: Record<string, string[]>
+  stickyItems?: Record<string, boolean>
+}
+
+export function isWorkspaceItemSticky(
+  rootId: string,
+  relativePath: string,
+  stickyItems: Record<string, boolean> = {}
+): boolean {
+  return Boolean(
+    stickyItems[`${rootId}/${relativePath}`] || stickyItems[`${rootId}::${relativePath}`]
+  )
+}
+
+export function sortWorkspaceTreeNodes(
+  rootId: string,
+  parentRelPath: string,
+  nodes: FileTreeNode[],
+  options: WorkspaceTreeSortOptions
+): FileTreeNode[] {
+  const {
+    sortOrder = 'name-asc',
+    foldersOnTop = true,
+    customOrder = {},
+    stickyItems = {}
+  } = options
+  const dirOrderKey = `${rootId}/${parentRelPath}`
+  const customList =
+    customOrder[dirOrderKey] || (parentRelPath === '' ? customOrder[rootId] : undefined) || []
+
+  return [...nodes].sort((a, b) => {
+    const aSticky = isWorkspaceItemSticky(rootId, a.relativePath, stickyItems)
+    const bSticky = isWorkspaceItemSticky(rootId, b.relativePath, stickyItems)
+
+    // 1. Sticky items always appear first in their folder
+    if (aSticky !== bSticky) {
+      return aSticky ? -1 : 1
+    }
+
+    // 2. Among sticky items: folders first, then files, sorted A-Z
+    if (aSticky && bSticky) {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1
+      }
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    }
+
+    // 3. Among non-sticky items: respect "Folders on top" checkbox
+    if (foldersOnTop && a.isDirectory !== b.isDirectory) {
+      return a.isDirectory ? -1 : 1
+    }
+
+    // 4. Sort non-sticky items by selected sort order (name-asc, name-desc, custom)
+    if (sortOrder === 'custom') {
+      const idxA = customList.findIndex((item) => item === a.relativePath || item === a.name)
+      const idxB = customList.findIndex((item) => item === b.relativePath || item === b.name)
+      if (idxA !== -1 && idxB !== -1 && idxA !== idxB) {
+        return idxA - idxB
+      }
+      if (idxA !== -1 && idxB === -1) return -1
+      if (idxA === -1 && idxB !== -1) return 1
+    } else if (sortOrder === 'name-desc') {
+      return b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' })
+    }
+
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  })
+}
 
 export interface NordicFolderIconOption {
   id: string
@@ -145,6 +229,17 @@ export const MultiRootSidebar: React.FC<{
   collapsedDirs?: Record<string, boolean>
   onUpdateCollapsedRoots?: (next: Record<string, boolean>) => void
   onUpdateCollapsedDirs?: (next: Record<string, boolean>) => void
+  workspaceSortOrder?: WorkspaceSortOrder
+  workspaceFoldersOnTop?: boolean
+  workspaceCustomOrder?: Record<string, string[]>
+  stickyItems?: Record<string, boolean>
+  onUpdateWorkspaceSortOrder?: (next: WorkspaceSortOrder) => void
+  onUpdateWorkspaceFoldersOnTop?: (next: boolean) => void
+  onUpdateWorkspaceCustomOrder?: (
+    next: Record<string, string[]>,
+    switchToCustom?: boolean
+  ) => void
+  onUpdateStickyItems?: (next: Record<string, boolean>) => void
   folderIcons?: Record<string, string>
   folderColors?: Record<string, string>
   onUpdateFolderIcon?: (folderKey: string, icon: string) => void
@@ -185,6 +280,13 @@ export const MultiRootSidebar: React.FC<{
     resolution: 'current' | 'incoming' | 'both'
   ) => void
   onAbortMergeRepo: (rootId: string) => void
+  dynamicWorkspaces?: DynamicWorkspaceDef[]
+  dynamicCandidateDocuments?: DynamicCandidateDocument[]
+  onOpenAddDynamicFolder?: (workspace: DynamicWorkspaceDef) => void
+  onOpenEditDynamicFolder?: (workspace: DynamicWorkspaceDef, folder: DynamicFolderDef) => void
+  onOpenEditDynamicRootRules?: (workspace: DynamicWorkspaceDef) => void
+  onDeleteDynamicFolder?: (workspaceId: string, folderId: string) => void
+  onRemoveDynamicWorkspace?: (workspaceId: string) => void
 }> = ({
   activeTab,
   onSelectTab,
@@ -205,6 +307,14 @@ export const MultiRootSidebar: React.FC<{
   collapsedDirs: externalCollapsedDirs,
   onUpdateCollapsedRoots,
   onUpdateCollapsedDirs,
+  workspaceSortOrder: externalSortOrder,
+  workspaceFoldersOnTop: externalFoldersOnTop,
+  workspaceCustomOrder: externalCustomOrder,
+  stickyItems: externalStickyItems,
+  onUpdateWorkspaceSortOrder,
+  onUpdateWorkspaceFoldersOnTop,
+  onUpdateWorkspaceCustomOrder,
+  onUpdateStickyItems,
   folderIcons = {},
   folderColors = {},
   onUpdateFolderIcon,
@@ -215,7 +325,7 @@ export const MultiRootSidebar: React.FC<{
   backlinks,
   onOpenDocument,
   onNavigateToLine,
-  onAddRootDialog,
+  onAddRootDialog: _onAddRootDialog,
   onRemoveRoot,
   onCreateFileInRoot,
   onCreateFolderInRoot,
@@ -226,7 +336,14 @@ export const MultiRootSidebar: React.FC<{
   onRefreshGit,
   onCommitRepo,
   onResolveConflictFromGitPanel,
-  onAbortMergeRepo
+  onAbortMergeRepo,
+  dynamicWorkspaces = [],
+  dynamicCandidateDocuments = [],
+  onOpenAddDynamicFolder,
+  onOpenEditDynamicFolder,
+  onOpenEditDynamicRootRules,
+  onDeleteDynamicFolder,
+  onRemoveDynamicWorkspace
 }) => {
   const [internalCollapsedRoots, setInternalCollapsedRoots] = useState<Record<string, boolean>>({})
   const [internalCollapsedDirs, setInternalCollapsedDirs] = useState<Record<string, boolean>>({})
@@ -234,6 +351,52 @@ export const MultiRootSidebar: React.FC<{
     rootId: string
     relativePath: string
   } | null>(null)
+  const [internalSortOrder, setInternalSortOrder] = useState<WorkspaceSortOrder>('name-asc')
+  const [internalFoldersOnTop, setInternalFoldersOnTop] = useState<boolean>(true)
+  const [internalCustomOrder, setInternalCustomOrder] = useState<Record<string, string[]>>({})
+  const [internalStickyItems, setInternalStickyItems] = useState<Record<string, boolean>>({})
+
+  const sortOrder = externalSortOrder !== undefined ? externalSortOrder : internalSortOrder
+  const setSortOrder = (next: WorkspaceSortOrder) => {
+    setInternalSortOrder(next)
+    onUpdateWorkspaceSortOrder?.(next)
+  }
+
+  const foldersOnTop =
+    externalFoldersOnTop !== undefined ? externalFoldersOnTop : internalFoldersOnTop
+  const setFoldersOnTop = (next: boolean) => {
+    setInternalFoldersOnTop(next)
+    onUpdateWorkspaceFoldersOnTop?.(next)
+  }
+
+  const customOrder = externalCustomOrder !== undefined ? externalCustomOrder : internalCustomOrder
+  const setCustomOrder = (next: Record<string, string[]>, switchToCustom = true) => {
+    setInternalCustomOrder(next)
+    if (switchToCustom) {
+      setInternalSortOrder('custom')
+    }
+    onUpdateWorkspaceCustomOrder?.(next, switchToCustom)
+  }
+
+  const stickyItems = externalStickyItems !== undefined ? externalStickyItems : internalStickyItems
+  const setStickyItems = (next: Record<string, boolean>) => {
+    setInternalStickyItems(next)
+    onUpdateStickyItems?.(next)
+  }
+
+  const toggleStickyItem = (rootId: string, relativePath: string) => {
+    const keySlash = `${rootId}/${relativePath}`
+    const keyColon = `${rootId}::${relativePath}`
+    const currentlySticky = isWorkspaceItemSticky(rootId, relativePath, stickyItems)
+    const next = { ...stickyItems }
+    if (currentlySticky) {
+      delete next[keySlash]
+      delete next[keyColon]
+    } else {
+      next[keySlash] = true
+    }
+    setStickyItems(next)
+  }
 
   const collapsedRoots =
     externalCollapsedRoots !== undefined ? externalCollapsedRoots : internalCollapsedRoots
@@ -569,6 +732,79 @@ export const MultiRootSidebar: React.FC<{
     return nextRelPath !== source.relativePath
   }
 
+  const handleReorderTreeItem = (
+    rootId: string,
+    parentRelPath: string,
+    sourceRelPath: string,
+    targetRelPath: string,
+    explicitPlacement?: 'before' | 'after'
+  ) => {
+    if (sourceRelPath === targetRelPath) return
+    const rootNodes = treesByRoot[rootId] || []
+    const dirNodes = findNodesInDir(rootNodes, parentRelPath)
+    const currentlySorted = sortWorkspaceTreeNodes(rootId, parentRelPath, dirNodes, {
+      sortOrder,
+      foldersOnTop,
+      customOrder,
+      stickyItems
+    })
+    const origSourceIdx = currentlySorted.findIndex((n) => n.relativePath === sourceRelPath)
+    const origTargetIdx = currentlySorted.findIndex((n) => n.relativePath === targetRelPath)
+    const placement: 'before' | 'after' =
+      explicitPlacement || (origSourceIdx > origTargetIdx ? 'before' : 'after')
+
+    const orderedRelPaths = currentlySorted
+      .map((n) => n.relativePath)
+      .filter((rel) => rel !== sourceRelPath)
+    if (!orderedRelPaths.includes(targetRelPath)) {
+      orderedRelPaths.push(sourceRelPath)
+    } else {
+      const targetIdx = orderedRelPaths.indexOf(targetRelPath)
+      const insertAt = placement === 'before' ? targetIdx : targetIdx + 1
+      orderedRelPaths.splice(insertAt, 0, sourceRelPath)
+    }
+
+    const dirOrderKey = `${rootId}/${parentRelPath}`
+    const nextCustomOrder = {
+      ...customOrder,
+      [dirOrderKey]: orderedRelPaths
+    }
+    setCustomOrder(nextCustomOrder, true)
+  }
+
+  const handleMoveItemUpOrDown = (
+    rootId: string,
+    relativePath: string,
+    direction: 'up' | 'down'
+  ) => {
+    const parentRelPath = relativePath.includes('/')
+      ? relativePath.slice(0, relativePath.lastIndexOf('/'))
+      : ''
+    const rootNodes = treesByRoot[rootId] || []
+    const dirNodes = findNodesInDir(rootNodes, parentRelPath)
+    const currentlySorted = sortWorkspaceTreeNodes(rootId, parentRelPath, dirNodes, {
+      sortOrder,
+      foldersOnTop,
+      customOrder,
+      stickyItems
+    })
+    const orderedRelPaths = currentlySorted.map((n) => n.relativePath)
+    const idx = orderedRelPaths.indexOf(relativePath)
+    if (idx === -1) return
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= orderedRelPaths.length) return
+    const temp = orderedRelPaths[idx]
+    orderedRelPaths[idx] = orderedRelPaths[swapIdx]
+    orderedRelPaths[swapIdx] = temp
+
+    const dirOrderKey = `${rootId}/${parentRelPath}`
+    const nextCustomOrder = {
+      ...customOrder,
+      [dirOrderKey]: orderedRelPaths
+    }
+    setCustomOrder(nextCustomOrder, true)
+  }
+
   const handleDropIntoTarget = (
     targetRootId: string,
     targetFolderRelPath: string,
@@ -592,11 +828,40 @@ export const MultiRootSidebar: React.FC<{
         [`${targetRootId}/${targetFolderRelPath}`]: false
       }))
     }
+    const dirOrderKey = `${targetRootId}/${targetFolderRelPath}`
+    const rootNodes = treesByRoot[targetRootId] || []
+    const dirNodes = findNodesInDir(rootNodes, targetFolderRelPath)
+    const currentlySorted = sortWorkspaceTreeNodes(targetRootId, targetFolderRelPath, dirNodes, {
+      sortOrder,
+      foldersOnTop,
+      customOrder,
+      stickyItems
+    })
+    const existingOrder = currentlySorted
+      .map((n) => n.relativePath)
+      .filter((rel) => rel !== nextRelPath)
+    existingOrder.push(nextRelPath)
+    setCustomOrder(
+      {
+        ...customOrder,
+        [dirOrderKey]: existingOrder
+      },
+      true
+    )
     void onRenameFileInRoot?.(targetRootId, source.relativePath, nextRelPath)
   }
 
-  const renderTreeNodes = (rootId: string, nodes: FileTreeNode[]) => {
-    return nodes.map((node) => {
+  const renderTreeNodes = (rootId: string, nodes: FileTreeNode[], parentRelPath = '') => {
+    const sortedNodes = sortWorkspaceTreeNodes(rootId, parentRelPath, nodes, {
+      sortOrder,
+      foldersOnTop,
+      customOrder,
+      stickyItems
+    })
+
+    return sortedNodes.map((node) => {
+      const isSticky = isWorkspaceItemSticky(rootId, node.relativePath, stickyItems)
+
       if (node.isDirectory) {
         const dirKey = `${rootId}/${node.relativePath}`
         const isDirCollapsed = Boolean(collapsedDirs[dirKey])
@@ -645,7 +910,10 @@ export const MultiRootSidebar: React.FC<{
                 e.preventDefault()
                 e.stopPropagation()
                 const src = resolveDraggedItem(e)
-                if (canDropTreeItemIntoFolder(src, rootId, node.relativePath)) {
+                if (
+                  canDropTreeItemIntoFolder(src, rootId, node.relativePath) ||
+                  (src && src.rootId === rootId && src.relativePath !== node.relativePath)
+                ) {
                   e.dataTransfer.dropEffect = 'move'
                   if (dragOverTargetKey !== dirKey) {
                     setDragOverTargetKey(dirKey)
@@ -658,7 +926,43 @@ export const MultiRootSidebar: React.FC<{
                   setDragOverTargetKey(null)
                 }
               }}
-              onDrop={(e) => handleDropIntoTarget(rootId, node.relativePath, e)}
+              onDrop={(e) => {
+                const src = resolveDraggedItem(e)
+                const srcParent =
+                  src && src.relativePath.includes('/')
+                    ? src.relativePath.slice(0, src.relativePath.lastIndexOf('/'))
+                    : ''
+                if (
+                  src &&
+                  src.rootId === rootId &&
+                  srcParent === parentRelPath &&
+                  src.relativePath !== node.relativePath &&
+                  e.clientY > 0
+                ) {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  if (
+                    rect.height > 0 &&
+                    (e.clientY < rect.top + rect.height * 0.25 ||
+                      e.clientY > rect.bottom - rect.height * 0.25)
+                  ) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setDragOverTargetKey(null)
+                    setDraggedTreeItem(null)
+                    const placement =
+                      e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+                    handleReorderTreeItem(
+                      rootId,
+                      parentRelPath,
+                      src.relativePath,
+                      node.relativePath,
+                      placement
+                    )
+                    return
+                  }
+                }
+                handleDropIntoTarget(rootId, node.relativePath, e)
+              }}
               style={
                 {
                   ...(customBgColor ? { backgroundColor: customBgColor } : {}),
@@ -743,25 +1047,38 @@ export const MultiRootSidebar: React.FC<{
                   className="flex-1 px-1.5 py-0.5 rounded bg-panel border border-accent text-primary text-xs focus:outline-none"
                 />
               ) : (
-                <span className="truncate">{node.name}</span>
+                <span className="truncate flex-1">{node.name}</span>
+              )}
+              {isSticky && (
+                <span
+                  title="Sticky (Pinned to top of folder)"
+                  data-testid={`tree-sticky-badge-${rootId}-${node.relativePath}`}
+                  className="inline-flex items-center shrink-0 text-accent"
+                >
+                  <Pin className="w-3 h-3" />
+                </span>
               )}
             </div>
-            {!isDirCollapsed && node.children && renderTreeNodes(rootId, node.children)}
+            {!isDirCollapsed &&
+              node.children &&
+              renderTreeNodes(rootId, node.children, node.relativePath)}
           </div>
         )
       }
 
+      const fileKey = `${rootId}/${node.relativePath}`
       const isActive =
         activeDoc?.rootId === rootId && activeDoc?.relativePath === node.relativePath
       const isRenaming =
         renamingItem?.rootId === rootId &&
         renamingItem?.relativePath === node.relativePath &&
         !renamingItem?.isDirectory
+      const isDragOverFile = dragOverTargetKey === fileKey
       const otherRoots = roots.filter((r) => r.id !== rootId)
 
       return (
         <div
-          key={`${rootId}/${node.relativePath}`}
+          key={fileKey}
           data-testid={`tree-file-${rootId}-${node.relativePath}`}
           draggable={!isRenaming}
           onDragStart={(e) => {
@@ -774,11 +1091,10 @@ export const MultiRootSidebar: React.FC<{
             }
             setDraggedTreeItem(item)
             try {
+              const payload = JSON.stringify(item)
               e.dataTransfer.effectAllowed = 'move'
-              e.dataTransfer.setData(
-                'application/x-klartext-tree-item',
-                JSON.stringify(item)
-              )
+              e.dataTransfer.setData('application/x-klartext-tree-item', payload)
+              e.dataTransfer.setData('text/plain', payload)
             } catch {
               // Ignore synthetic drag events
             }
@@ -787,10 +1103,74 @@ export const MultiRootSidebar: React.FC<{
             setDraggedTreeItem(null)
             setDragOverTargetKey(null)
           }}
-          className={`group flex items-center justify-between px-2 py-1 rounded text-xs cursor-pointer ${
-            isActive
-              ? 'bg-secondary text-accent font-medium'
-              : 'text-primary hover:bg-secondary/60'
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            const src = resolveDraggedItem(e)
+            if (src && src.rootId === rootId && src.relativePath !== node.relativePath) {
+              try {
+                e.dataTransfer.dropEffect = 'move'
+              } catch {
+                // Ignore synthetic drag events
+              }
+              if (dragOverTargetKey !== fileKey) {
+                setDragOverTargetKey(fileKey)
+              }
+            }
+          }}
+          onDragLeave={(e) => {
+            e.stopPropagation()
+            if (dragOverTargetKey === fileKey) {
+              setDragOverTargetKey(null)
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            const src = resolveDraggedItem(e)
+            setDragOverTargetKey(null)
+            setDraggedTreeItem(null)
+            if (!src || src.rootId !== rootId || src.relativePath === node.relativePath) {
+              return
+            }
+            const srcParent = src.relativePath.includes('/')
+              ? src.relativePath.slice(0, src.relativePath.lastIndexOf('/'))
+              : ''
+            let explicitPlacement: 'before' | 'after' | undefined
+            if (e.clientY > 0) {
+              const rect = e.currentTarget.getBoundingClientRect()
+              if (rect.height > 0) {
+                explicitPlacement = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+              }
+            }
+            if (srcParent === parentRelPath) {
+              handleReorderTreeItem(
+                rootId,
+                parentRelPath,
+                src.relativePath,
+                node.relativePath,
+                explicitPlacement
+              )
+            } else {
+              const nextRelPath = parentRelPath ? `${parentRelPath}/${src.name}` : src.name
+              if (nextRelPath !== src.relativePath) {
+                handleReorderTreeItem(
+                  rootId,
+                  parentRelPath,
+                  nextRelPath,
+                  node.relativePath,
+                  explicitPlacement
+                )
+                void onRenameFileInRoot?.(rootId, src.relativePath, nextRelPath)
+              }
+            }
+          }}
+          className={`group flex items-center justify-between px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+            isDragOverFile
+              ? 'ring-2 ring-accent bg-accent/20 text-primary'
+              : isActive
+                ? 'bg-secondary text-accent font-medium'
+                : 'text-primary hover:bg-secondary/60'
           }`}
           onClick={() => {
             const parentFolder = node.relativePath.includes('/')
@@ -850,6 +1230,15 @@ export const MultiRootSidebar: React.FC<{
               />
             ) : (
               <span className="truncate">{node.name}</span>
+            )}
+            {isSticky && (
+              <span
+                title="Sticky (Pinned to top of folder)"
+                data-testid={`tree-sticky-badge-${rootId}-${node.relativePath}`}
+                className="inline-flex items-center shrink-0 text-accent"
+              >
+                <Pin className="w-3 h-3" />
+              </span>
             )}
           </div>
           {!isRenaming && otherRoots.length > 0 && (
@@ -922,25 +1311,49 @@ export const MultiRootSidebar: React.FC<{
         <div className="flex-1 flex flex-col overflow-y-auto p-2 space-y-2">
           <div className="flex items-center justify-between px-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-              Workspace Roots ({roots.length})
+              Workspace Roots ({roots.length + dynamicWorkspaces.length})
             </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                title="Open new workspace"
-                aria-label="Open new workspace"
-                data-testid="add-folder-dialog-btn"
-                onClick={onAddRootDialog}
-                className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
-              >
-                <FolderPlus className="w-3.5 h-3.5" />
-              </button>
-            </div>
           </div>
 
-          {roots.length === 0 && (
+          {/* Workspace Sort Order Dropdown (Name A-Z, Name Z-A, Custom) + Folders on Top Checkbox */}
+          <div
+            data-testid="workspace-sort-controls"
+            className="flex items-center justify-between gap-2 px-1.5 py-1 rounded bg-panel border border-subtle text-[11px]"
+          >
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <ArrowUpDown className="w-3 h-3 text-muted shrink-0" />
+              <select
+                data-testid="workspace-sort-order-select"
+                aria-label="Workspace sort order"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as WorkspaceSortOrder)}
+                className="w-full bg-transparent text-primary text-[11px] font-medium focus:outline-none cursor-pointer truncate"
+              >
+                <option value="name-asc">Name A–Z</option>
+                <option value="name-desc">Name Z–A</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            <label
+              data-testid="workspace-folders-on-top-label"
+              className="flex items-center gap-1 text-[11px] text-muted hover:text-primary cursor-pointer select-none shrink-0"
+              title="Keep non-sticky folders above files"
+            >
+              <input
+                type="checkbox"
+                data-testid="workspace-folders-on-top-checkbox"
+                checked={foldersOnTop}
+                onChange={(e) => setFoldersOnTop(e.target.checked)}
+                className="rounded border-subtle accent-[var(--color-accent)] cursor-pointer"
+              />
+              <span>Folders on top</span>
+            </label>
+          </div>
+
+          {roots.length === 0 && dynamicWorkspaces.length === 0 && (
             <div className="px-3 py-6 text-center text-xs text-muted rounded-md border border-dashed border-subtle bg-panel/50">
-              No folders mounted yet. Click <span className="font-medium text-primary">Open new workspace</span> above or <span className="font-medium text-primary">File → Open Folder…</span> to add a workspace folder.
+              No folders mounted yet. Use <span className="font-medium text-primary">File → Open Folder…</span>, <span className="font-medium text-primary">File → Add Git Workspace…</span>, or <span className="font-medium text-primary">File → Create a New Dynamic Workspace…</span> to get started.
             </div>
           )}
 
@@ -1077,7 +1490,259 @@ export const MultiRootSidebar: React.FC<{
                     {nodes.length === 0 ? (
                       <div className="text-xs text-muted px-2 py-1">Empty folder</div>
                     ) : (
-                      renderTreeNodes(root.id, nodes)
+                      renderTreeNodes(root.id, nodes, '')
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* DYNAMIC WORKSPACES (Container + Dynamic Folders or Root Dynamic Content) */}
+          {dynamicWorkspaces.map((dynWs) => {
+            const isCollapsed = Boolean(collapsedRoots[dynWs.id])
+            const rootMatchedDocs =
+              dynWs.mode === 'root-content'
+                ? dynamicCandidateDocuments.filter((doc) =>
+                    matchesDynamicFilterRule(doc, dynWs.rootRules)
+                  )
+                : []
+
+            return (
+              <div
+                key={dynWs.id}
+                data-testid={`dynamic-workspace-section-${dynWs.id}`}
+                className="rounded-md border border-subtle bg-panel overflow-hidden transition-colors"
+              >
+                <div
+                  data-testid={`dynamic-workspace-header-${dynWs.id}`}
+                  onClick={() =>
+                    setCollapsedRoots((p) => ({ ...p, [dynWs.id]: !p[dynWs.id] }))
+                  }
+                  className="flex items-center justify-between px-2 py-1.5 bg-secondary/60 border-b border-subtle text-xs cursor-pointer"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCollapsedRoots((p) => ({ ...p, [dynWs.id]: !p[dynWs.id] }))
+                    }}
+                    className="flex items-center gap-1 font-semibold text-primary truncate"
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
+                    <span className="truncate">{dynWs.name}</span>
+                  </button>
+
+                  <div
+                    className="flex items-center gap-1 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span
+                      data-testid={`dynamic-workspace-badge-${dynWs.id}`}
+                      className="text-[10px] px-1.5 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent font-medium select-none"
+                    >
+                      Dynamic
+                    </span>
+                    {dynWs.mode === 'root-content' && (
+                      <button
+                        type="button"
+                        title="Edit Root Dynamic Filter Rules"
+                        data-testid={`edit-dynamic-root-rules-btn-${dynWs.id}`}
+                        onClick={() => onOpenEditDynamicRootRules?.(dynWs)}
+                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      title="Add Dynamic Folder"
+                      data-testid={`add-dynamic-folder-btn-${dynWs.id}`}
+                      onClick={() => onOpenAddDynamicFolder?.(dynWs)}
+                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Remove Dynamic Workspace"
+                      data-testid={`remove-dynamic-workspace-btn-${dynWs.id}`}
+                      onClick={() => onRemoveDynamicWorkspace?.(dynWs.id)}
+                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {!isCollapsed && (
+                  <div className="p-1.5 space-y-1">
+                    {dynWs.mode === 'root-content' ? (
+                      <div className="space-y-0.5">
+                        <div className="px-2 py-0.5 text-[10px] font-mono text-muted truncate flex items-center justify-between">
+                          <span className="truncate">
+                            {formatDynamicRuleSummary(dynWs.rootRules)}
+                          </span>
+                          <span>{rootMatchedDocs.length}</span>
+                        </div>
+                        {rootMatchedDocs.length === 0 ? (
+                          <div className="text-xs text-muted px-2 py-1 italic">
+                            No matching files
+                          </div>
+                        ) : (
+                          rootMatchedDocs.map((doc) => {
+                            const isSelected =
+                              activeDoc?.rootId === doc.rootId &&
+                              activeDoc?.relativePath === doc.relativePath
+                            return (
+                              <button
+                                key={`${doc.rootId}::${doc.relativePath}`}
+                                type="button"
+                                data-testid={`dynamic-root-file-${dynWs.id}-${doc.relativePath}`}
+                                onClick={() => onOpenDocument(doc.rootId, doc.relativePath)}
+                                className={`w-full flex items-center justify-between gap-1.5 px-2 py-1 rounded text-xs text-left transition-colors ${
+                                  isSelected
+                                    ? 'bg-accent text-white font-medium'
+                                    : 'text-primary hover:bg-secondary'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5 min-w-0 truncate">
+                                  <FileText className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                                  <span className="truncate">{doc.name}</span>
+                                </span>
+                                <span
+                                  className={`text-[10px] font-mono shrink-0 ${
+                                    isSelected ? 'text-white/80' : 'text-muted'
+                                  }`}
+                                >
+                                  {doc.rootName}
+                                </span>
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    ) : dynWs.folders.length === 0 ? (
+                      <div className="text-xs text-muted px-2 py-1">
+                        No dynamic folders yet. Click + above to add a Dynamic Folder.
+                      </div>
+                    ) : (
+                      dynWs.folders.map((folder) => {
+                        const folderCollapseKey = `${dynWs.id}/${folder.id}`
+                        const isFolderCollapsed = Boolean(collapsedDirs[folderCollapseKey])
+                        const folderMatches = dynamicCandidateDocuments.filter((doc) =>
+                          matchesDynamicFilterRule(doc, folder.rules)
+                        )
+
+                        return (
+                          <div
+                            key={folder.id}
+                            data-testid={`dynamic-folder-node-${folder.id}`}
+                            className="rounded border border-subtle/60 bg-app/40 overflow-hidden"
+                          >
+                            <div
+                              onClick={() =>
+                                setCollapsedDirs((p) => ({
+                                  ...p,
+                                  [folderCollapseKey]: !p[folderCollapseKey]
+                                }))
+                              }
+                              title={formatDynamicRuleSummary(folder.rules)}
+                              className="group flex items-center justify-between px-2 py-1 hover:bg-secondary/70 text-xs cursor-pointer"
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0 truncate font-medium text-primary">
+                                {isFolderCollapsed ? (
+                                  <ChevronRight className="w-3 h-3 shrink-0 text-muted" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3 shrink-0 text-muted" />
+                                )}
+                                <Folder className="w-3.5 h-3.5 shrink-0 text-accent" />
+                                <span className="truncate">{folder.name}</span>
+                              </div>
+                              <div
+                                className="flex items-center gap-1 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span
+                                  data-testid={`dynamic-folder-count-${folder.id}`}
+                                  className="text-[10px] font-mono text-muted px-1 rounded bg-secondary"
+                                >
+                                  {folderMatches.length}
+                                </span>
+                                <button
+                                  type="button"
+                                  title="Edit Dynamic Folder Rules"
+                                  data-testid={`edit-dynamic-folder-btn-${folder.id}`}
+                                  onClick={() => onOpenEditDynamicFolder?.(dynWs, folder)}
+                                  className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Delete Dynamic Folder"
+                                  data-testid={`delete-dynamic-folder-btn-${folder.id}`}
+                                  onClick={() => onDeleteDynamicFolder?.(dynWs.id, folder.id)}
+                                  className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {!isFolderCollapsed && (
+                              <div className="pl-4 pr-1 py-1 space-y-0.5 border-t border-subtle/40">
+                                <div className="px-1.5 py-0.5 text-[10px] font-mono text-muted truncate">
+                                  {formatDynamicRuleSummary(folder.rules)}
+                                </div>
+                                {folderMatches.length === 0 ? (
+                                  <div className="text-[11px] text-muted px-1.5 py-1 italic">
+                                    No matching files
+                                  </div>
+                                ) : (
+                                  folderMatches.map((doc) => {
+                                    const isSelected =
+                                      activeDoc?.rootId === doc.rootId &&
+                                      activeDoc?.relativePath === doc.relativePath
+                                    return (
+                                      <button
+                                        key={`${doc.rootId}::${doc.relativePath}`}
+                                        type="button"
+                                        data-testid={`dynamic-file-item-${folder.id}-${doc.relativePath}`}
+                                        onClick={() =>
+                                          onOpenDocument(doc.rootId, doc.relativePath)
+                                        }
+                                        className={`w-full flex items-center justify-between gap-1.5 px-1.5 py-1 rounded text-xs text-left transition-colors ${
+                                          isSelected
+                                            ? 'bg-accent text-white font-medium'
+                                            : 'text-primary hover:bg-secondary'
+                                        }`}
+                                      >
+                                        <span className="flex items-center gap-1.5 min-w-0 truncate">
+                                          <FileText className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                                          <span className="truncate">{doc.name}</span>
+                                        </span>
+                                        <span
+                                          className={`text-[10px] font-mono shrink-0 ${
+                                            isSelected ? 'text-white/80' : 'text-muted'
+                                          }`}
+                                        >
+                                          {doc.rootName}
+                                        </span>
+                                      </button>
+                                    )
+                                  })
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
                     )}
                   </div>
                 )}
@@ -1109,7 +1774,7 @@ export const MultiRootSidebar: React.FC<{
           style={{
             position: 'fixed',
             left: `${Math.max(8, Math.min(window.innerWidth - 240, fileContextMenu.x))}px`,
-            top: `${Math.max(8, Math.min(window.innerHeight - 360, fileContextMenu.y))}px`
+            top: `${Math.max(8, Math.min(window.innerHeight - 420, fileContextMenu.y))}px`
           }}
           onClick={(e) => e.stopPropagation()}
           className="z-50 w-56 rounded-md bg-panel border border-subtle shadow-xl py-1.5 text-xs"
@@ -1119,6 +1784,89 @@ export const MultiRootSidebar: React.FC<{
             <span className="uppercase text-[9px]">
               {fileContextMenu.isDirectory ? 'Folder' : 'File'}
             </span>
+          </div>
+
+          {/* Sticky Toggle Option (for both folders and files: pins first in folder, folders before files, sorted A-Z) */}
+          <button
+            type="button"
+            data-testid="context-menu-toggle-sticky"
+            onMouseEnter={() => {
+              setShowContextTemplatesSubmenu(false)
+              setShowContextFolderIconsSubmenu(false)
+            }}
+            onClick={() => {
+              toggleStickyItem(fileContextMenu.rootId, fileContextMenu.relativePath)
+              setFileContextMenu(null)
+              setShowContextTemplatesSubmenu(false)
+              setShowContextFolderIconsSubmenu(false)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between gap-2 font-medium"
+          >
+            <span className="flex items-center gap-2">
+              <Pin
+                className={`w-3.5 h-3.5 ${
+                  isWorkspaceItemSticky(
+                    fileContextMenu.rootId,
+                    fileContextMenu.relativePath,
+                    stickyItems
+                  )
+                    ? 'text-accent'
+                    : 'text-muted'
+                }`}
+              />
+              <span>Sticky</span>
+            </span>
+            {isWorkspaceItemSticky(
+              fileContextMenu.rootId,
+              fileContextMenu.relativePath,
+              stickyItems
+            ) && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
+          </button>
+
+          {/* Move Up / Move Down in Folder (automatically activates Custom Sort Order) */}
+          <div className="flex items-center gap-1 px-2 py-1 border-b border-subtle">
+            <button
+              type="button"
+              data-testid="context-menu-move-up"
+              onMouseEnter={() => {
+                setShowContextTemplatesSubmenu(false)
+                setShowContextFolderIconsSubmenu(false)
+              }}
+              onClick={() => {
+                handleMoveItemUpOrDown(
+                  fileContextMenu.rootId,
+                  fileContextMenu.relativePath,
+                  'up'
+                )
+                setFileContextMenu(null)
+              }}
+              className="flex-1 px-2 py-1 rounded bg-secondary/60 hover:bg-secondary text-primary flex items-center justify-center gap-1 text-[11px]"
+              title="Move item up (switches to Custom sort)"
+            >
+              <ArrowUp className="w-3 h-3 text-muted" />
+              <span>Move Up</span>
+            </button>
+            <button
+              type="button"
+              data-testid="context-menu-move-down"
+              onMouseEnter={() => {
+                setShowContextTemplatesSubmenu(false)
+                setShowContextFolderIconsSubmenu(false)
+              }}
+              onClick={() => {
+                handleMoveItemUpOrDown(
+                  fileContextMenu.rootId,
+                  fileContextMenu.relativePath,
+                  'down'
+                )
+                setFileContextMenu(null)
+              }}
+              className="flex-1 px-2 py-1 rounded bg-secondary/60 hover:bg-secondary text-primary flex items-center justify-center gap-1 text-[11px]"
+              title="Move item down (switches to Custom sort)"
+            >
+              <ArrowDown className="w-3 h-3 text-muted" />
+              <span>Move Down</span>
+            </button>
           </div>
 
           {fileContextMenu.isDirectory && (
