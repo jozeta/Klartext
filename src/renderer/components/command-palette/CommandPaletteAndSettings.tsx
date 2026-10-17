@@ -425,8 +425,10 @@ export const SettingsModal: React.FC<{
     )
     setThemeJsonText(payload)
     setShowThemeJsonDrawer(true)
-    navigator.clipboard?.writeText(payload).catch(() => {})
-    setThemeStatusMsg('Exported themes JSON (copied to clipboard)')
+    if (typeof navigator !== 'undefined' && !navigator.webdriver) {
+      navigator.clipboard?.writeText(payload).catch(() => {})
+    }
+    setThemeStatusMsg('Exported themes JSON')
   }
 
   const handleImportThemesFromJson = (rawJson: string) => {

@@ -20,7 +20,10 @@ export default defineConfig({
       'zod',
       'katex',
       'simple-git',
-      'dompurify'
+      'dompurify',
+      '@untitledui/icons',
+      'react',
+      'react-dom'
     ] })],
     resolve: {
       alias: {
