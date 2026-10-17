@@ -1,6 +1,22 @@
 import React, { useState } from 'react'
-import { Command, FileText, X } from 'lucide-react'
-import type { AppSettings, WorkspaceRoot } from '../../../shared/types'
+import {
+  Command,
+  FileText,
+  X,
+  Smile,
+  Palette,
+  Plus,
+  Trash2,
+  Edit3,
+  Download,
+  Upload,
+  Check,
+  Sparkles,
+  Folder
+} from '../icons/untitled-icons'
+import { searchUntitledIcons } from '../icons/untitled-icons'
+import { PRESET_HIGHLIGHT_COLORS } from '../../../shared/constants'
+import type { AppSettings, SavedTheme, WorkspaceRoot } from '../../../shared/types'
 import {
   SPELL_LANGUAGE_LABELS,
   type SupportedSpellLanguage
@@ -49,12 +65,13 @@ const CODE_FONT_OPTIONS = [
 ]
 
 export const CommandPaletteModal: React.FC<{
-  mode: 'commands' | 'files'
+  mode: 'commands' | 'files' | 'icons'
   actions: CommandActionItem[]
   files: Array<{ rootId: string; rootName: string; relativePath: string }>
   onSelectFile: (rootId: string, relativePath: string) => void
+  onSelectIcon?: (iconSyntax: string) => void
   onClose: () => void
-}> = ({ mode, actions, files, onSelectFile, onClose }) => {
+}> = ({ mode, actions, files, onSelectFile, onSelectIcon, onClose }) => {
   const [query, setQuery] = useState('')
 
   const lower = query.toLowerCase().trim()
@@ -70,27 +87,41 @@ export const CommandPaletteModal: React.FC<{
       f.relativePath.toLowerCase().includes(lower) ||
       f.rootName.toLowerCase().includes(lower)
   )
+  const filteredIcons = mode === 'icons' ? searchUntitledIcons(query, 96) : []
+
+  const modalTestId =
+    mode === 'commands'
+      ? 'command-palette-modal'
+      : mode === 'files'
+        ? 'quick-switcher-modal'
+        : 'icon-picker-modal'
 
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-20"
-      data-testid={mode === 'commands' ? 'command-palette-modal' : 'quick-switcher-modal'}
+      data-testid={modalTestId}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl bg-panel border border-subtle rounded-lg shadow-xl overflow-hidden"
+        className="w-full max-w-2xl bg-panel border border-subtle rounded-lg shadow-xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-3 py-2.5 bg-secondary border-b border-subtle">
-          <Command className="w-4 h-4 text-accent" />
+          {mode === 'icons' ? (
+            <Smile className="w-4 h-4 text-accent" />
+          ) : (
+            <Command className="w-4 h-4 text-accent" />
+          )}
           <input
             type="text"
             autoFocus
             data-testid="palette-search-input"
             placeholder={
               mode === 'commands'
-                ? 'Type a command (e.g., Sync All Repositories, Zen Mode, Theme)...'
-                : 'Switch to file across any root folder...'
+                ? 'Type a command (e.g., Sync All Repositories, Insert Icon, Zen Mode, Theme)...'
+                : mode === 'files'
+                  ? 'Switch to file across any root folder...'
+                  : 'Search Untitled UI Free Icons to insert (e.g., rocket, check, star, folder, code)...'
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -103,11 +134,19 @@ export const CommandPaletteModal: React.FC<{
                 } else if (mode === 'files' && filteredFiles[0]) {
                   onSelectFile(filteredFiles[0].rootId, filteredFiles[0].relativePath)
                   onClose()
+                } else if (mode === 'icons' && filteredIcons[0]) {
+                  onSelectIcon?.(`:icon[${filteredIcons[0].id}]:`)
+                  onClose()
                 }
               }
             }}
             className="flex-1 bg-transparent text-sm text-primary focus:outline-none"
           />
+          {mode === 'icons' && (
+            <span className="px-2 py-0.5 rounded bg-app border border-subtle text-[10px] font-mono text-accent">
+              Untitled UI Icons (⌘⇧I)
+            </span>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -117,9 +156,10 @@ export const CommandPaletteModal: React.FC<{
           </button>
         </div>
 
-        <div className="max-h-80 overflow-y-auto p-1.5 space-y-0.5 text-xs">
-          {mode === 'commands'
-            ? filteredActions.map((act) => (
+        <div className="max-h-96 overflow-y-auto p-2 text-xs">
+          {mode === 'commands' ? (
+            <div className="space-y-0.5">
+              {filteredActions.map((act) => (
                 <button
                   key={act.id}
                   type="button"
@@ -140,8 +180,11 @@ export const CommandPaletteModal: React.FC<{
                     </kbd>
                   )}
                 </button>
-              ))
-            : filteredFiles.map((file) => (
+              ))}
+            </div>
+          ) : mode === 'files' ? (
+            <div className="space-y-0.5">
+              {filteredFiles.map((file) => (
                 <button
                   key={`${file.rootId}::${file.relativePath}`}
                   type="button"
@@ -161,6 +204,49 @@ export const CommandPaletteModal: React.FC<{
                   </span>
                 </button>
               ))}
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between px-2 pb-2 text-[11px] text-muted">
+                <span>
+                  Click an icon or press <kbd className="px-1 py-0.5 rounded bg-app border border-subtle font-mono">Enter</kbd> to insert inline <code className="font-mono text-accent">:icon[IconName]:</code>
+                </span>
+                <span>{filteredIcons.length} icons shown</span>
+              </div>
+              <div
+                data-testid="icon-picker-grid"
+                className="grid grid-cols-4 gap-1.5"
+              >
+                {filteredIcons.map((iconItem) => {
+                  const IconComp = iconItem.Component
+                  return (
+                    <button
+                      key={iconItem.id}
+                      type="button"
+                      data-testid={`icon-picker-item-${iconItem.id}`}
+                      onClick={() => {
+                        onSelectIcon?.(`:icon[${iconItem.id}]:`)
+                        onClose()
+                      }}
+                      className="flex items-center gap-2.5 p-2 rounded border border-subtle/60 bg-app/50 hover:bg-secondary hover:border-accent text-left transition-colors group"
+                    >
+                      <div className="w-7 h-7 rounded bg-panel border border-subtle flex items-center justify-center shrink-0 text-primary group-hover:text-accent">
+                        <IconComp className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-primary truncate text-[11px]">
+                          {iconItem.label}
+                        </div>
+                        <div className="font-mono text-[9px] text-muted truncate">
+                          {iconItem.kebab}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -184,6 +270,15 @@ export const SettingsModal: React.FC<{
   const [manifestPath, setManifestPath] = useState('')
   const [patInput, setPatInput] = useState('')
   const [hasGithubPat, setHasGithubPat] = useState(false)
+
+  // Saved Themes & Highlight Palette state
+  const [newThemeName, setNewThemeName] = useState('')
+  const [isEditingSavedTheme, setIsEditingSavedTheme] = useState(false)
+  const [editThemeName, setEditThemeName] = useState('')
+  const [customHighlightHex, setCustomHighlightHex] = useState('#FF5E5B')
+  const [showThemeJsonDrawer, setShowThemeJsonDrawer] = useState(false)
+  const [themeJsonText, setThemeJsonText] = useState('')
+  const [themeStatusMsg, setThemeStatusMsg] = useState<string | null>(null)
 
   React.useEffect(() => {
     window.klartext
@@ -219,16 +314,209 @@ export const SettingsModal: React.FC<{
 
   const [settingsTab, setSettingsTab] = useState<'general' | 'visual'>('general')
 
+  const savedThemes = settings.savedThemes || []
+  const activeSavedThemeId = settings.activeSavedThemeId || ''
+  const activeSavedTheme = savedThemes.find((t) => t.id === activeSavedThemeId) || null
+  const activeHighlightColor = settings.highlightColor || '#4C78A8'
+  const customHighlightColors = settings.customHighlightColors || []
+  const customThemeColors = settings.customThemeColors || {}
+
+  const handleSelectSavedTheme = (themeId: string) => {
+    if (!themeId) {
+      onUpdateSettings({
+        activeSavedThemeId: '',
+        customThemeColors: {}
+      })
+      setIsEditingSavedTheme(false)
+      return
+    }
+    const found = savedThemes.find((t) => t.id === themeId)
+    if (!found) return
+    setEditThemeName(found.name)
+    onUpdateSettings({
+      activeSavedThemeId: found.id,
+      theme: found.baseMode,
+      highlightColor: found.highlightColor,
+      lightPaperInDarkMode: Boolean(found.lightPaperInDarkMode),
+      customThemeColors: found.customColors || {},
+      ...(found.typography ? { typography: found.typography } : {})
+    })
+  }
+
+  const handleSaveNewTheme = () => {
+    const name = newThemeName.trim() || `Custom Theme ${savedThemes.length + 1}`
+    const id = `theme-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const newTheme: SavedTheme = {
+      id,
+      name,
+      baseMode: settings.theme,
+      highlightColor: activeHighlightColor,
+      lightPaperInDarkMode: Boolean(settings.lightPaperInDarkMode),
+      customColors: { ...customThemeColors },
+      typography: { ...settings.typography }
+    }
+    const nextThemes = [...savedThemes, newTheme]
+    onUpdateSettings({
+      savedThemes: nextThemes,
+      activeSavedThemeId: id
+    })
+    setNewThemeName('')
+    setEditThemeName(name)
+    setThemeStatusMsg(`Saved theme "${name}"`)
+  }
+
+  const handleUpdateActiveTheme = () => {
+    if (!activeSavedTheme) return
+    const updatedName = editThemeName.trim() || activeSavedTheme.name
+    const nextThemes = savedThemes.map((t) =>
+      t.id === activeSavedTheme.id
+        ? {
+            ...t,
+            name: updatedName,
+            baseMode: settings.theme,
+            highlightColor: activeHighlightColor,
+            lightPaperInDarkMode: Boolean(settings.lightPaperInDarkMode),
+            customColors: { ...customThemeColors },
+            typography: { ...settings.typography }
+          }
+        : t
+    )
+    onUpdateSettings({
+      savedThemes: nextThemes
+    })
+    setIsEditingSavedTheme(false)
+    setThemeStatusMsg(`Updated theme "${updatedName}"`)
+  }
+
+  const handleDeleteActiveTheme = () => {
+    if (!activeSavedTheme) return
+    const deletedName = activeSavedTheme.name
+    const nextThemes = savedThemes.filter((t) => t.id !== activeSavedTheme.id)
+    onUpdateSettings({
+      savedThemes: nextThemes,
+      activeSavedThemeId: ''
+    })
+    setIsEditingSavedTheme(false)
+    setThemeStatusMsg(`Deleted theme "${deletedName}"`)
+  }
+
+  const handleExportThemes = () => {
+    const payload = JSON.stringify(
+      {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        themes:
+          savedThemes.length > 0
+            ? savedThemes
+            : [
+                {
+                  id: 'exported-current-theme',
+                  name: 'Current Klartext Theme',
+                  baseMode: settings.theme,
+                  highlightColor: activeHighlightColor,
+                  lightPaperInDarkMode: Boolean(settings.lightPaperInDarkMode),
+                  customColors: customThemeColors,
+                  typography: settings.typography
+                }
+              ]
+      },
+      null,
+      2
+    )
+    setThemeJsonText(payload)
+    setShowThemeJsonDrawer(true)
+    navigator.clipboard?.writeText(payload).catch(() => {})
+    setThemeStatusMsg('Exported themes JSON (copied to clipboard)')
+  }
+
+  const handleImportThemesFromJson = (rawJson: string) => {
+    try {
+      const parsed = JSON.parse(rawJson)
+      const incomingList: SavedTheme[] = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.themes)
+          ? parsed.themes
+          : parsed?.id && parsed?.name
+            ? [parsed]
+            : []
+      if (incomingList.length === 0) {
+        setThemeStatusMsg('No valid themes found in JSON')
+        return
+      }
+      const sanitized: SavedTheme[] = incomingList.map((item, idx) => ({
+        id: String(item.id || `imported-${Date.now()}-${idx}`),
+        name: String(item.name || `Imported Theme ${idx + 1}`),
+        baseMode:
+          item.baseMode === 'dark' || item.baseMode === 'light' || item.baseMode === 'system'
+            ? item.baseMode
+            : 'light',
+        highlightColor:
+          typeof item.highlightColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(item.highlightColor)
+            ? item.highlightColor
+            : '#4C78A8',
+        lightPaperInDarkMode: Boolean(item.lightPaperInDarkMode),
+        customColors: item.customColors || {},
+        typography: item.typography
+      }))
+      const existingIds = new Set(savedThemes.map((t) => t.id))
+      const merged = [
+        ...savedThemes,
+        ...sanitized.map((t) =>
+          existingIds.has(t.id) ? { ...t, id: `${t.id}-${Date.now()}` } : t
+        )
+      ]
+      const firstImported = merged[merged.length - 1]
+      onUpdateSettings({
+        savedThemes: merged,
+        activeSavedThemeId: firstImported.id,
+        theme: firstImported.baseMode,
+        highlightColor: firstImported.highlightColor,
+        customThemeColors: firstImported.customColors || {}
+      })
+      setShowThemeJsonDrawer(false)
+      setThemeStatusMsg(`Imported ${sanitized.length} theme(s)`)
+    } catch {
+      setThemeStatusMsg('Invalid Theme JSON format')
+    }
+  }
+
+  const handleAddCustomHighlightColor = () => {
+    const clean = customHighlightHex.trim()
+    if (!/^#[0-9A-Fa-f]{6}$/.test(clean)) return
+    const upper = clean.toUpperCase()
+    const nextCustom = customHighlightColors.includes(upper)
+      ? customHighlightColors
+      : [...customHighlightColors, upper]
+    onUpdateSettings({
+      customHighlightColors: nextCustom,
+      highlightColor: upper
+    })
+  }
+
+  // Compute live preview colors for the Theme Preview Window
+  const previewIsDark = settings.theme === 'dark'
+  const previewBgApp =
+    customThemeColors.bgApp || (previewIsDark ? '#14171A' : '#F6F7F8')
+  const previewBgPanel =
+    customThemeColors.bgPanel || (previewIsDark ? '#1B2025' : '#FFFFFF')
+  const previewBgEditor =
+    customThemeColors.bgEditor ||
+    (previewIsDark && !settings.lightPaperInDarkMode ? '#1B2025' : '#FFFFFF')
+  const previewTextPrimary =
+    customThemeColors.textPrimary ||
+    settings.typography.bodyColor ||
+    (previewIsDark && !settings.lightPaperInDarkMode ? '#E4E8EC' : '#20272D')
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6"
       data-testid="settings-modal"
     >
-      <div className="w-full max-w-3xl bg-panel border border-subtle rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[88vh]">
+      <div className="w-full max-w-4xl bg-panel border border-subtle rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-4 py-3 bg-secondary border-b border-subtle">
           <div className="flex items-center gap-4">
             <span className="font-semibold text-sm text-primary">
-              Klartext Settings & Customization
+              Klartext Settings &amp; Customization
             </span>
             <div className="flex items-center gap-1 bg-app p-0.5 rounded border border-subtle text-xs">
               <button
@@ -270,6 +558,480 @@ export const SettingsModal: React.FC<{
         <div className="p-5 overflow-y-auto space-y-6 text-xs">
           {settingsTab === 'visual' ? (
             <>
+              {/* Saved Themes Manager + Import/Export + Live Theme Preview Window */}
+              <div
+                className="p-3.5 rounded-lg bg-app border border-subtle space-y-3"
+                data-testid="settings-saved-themes-section"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-accent" />
+                    <span className="font-semibold text-primary uppercase tracking-wider text-[11px]">
+                      Saved Themes Library (Save, Edit, Delete, Import &amp; Export)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      data-testid="export-themes-btn"
+                      onClick={handleExportThemes}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export Themes</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="import-themes-btn"
+                      onClick={() => {
+                        setShowThemeJsonDrawer((v) => !v)
+                        setThemeJsonText('')
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Import Themes</span>
+                    </button>
+                  </div>
+                </div>
+
+                {themeStatusMsg && (
+                  <div
+                    data-testid="theme-status-banner"
+                    className="px-2.5 py-1 rounded bg-panel border border-subtle text-[11px] text-accent flex items-center justify-between"
+                  >
+                    <span>{themeStatusMsg}</span>
+                    <button
+                      type="button"
+                      onClick={() => setThemeStatusMsg(null)}
+                      className="text-muted hover:text-primary"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-12 gap-2.5 items-end">
+                  <div className="col-span-5">
+                    <label className="block text-muted mb-1">Active Saved Theme</label>
+                    <select
+                      data-testid="settings-saved-themes-select"
+                      value={activeSavedThemeId}
+                      onChange={(e) => handleSelectSavedTheme(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary font-medium"
+                    >
+                      <option value="">Nordic Default (Unsaved Preset)</option>
+                      {savedThemes.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} ({t.baseMode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-span-4">
+                    <label className="block text-muted mb-1">Save Current as New Theme</label>
+                    <input
+                      type="text"
+                      data-testid="save-new-theme-input"
+                      placeholder="e.g., Midnight Fjord, Solarized Snow..."
+                      value={newThemeName}
+                      onChange={(e) => setNewThemeName(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary"
+                    />
+                  </div>
+
+                  <div className="col-span-3 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      data-testid="save-theme-btn"
+                      onClick={handleSaveNewTheme}
+                      className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded bg-accent text-white font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Save Theme</span>
+                    </button>
+                    {activeSavedTheme && (
+                      <>
+                        <button
+                          type="button"
+                          data-tooltip="Edit Saved Theme"
+                          data-testid="edit-theme-btn"
+                          onClick={() => {
+                            setEditThemeName(activeSavedTheme.name)
+                            setIsEditingSavedTheme((v) => !v)
+                          }}
+                          className="p-1.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          data-tooltip="Delete Saved Theme"
+                          data-testid="delete-theme-btn"
+                          onClick={handleDeleteActiveTheme}
+                          className="p-1.5 rounded bg-panel border border-subtle text-danger hover:border-danger"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Edit Saved Theme Drawer */}
+                {isEditingSavedTheme && activeSavedTheme && (
+                  <div
+                    data-testid="edit-saved-theme-drawer"
+                    className="p-3 rounded bg-panel border border-subtle space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-primary text-[11px]">
+                        Editing Saved Theme: {activeSavedTheme.name}
+                      </span>
+                      <button
+                        type="button"
+                        data-testid="update-saved-theme-btn"
+                        onClick={handleUpdateActiveTheme}
+                        className="px-2.5 py-1 rounded bg-accent text-white font-medium text-[11px]"
+                      >
+                        Save Theme Changes
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-muted mb-1 text-[10px]">Theme Name</label>
+                        <input
+                          type="text"
+                          data-testid="edit-theme-name-input"
+                          value={editThemeName}
+                          onChange={(e) => setEditThemeName(e.target.value)}
+                          className="w-full px-2 py-1 rounded bg-app border border-subtle text-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-muted mb-1 text-[10px]">App Surface</label>
+                        <input
+                          type="color"
+                          data-testid="edit-theme-bg-app"
+                          value={previewBgApp}
+                          onChange={(e) =>
+                            onUpdateSettings({
+                              customThemeColors: {
+                                ...customThemeColors,
+                                bgApp: e.target.value
+                              }
+                            })
+                          }
+                          className="w-full h-7 rounded border border-subtle cursor-pointer bg-app"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-muted mb-1 text-[10px]">Panel Surface</label>
+                        <input
+                          type="color"
+                          data-testid="edit-theme-bg-panel"
+                          value={previewBgPanel}
+                          onChange={(e) =>
+                            onUpdateSettings({
+                              customThemeColors: {
+                                ...customThemeColors,
+                                bgPanel: e.target.value
+                              }
+                            })
+                          }
+                          className="w-full h-7 rounded border border-subtle cursor-pointer bg-app"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-muted mb-1 text-[10px]">Editor Surface</label>
+                        <input
+                          type="color"
+                          data-testid="edit-theme-bg-editor"
+                          value={previewBgEditor}
+                          onChange={(e) =>
+                            onUpdateSettings({
+                              customThemeColors: {
+                                ...customThemeColors,
+                                bgEditor: e.target.value
+                              }
+                            })
+                          }
+                          className="w-full h-7 rounded border border-subtle cursor-pointer bg-app"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Import / Export Themes JSON Drawer */}
+                {showThemeJsonDrawer && (
+                  <div
+                    data-testid="themes-import-export-drawer"
+                    className="p-3 rounded bg-panel border border-subtle space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-primary text-[11px]">
+                        Import or Export Themes JSON
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <label className="px-2 py-1 rounded bg-secondary border border-subtle text-[11px] cursor-pointer hover:border-accent">
+                          <span>Load .json File</span>
+                          <input
+                            type="file"
+                            accept=".json,application/json"
+                            data-testid="import-themes-file-input"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              const reader = new FileReader()
+                              reader.onload = () => {
+                                const text = String(reader.result || '')
+                                setThemeJsonText(text)
+                                handleImportThemesFromJson(text)
+                              }
+                              reader.readAsText(file)
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          data-testid="apply-import-themes-btn"
+                          onClick={() => handleImportThemesFromJson(themeJsonText)}
+                          className="px-2.5 py-1 rounded bg-accent text-white font-medium text-[11px]"
+                        >
+                          Apply Imported JSON
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      rows={4}
+                      data-testid="themes-json-textarea"
+                      placeholder='Paste exported theme JSON here (e.g., {"themes": [...]})'
+                      value={themeJsonText}
+                      onChange={(e) => setThemeJsonText(e.target.value)}
+                      className="w-full p-2 rounded bg-app border border-subtle font-mono text-[11px] text-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Highlight Color Palette (12 Pre-Configured Bright Colors + Custom Colors) */}
+              <div
+                className="p-3.5 rounded-lg bg-app border border-subtle space-y-3"
+                data-testid="highlight-color-palette"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-primary uppercase tracking-wider text-[11px]">
+                      App Highlight &amp; Accent Color Palette (12 Bright Presets + Custom Colors)
+                    </div>
+                    <div className="text-[11px] text-muted mt-0.5">
+                      Controls the primary accent color across buttons, active icons, badges, selection highlights, and inline <code className="font-mono">==highlight==</code> marks.
+                    </div>
+                  </div>
+                  <span
+                    data-testid="active-highlight-color-badge"
+                    style={{ backgroundColor: activeHighlightColor }}
+                    className="px-2.5 py-1 rounded text-white font-mono text-[11px] font-semibold shadow-sm"
+                  >
+                    {activeHighlightColor.toUpperCase()}
+                  </span>
+                </div>
+
+                {/* 12 Pre-Configured Bright Colors */}
+                <div className="grid grid-cols-6 gap-2">
+                  {PRESET_HIGHLIGHT_COLORS.map((preset) => {
+                    const isSelected =
+                      activeHighlightColor.toLowerCase() === preset.hex.toLowerCase()
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        data-testid={`highlight-color-swatch-${preset.id}`}
+                        data-color={preset.hex}
+                        onClick={() => onUpdateSettings({ highlightColor: preset.hex })}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded border text-left transition-all ${
+                          isSelected
+                            ? 'bg-panel border-accent ring-2 ring-accent/40 font-semibold'
+                            : 'bg-panel/70 border-subtle hover:border-accent/60'
+                        }`}
+                      >
+                        <span
+                          style={{ backgroundColor: preset.hex }}
+                          className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center border border-black/10"
+                        >
+                          {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                        </span>
+                        <span className="truncate text-[11px] text-primary">{preset.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Custom Highlight Colors + Add New Custom Color */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-subtle/60">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-muted mr-1">Custom Colors:</span>
+                    {customHighlightColors.length === 0 && (
+                      <span className="text-[11px] text-muted italic">None added yet</span>
+                    )}
+                    {customHighlightColors.map((hex) => {
+                      const isSelected =
+                        activeHighlightColor.toLowerCase() === hex.toLowerCase()
+                      return (
+                        <button
+                          key={hex}
+                          type="button"
+                          data-testid={`custom-highlight-swatch-${hex}`}
+                          onClick={() => onUpdateSettings({ highlightColor: hex })}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[11px] font-mono ${
+                            isSelected
+                              ? 'bg-panel border-accent ring-2 ring-accent/40 font-semibold'
+                              : 'bg-panel border-subtle'
+                          }`}
+                        >
+                          <span
+                            style={{ backgroundColor: hex }}
+                            className="w-3.5 h-3.5 rounded-full border border-black/10"
+                          />
+                          <span>{hex}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="color"
+                      data-testid="custom-highlight-color-input"
+                      value={
+                        /^#[0-9A-Fa-f]{6}$/.test(customHighlightHex)
+                          ? customHighlightHex
+                          : '#FF5E5B'
+                      }
+                      onChange={(e) => setCustomHighlightHex(e.target.value.toUpperCase())}
+                      className="w-7 h-7 rounded border border-subtle cursor-pointer bg-panel"
+                    />
+                    <input
+                      type="text"
+                      data-testid="custom-highlight-hex-input"
+                      value={customHighlightHex}
+                      onChange={(e) => setCustomHighlightHex(e.target.value)}
+                      placeholder="#FF5E5B"
+                      className="w-24 px-2 py-1 rounded bg-panel border border-subtle font-mono text-[11px] text-primary"
+                    />
+                    <button
+                      type="button"
+                      data-testid="add-custom-highlight-color-btn"
+                      onClick={handleAddCustomHighlightColor}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded bg-accent text-white font-medium text-[11px]"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Color</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Theme Preview Window */}
+              <div
+                data-testid="theme-preview-window"
+                style={{
+                  backgroundColor: previewBgApp,
+                  color: previewTextPrimary
+                }}
+                className="rounded-lg border border-subtle overflow-hidden shadow-md"
+              >
+                <div
+                  style={{ backgroundColor: previewBgPanel }}
+                  className="flex items-center justify-between px-3 py-1.5 border-b border-subtle/60 text-[11px]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-400/80" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
+                    <span className="font-semibold ml-1">
+                      Theme Preview — {activeSavedTheme ? activeSavedTheme.name : `Nordic ${settings.theme}`}
+                    </span>
+                  </div>
+                  <span
+                    style={{ backgroundColor: activeHighlightColor }}
+                    className="px-2 py-0.5 rounded text-white text-[10px] font-medium flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Accent Button</span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-12 min-h-[120px]">
+                  <div
+                    style={{ backgroundColor: previewBgApp }}
+                    className="col-span-3 p-2.5 border-r border-subtle/50 space-y-1.5 text-[11px]"
+                  >
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <Folder
+                        className="w-3.5 h-3.5"
+                        style={{ color: activeHighlightColor }}
+                      />
+                      <span>Workspace Root</span>
+                    </div>
+                    <div
+                      style={{
+                        backgroundColor: `${activeHighlightColor}22`,
+                        borderLeft: `3px solid ${activeHighlightColor}`
+                      }}
+                      className="px-2 py-1 rounded text-[10px] font-medium"
+                    >
+                      Architecture-Overview.md
+                    </div>
+                    <div className="px-2 py-1 text-[10px] opacity-70">
+                      Release-Checklist.md
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      backgroundColor: previewBgEditor,
+                      fontFamily: settings.typography.bodyFontFamily
+                    }}
+                    className="col-span-9 p-3.5 space-y-2"
+                  >
+                    <div
+                      style={{
+                        fontFamily:
+                          settings.typography.headings?.h1?.fontFamily ||
+                          settings.typography.bodyFontFamily,
+                        color:
+                          settings.typography.headings?.h1?.color || previewTextPrimary
+                      }}
+                      className="text-base font-bold"
+                    >
+                      # Technical Nordic Markdown Studio
+                    </div>
+                    <p className="text-xs leading-relaxed">
+                      Live typography preview with{' '}
+                      <span
+                        style={{
+                          backgroundColor: `${activeHighlightColor}38`,
+                          borderBottom: `2px solid ${activeHighlightColor}`
+                        }}
+                        className="px-1 py-0.5 rounded font-medium"
+                      >
+                        ==highlighted key insights==
+                      </span>{' '}
+                      and inline Untitled UI icons{' '}
+                      <span
+                        style={{ color: activeHighlightColor }}
+                        className="inline-flex items-center gap-0.5 font-medium"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" /> :icon[Sparkles]:
+                      </span>
+                      .
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Theme & General Editor Appearance */}
               <div className="space-y-3" data-testid="settings-visual-panel">
                 <div className="font-semibold text-primary uppercase tracking-wider text-[11px]">
@@ -726,6 +1488,7 @@ export const SettingsModal: React.FC<{
                         keybindings: {
                           'commandPalette.toggle': 'Mod+K',
                           'quickSwitcher.toggle': 'Mod+P',
+                          'iconPicker.toggle': 'Mod+Shift+I',
                           'zenMode.toggle': 'Mod+Shift+F',
                           'search.inFile': 'Mod+F',
                           'search.global': 'Mod+Shift+H',

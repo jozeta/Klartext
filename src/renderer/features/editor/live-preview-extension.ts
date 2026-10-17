@@ -17,6 +17,35 @@ import {
   formatMarkdownDocument,
   formatMarkdownTable
 } from '../../../shared/markdown/pipeline'
+import { renderUntitledIconToSvgHtml } from '../../../shared/icons/untitled-icon-svg'
+
+class InlineUntitledIconWidget extends WidgetType {
+  constructor(
+    private iconName: string,
+    private svgHtml: string,
+    private targetPos: number
+  ) {
+    super()
+  }
+
+  eq(other: InlineUntitledIconWidget): boolean {
+    return this.iconName === other.iconName && this.targetPos === other.targetPos
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const span = document.createElement('span')
+    span.className = 'klartext-inline-icon-wrap cursor-pointer'
+    span.setAttribute('data-icon', this.iconName)
+    span.title = `:icon[${this.iconName}]:`
+    span.innerHTML = this.svgHtml
+    span.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      view.dispatch({ selection: { anchor: this.targetPos } })
+      view.focus()
+    })
+    return span
+  }
+}
 
 class TaskCheckboxWidget extends WidgetType {
   constructor(
@@ -1041,6 +1070,25 @@ function buildLiveDecorations(
         value: Decoration.mark({ class: 'cm-live-kbd' })
       })
       decos.push({ from: end - 6, to: end, value: Decoration.replace({}) })
+    }
+
+    // 20. Inline Untitled UI Icon (:icon[IconName]:)
+    const iconRegex = /:icon\[([a-zA-Z0-9_-]+)\]:/g
+    let iconMatch: RegExpExecArray | null
+    while ((iconMatch = iconRegex.exec(text)) !== null) {
+      const start = line.from + iconMatch.index
+      const end = start + iconMatch[0].length
+      const iconName = iconMatch[1]
+      const svgHtml = renderUntitledIconToSvgHtml(iconName, 16)
+      if (svgHtml) {
+        decos.push({
+          from: start,
+          to: end,
+          value: Decoration.replace({
+            widget: new InlineUntitledIconWidget(iconName, svgHtml, start)
+          })
+        })
+      }
     }
 
     lineNum++

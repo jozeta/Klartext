@@ -340,5 +340,186 @@ Markdown
     expect(convertedMd).toContain('**world**')
     expect(convertedMd).toContain('[link](https://example.com)')
   })
+
+  it('evaluates <% %> dynamic template variables in content and filenames including dates, relative dates, folder slugs, breadcrumbs, git, system info, and cursor placement', async () => {
+    const {
+      evaluateTemplateVariables,
+      evaluateTemplateFileName,
+      TEMPLATE_VARIABLES_DOCS
+    } = await import('../../shared/templates/template-engine')
+    expect(TEMPLATE_VARIABLES_DOCS.length).toBeGreaterThanOrEqual(60)
+
+    const fixedNow = new Date('2026-10-17T14:30:45.000Z')
+    const ctx = {
+      now: fixedNow,
+      fileName: 'Sprint Plan 2026.md',
+      fileTitle: 'Sprint Plan 2026',
+      relativePath: 'Engineering/Roadmap/Sprint Plan 2026.md',
+      folderName: 'Q4 Roadmap',
+      folderPath: 'Engineering/Q4 Roadmap',
+      parentFolderName: 'Engineering',
+      rootName: 'Product Hub',
+      rootPath: '/Users/zeta/ProductHub',
+      allRootNames: ['Product Hub', 'Docs'],
+      gitBranch: 'feat/templates',
+      gitStatus: 'Synced',
+      userName: 'zeta',
+      hostName: 'macbook-pro',
+      osPlatform: 'macOS',
+      cpuArch: 'arm64',
+      appVersion: '1.1.0',
+      locale: 'sv-SE'
+    }
+
+    const dynamicFileName = evaluateTemplateFileName(
+      '<% date %>-<% folder_slug %>-Standup.md',
+      ctx
+    )
+    expect(dynamicFileName).toBe('2026-10-17-q4-roadmap-Standup.md')
+
+    const tpl = `# <% title %> in <% folder %> (<% root %>)
+Date: <% date %> | Compact: <% date_compact %> | Plus7: <% date +7d %> | Custom: <% date:DD.MM.YYYY %>
+Slugs: <% file_slug %> / <% folder_slug %> | Parent: <% parent_folder %>
+Breadcrumbs: <% breadcrumbs %> | Roots (<% root_count %>): <% all_roots %>
+User: <% user %>@<% host %> (<% os %> / <% arch %>)
+Git: <% git_branch %> [<% git_status %>]
+Range: <% random(42, 42) %>
+Here: <% cursor %>End`
+
+    const res = evaluateTemplateVariables(tpl, ctx)
+
+    expect(res.output).toContain('# Sprint Plan 2026 in Q4 Roadmap (Product Hub)')
+    expect(res.output).toContain(
+      'Date: 2026-10-17 | Compact: 20261017 | Plus7: 2026-10-24 | Custom: 17.10.2026'
+    )
+    expect(res.output).toContain('Slugs: sprint-plan-2026 / q4-roadmap | Parent: Engineering')
+    expect(res.output).toContain(
+      'Breadcrumbs: Product Hub > Engineering > Q4 Roadmap | Roots (2): Product Hub, Docs'
+    )
+    expect(res.output).toContain('User: zeta@macbook-pro (macOS / arm64)')
+    expect(res.output).toContain('Git: feat/templates [Synced]')
+    expect(res.output).toContain('Range: 42')
+    expect(res.output).toContain('Here: End')
+    expect(res.output).not.toContain('<% cursor %>')
+    expect(res.cursorOffset).toBe(res.output.indexOf('End'))
+  })
+
+  it('renders Untitled UI Free Icons (:icon[Name]:), searches the icon catalog, validates Saved Themes & 12 Highlight Colors, and evaluates Power-User dynamic variables', async () => {
+    const {
+      UNTITLED_ICON_CATALOG,
+      searchUntitledIcons
+    } = await import('../../renderer/components/icons/untitled-icons')
+    const { renderUntitledIconSvgHtml } = await import(
+      '../../shared/icons/untitled-icon-svg'
+    )
+    const {
+      extractPowerTemplateExpressions,
+      evaluateTemplateVariablesAsync
+    } = await import('../../shared/templates/template-engine')
+    const { PRESET_HIGHLIGHT_COLORS } = await import('../../shared/constants')
+    const {
+      SavedThemeSchema,
+      AppSettingsSchema
+    } = await import('../../shared/schemas')
+
+    // 1. Untitled UI Free Icons catalog & inline :icon[Name]: rendering
+    expect(UNTITLED_ICON_CATALOG.length).toBeGreaterThanOrEqual(90)
+    const starMatches = searchUntitledIcons('sparkles')
+    expect(starMatches.some((i) => i.id === 'Sparkles')).toBe(true)
+
+    const svgHtml = renderUntitledIconSvgHtml('Sparkles')
+    expect(svgHtml).toContain('<svg')
+    expect(svgHtml).toContain('data-untitled-icon="Sparkles"')
+
+    const renderedDoc = await renderMarkdownDocument(
+      'Feature badge :icon[Sparkles]: and :icon[Rocket01]: inline.'
+    )
+    expect(renderedDoc.html).toContain('class="klartext-inline-icon-wrap"')
+    expect(renderedDoc.html).toContain('class="klartext-inline-icon"')
+    expect(renderedDoc.html).toContain('<svg viewBox="0 0 24 24"')
+
+    // 2. 12 Pre-configured bright highlight colors + SavedThemeSchema validation
+    expect(PRESET_HIGHLIGHT_COLORS).toHaveLength(12)
+    const parsedTheme = SavedThemeSchema.parse({
+      id: 'theme-nordic-aurora',
+      name: 'Nordic Aurora',
+      baseTheme: 'dark',
+      lightPaperInDarkMode: false,
+      highlightColor: '#3B82F6',
+      colors: {
+        bgApp: '#0F172A',
+        bgPanel: '#1E293B',
+        bgEditor: '#0F172A',
+        textEditor: '#F8FAFC',
+        textPrimary: '#F8FAFC',
+        textSecondary: '#94A3B8',
+        accentPrimary: '#3B82F6',
+        borderSubtle: '#334155'
+      },
+      createdAt: Date.now()
+    })
+    expect(parsedTheme.name).toBe('Nordic Aurora')
+    const parsedSettings = AppSettingsSchema.parse({
+      highlightColor: '#10B981',
+      customHighlightColors: ['#FF00AA'],
+      savedThemes: [parsedTheme],
+      activeSavedThemeId: parsedTheme.id
+    })
+    expect(parsedSettings.highlightColor).toBe('#10B981')
+    expect(parsedSettings.customHighlightColors).toEqual(['#FF00AA'])
+    expect(parsedSettings.savedThemes).toHaveLength(1)
+
+    // 3. Power-user dynamic variables extraction & async evaluation
+    const powerTpl = `CLI: <% exec: echo "Klartext Power" %>
+Script: <% sh: printf "ShellOK" %>
+AppleScript: <% applescript: return "macOS Ready" %>
+URL: <% url: https://api.example.local/status %>
+JSON: <% json_url: https://api.example.local/meta | version %>
+Env: <% env:KLARTEXT_UNIT_VAR %>
+Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
+
+    const exprs = extractPowerTemplateExpressions(powerTpl)
+    expect(exprs).toEqual([
+      'exec: echo "Klartext Power"',
+      'sh: printf "ShellOK"',
+      'applescript: return "macOS Ready"',
+      'url: https://api.example.local/status',
+      'json_url: https://api.example.local/meta | version',
+      'env:KLARTEXT_UNIT_VAR',
+      'git_commit',
+      'uptime',
+      'cpu_cores'
+    ])
+
+    const asyncEval = await evaluateTemplateVariablesAsync(
+      powerTpl,
+      {
+        gitCommit: 'a1b2c3d',
+        uptime: '4d 12h',
+        cpuCores: '12'
+      },
+      async (requested) => {
+        const out: Record<string, string> = {}
+        for (const k of requested) {
+          if (k.startsWith('exec:')) out[k] = 'Klartext Power'
+          else if (k.startsWith('sh:')) out[k] = 'ShellOK'
+          else if (k.startsWith('applescript:')) out[k] = 'macOS Ready'
+          else if (k.startsWith('url:')) out[k] = '200 OK'
+          else if (k.startsWith('json_url:')) out[k] = '2.4.0'
+          else if (k === 'env:KLARTEXT_UNIT_VAR') out[k] = 'production'
+        }
+        return out
+      }
+    )
+
+    expect(asyncEval.output).toContain('CLI: Klartext Power')
+    expect(asyncEval.output).toContain('Script: ShellOK')
+    expect(asyncEval.output).toContain('AppleScript: macOS Ready')
+    expect(asyncEval.output).toContain('URL: 200 OK')
+    expect(asyncEval.output).toContain('JSON: 2.4.0')
+    expect(asyncEval.output).toContain('Env: production')
+    expect(asyncEval.output).toContain('Sys: a1b2c3d | 4d 12h | 12 cores')
+  })
 })
+
 

@@ -15,10 +15,13 @@ export const IPC_CHANNELS = {
   DOC_READ: 'doc:read',
   DOC_WRITE: 'doc:write',
   DOC_CREATE: 'doc:create',
+  DOC_CREATE_DIR: 'doc:create-dir',
   DOC_DELETE: 'doc:delete',
   DOC_RENAME: 'doc:rename',
   DOC_MOVE_CROSS_ROOT: 'doc:move-cross-root',
   DOC_CHECK_CROSS_ROOT_ASSETS: 'doc:check-cross-root-assets',
+  SYSTEM_GET_ENV_INFO: 'system:get-env-info',
+  TEMPLATE_EVALUATE_POWER: 'template:evaluate-power',
 
   // Assets & Diagrams
   ASSET_SAVE: 'asset:save',
@@ -89,9 +92,30 @@ export const IPC_CHANNELS = {
   EVENT_MENU_ACTION: 'event:menu-action'
 } as const
 
+export const PRESET_HIGHLIGHT_COLORS: Array<{
+  id: string
+  name: string
+  label: string
+  hex: string
+}> = [
+  { id: 'electric-blue', name: 'Electric Blue', label: 'Electric Blue', hex: '#3B82F6' },
+  { id: 'cyber-cyan', name: 'Cyber Cyan', label: 'Cyber Cyan', hex: '#06B6D4' },
+  { id: 'nordic-teal', name: 'Nordic Teal', label: 'Nordic Teal', hex: '#14B8A6' },
+  { id: 'emerald-mint', name: 'Emerald Mint', label: 'Emerald Mint', hex: '#10B981' },
+  { id: 'lime-neon', name: 'Lime Neon', label: 'Lime Neon', hex: '#84CC16' },
+  { id: 'amber-gold', name: 'Amber Gold', label: 'Amber Gold', hex: '#F59E0B' },
+  { id: 'sunset-orange', name: 'Sunset Orange', label: 'Sunset Orange', hex: '#F97316' },
+  { id: 'coral-red', name: 'Coral Red', label: 'Coral Red', hex: '#EF4444' },
+  { id: 'hot-rose', name: 'Hot Rose', label: 'Hot Rose', hex: '#F43F5E' },
+  { id: 'vivid-pink', name: 'Vivid Pink', label: 'Vivid Pink', hex: '#EC4899' },
+  { id: 'neon-purple', name: 'Neon Purple', label: 'Neon Purple', hex: '#A855F7' },
+  { id: 'electric-indigo', name: 'Electric Indigo', label: 'Electric Indigo', hex: '#6366F1' }
+]
+
 export const DEFAULT_KEYBINDINGS: Record<string, string> = {
   'commandPalette.toggle': 'Mod+K',
   'quickSwitcher.toggle': 'Mod+P',
+  'iconPicker.toggle': 'Mod+Shift+I',
   'zenMode.toggle': 'Mod+Shift+F',
   'search.inFile': 'Mod+F',
   'search.global': 'Mod+Shift+H',

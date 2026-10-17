@@ -9,7 +9,7 @@ import {
   Trash2,
   GitCommit,
   Check
-} from 'lucide-react'
+} from '../../components/icons/untitled-icons'
 import {
   createDefaultExcalidrawScene,
   serializeExcalidrawSvg,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Sparkles, Server, Cpu, Check, X, Square, RefreshCw, Copy } from 'lucide-react'
+import { Sparkles, Server, Cpu, Check, X, Square, RefreshCw, Copy } from '../../components/icons/untitled-icons'
 import type {
   AppSettings,
   HardwareTierAdvice,

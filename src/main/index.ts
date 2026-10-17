@@ -249,7 +249,7 @@ app.whenReady().then(() => {
       label: 'File',
       submenu: [
         {
-          label: 'Open Folder...',
+          label: 'Open new workspace...',
           accelerator: 'CmdOrCtrl+O',
           click: () => sendMenuAction('open-folder')
         },
@@ -285,36 +285,79 @@ app.whenReady().then(() => {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
-        { role: 'selectAll' }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
+        { role: 'selectAll' },
+        { type: 'separator' },
         {
-          label: 'Switch Light / Dark Mode',
-          click: () => sendMenuAction('toggle-theme')
-        },
-        {
-          label: 'Toggle Formatting Toolbar Row',
-          click: () => sendMenuAction('toggle-toolbar')
-        },
-        {
-          label: 'Toggle Bottom Status Row',
-          click: () => sendMenuAction('toggle-status-bar')
-        },
-        {
-          label: 'Toggle Right Frontmatter Window',
-          click: () => sendMenuAction('toggle-frontmatter')
-        },
-        {
-          label: 'Toggle Spellcheck Underlines',
-          click: () => sendMenuAction('toggle-spellcheck')
+          label: 'Insert',
+          submenu: [
+            { label: 'Table (2 × 2)', click: () => sendMenuAction('editor:table-2x2') },
+            { label: 'Table (3 × 3)', click: () => sendMenuAction('editor:table-3x3') },
+            { label: 'Table (4 × 4)', click: () => sendMenuAction('editor:table-4x4') },
+            { type: 'separator' },
+            { label: 'Note Callout (> [!NOTE])', click: () => sendMenuAction('editor:callout-note') },
+            { label: 'Tip Callout (> [!TIP])', click: () => sendMenuAction('editor:callout-tip') },
+            {
+              label: 'Important Callout (> [!IMPORTANT])',
+              click: () => sendMenuAction('editor:callout-important')
+            },
+            {
+              label: 'Warning Alert (> [!WARNING])',
+              click: () => sendMenuAction('editor:callout-warning')
+            },
+            {
+              label: 'Caution Alert (> [!CAUTION])',
+              click: () => sendMenuAction('editor:callout-caution')
+            },
+            { type: 'separator' },
+            { label: 'Code Block', click: () => sendMenuAction('editor:codeblock') },
+            { label: 'Inline Math ($...$)', click: () => sendMenuAction('editor:math-inline') },
+            { label: 'Display Math Block ($$...$$)', click: () => sendMenuAction('editor:math-block') },
+            {
+              label: 'Collapsible Accordion (<details>)',
+              click: () => sendMenuAction('editor:details')
+            },
+            { label: 'Horizontal Rule (---)', click: () => sendMenuAction('editor:hr') },
+            { type: 'separator' },
+            {
+              label: 'Hyperlink',
+              accelerator: 'CmdOrCtrl+K',
+              click: () => sendMenuAction('editor:link')
+            },
+            { label: 'Wiki-Link ([[Doc]])', click: () => sendMenuAction('editor:wikilink') },
+            { label: 'Image Reference', click: () => sendMenuAction('editor:image') },
+            { label: 'Footnote ([^1])', click: () => sendMenuAction('editor:footnote') },
+            { label: 'Table of Contents ([[_TOC_]])', click: () => sendMenuAction('editor:toc') },
+            { label: 'YAML Frontmatter', click: () => sendMenuAction('editor:frontmatter') },
+            { label: 'Current Date (YYYY-MM-DD)', click: () => sendMenuAction('editor:date') }
+          ]
         },
         { type: 'separator' },
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
-        { role: 'togglefullscreen' }
+        {
+          label: 'Format & Prettify Document',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => sendMenuAction('editor:format-doc')
+        },
+        {
+          label: 'Align All GFM Tables',
+          click: () => sendMenuAction('editor:format-tables')
+        },
+        {
+          label: 'Clear Formatting',
+          click: () => sendMenuAction('editor:clear-format')
+        },
+        { type: 'separator' },
+        {
+          label: 'Open Visual Diagram Builder...',
+          click: () => sendMenuAction('editor:open-mermaid-builder')
+        },
+        { label: 'Mermaid Flowchart', click: () => sendMenuAction('editor:mermaid') },
+        { label: 'Mermaid Sequence Diagram', click: () => sendMenuAction('editor:mermaid-sequence') },
+        { label: 'Mermaid State Diagram', click: () => sendMenuAction('editor:mermaid-state') },
+        { label: 'Mermaid Class Diagram', click: () => sendMenuAction('editor:mermaid-class') },
+        { label: 'Mermaid ER Diagram', click: () => sendMenuAction('editor:mermaid-er') },
+        { label: 'Mermaid Gantt Chart', click: () => sendMenuAction('editor:mermaid-gantt') },
+        { label: 'Mermaid Pie Chart', click: () => sendMenuAction('editor:mermaid-pie') },
+        { label: 'Mermaid Mindmap', click: () => sendMenuAction('editor:mermaid-mindmap') }
       ]
     },
     {
@@ -380,81 +423,75 @@ app.whenReady().then(() => {
         { label: 'Numbered List', click: () => sendMenuAction('editor:numbered') },
         { label: 'Task Checklist', click: () => sendMenuAction('editor:task') },
         { label: 'Definition List', click: () => sendMenuAction('editor:def-list') },
-        { label: 'Blockquote', click: () => sendMenuAction('editor:quote') },
-        { type: 'separator' },
-        {
-          label: 'Format & Prettify Document',
-          accelerator: 'CmdOrCtrl+Shift+I',
-          click: () => sendMenuAction('editor:format-doc')
-        },
-        {
-          label: 'Align All GFM Tables',
-          click: () => sendMenuAction('editor:format-tables')
-        },
-        {
-          label: 'Clear Formatting',
-          click: () => sendMenuAction('editor:clear-format')
-        }
+        { label: 'Blockquote', click: () => sendMenuAction('editor:quote') }
       ]
     },
     {
-      label: 'Insert',
+      label: 'View',
       submenu: [
-        { label: 'Table (2 × 2)', click: () => sendMenuAction('editor:table-2x2') },
-        { label: 'Table (3 × 3)', click: () => sendMenuAction('editor:table-3x3') },
-        { label: 'Table (4 × 4)', click: () => sendMenuAction('editor:table-4x4') },
-        { type: 'separator' },
-        { label: 'Note Callout (> [!NOTE])', click: () => sendMenuAction('editor:callout-note') },
-        { label: 'Tip Callout (> [!TIP])', click: () => sendMenuAction('editor:callout-tip') },
         {
-          label: 'Important Callout (> [!IMPORTANT])',
-          click: () => sendMenuAction('editor:callout-important')
+          label: 'Switch Light / Dark Mode',
+          click: () => sendMenuAction('toggle-theme')
         },
         {
-          label: 'Warning Alert (> [!WARNING])',
-          click: () => sendMenuAction('editor:callout-warning')
+          label: 'Toggle Formatting Toolbar Row',
+          click: () => sendMenuAction('toggle-toolbar')
         },
         {
-          label: 'Caution Alert (> [!CAUTION])',
-          click: () => sendMenuAction('editor:callout-caution')
+          label: 'Toggle Bottom Status Row',
+          click: () => sendMenuAction('toggle-status-bar')
         },
         { type: 'separator' },
-        { label: 'Code Block', click: () => sendMenuAction('editor:codeblock') },
-        { label: 'Inline Math ($...$)', click: () => sendMenuAction('editor:math-inline') },
-        { label: 'Display Math Block ($$...$$)', click: () => sendMenuAction('editor:math-block') },
         {
-          label: 'Collapsible Accordion (<details>)',
-          click: () => sendMenuAction('editor:details')
+          label: 'Show Right Frontmatter Window',
+          click: () => sendMenuAction('toggle-frontmatter')
         },
-        { label: 'Horizontal Rule (---)', click: () => sendMenuAction('editor:hr') },
+        {
+          label: 'Show Right Templates Panel (<% %>)',
+          click: () => sendMenuAction('toggle-templates')
+        },
+        {
+          label: 'Show Right Local AI Panel',
+          click: () => sendMenuAction('toggle-ai-panel')
+        },
+        {
+          label: 'Show Right Help & Reference Panel',
+          click: () => sendMenuAction('toggle-help-panel')
+        },
         { type: 'separator' },
         {
-          label: 'Open Visual Diagram Builder...',
-          click: () => sendMenuAction('editor:open-mermaid-builder')
+          label: 'Toggle Spellcheck Underlines',
+          click: () => sendMenuAction('toggle-spellcheck')
         },
-        { label: 'Mermaid Flowchart', click: () => sendMenuAction('editor:mermaid') },
-        { label: 'Mermaid Sequence Diagram', click: () => sendMenuAction('editor:mermaid-sequence') },
-        { label: 'Mermaid State Diagram', click: () => sendMenuAction('editor:mermaid-state') },
-        { label: 'Mermaid Class Diagram', click: () => sendMenuAction('editor:mermaid-class') },
-        { label: 'Mermaid ER Diagram', click: () => sendMenuAction('editor:mermaid-er') },
-        { label: 'Mermaid Gantt Chart', click: () => sendMenuAction('editor:mermaid-gantt') },
-        { label: 'Mermaid Pie Chart', click: () => sendMenuAction('editor:mermaid-pie') },
-        { label: 'Mermaid Mindmap', click: () => sendMenuAction('editor:mermaid-mindmap') },
         { type: 'separator' },
-        {
-          label: 'Hyperlink',
-          accelerator: 'CmdOrCtrl+K',
-          click: () => sendMenuAction('editor:link')
-        },
-        { label: 'Wiki-Link ([[Doc]])', click: () => sendMenuAction('editor:wikilink') },
-        { label: 'Image Reference', click: () => sendMenuAction('editor:image') },
-        { label: 'Footnote ([^1])', click: () => sendMenuAction('editor:footnote') },
-        { label: 'Table of Contents ([[_TOC_]])', click: () => sendMenuAction('editor:toc') },
-        { label: 'YAML Frontmatter', click: () => sendMenuAction('editor:frontmatter') },
-        { label: 'Current Date (YYYY-MM-DD)', click: () => sendMenuAction('editor:date') }
+        { role: 'reload' },
+        { role: 'toggleDevTools' },
+        { role: 'togglefullscreen' }
       ]
     },
-    { role: 'windowMenu' }
+    { role: 'windowMenu' },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Markdown Formatting Guide...',
+          click: () => sendMenuAction('help:formatting')
+        },
+        {
+          label: 'Dynamic Variables (<% %>) Reference...',
+          click: () => sendMenuAction('help:variables')
+        },
+        {
+          label: 'Smart Editing & Shortcuts...',
+          click: () => sendMenuAction('help:shortcuts')
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Right Templates Panel (<% %>)',
+          click: () => sendMenuAction('toggle-templates')
+        }
+      ]
+    }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
 

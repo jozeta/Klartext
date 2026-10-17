@@ -1,13 +1,24 @@
 import type {
   AppSettings,
+  CustomThemeColors,
   EditMode,
   GitPullStrategy,
+  SavedTheme,
   ThemeMode,
   WorkspaceManifest,
   WorkspaceRoot
 } from '../schemas'
 
-export type { AppSettings, EditMode, GitPullStrategy, ThemeMode, WorkspaceManifest, WorkspaceRoot }
+export type {
+  AppSettings,
+  CustomThemeColors,
+  EditMode,
+  GitPullStrategy,
+  SavedTheme,
+  ThemeMode,
+  WorkspaceManifest,
+  WorkspaceRoot
+}
 
 export interface FileTreeNode {
   name: string

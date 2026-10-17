@@ -101,9 +101,34 @@ export const AISettingsSchema = z.object({
 })
 export type AISettings = z.infer<typeof AISettingsSchema>
 
+export const CustomThemeColorsSchema = z.object({
+  bgApp: z.string().optional(),
+  bgPanel: z.string().optional(),
+  bgEditor: z.string().optional(),
+  textPrimary: z.string().optional()
+})
+export type CustomThemeColors = z.infer<typeof CustomThemeColorsSchema>
+
+export const SavedThemeSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(120),
+  baseMode: ThemeModeSchema.default('dark'),
+  highlightColor: z.string().default('#3B82F6'),
+  customColors: CustomThemeColorsSchema.optional(),
+  lightPaperInDarkMode: z.boolean().default(false),
+  typography: TypographySettingsSchema.optional(),
+  updatedAt: z.number().default(() => Date.now())
+})
+export type SavedTheme = z.infer<typeof SavedThemeSchema>
+
 export const AppSettingsSchema = z.object({
   theme: ThemeModeSchema.default('system'),
   accentColorOverride: z.string().optional(),
+  highlightColor: z.string().optional(),
+  customHighlightColors: z.array(z.string()).default([]),
+  savedThemes: z.array(SavedThemeSchema).default([]),
+  activeSavedThemeId: z.string().nullable().default(null),
+  customThemeColors: CustomThemeColorsSchema.optional(),
   defaultEditMode: EditModeSchema.default('inline'),
   floatingToolbarEnabled: z.boolean().default(true),
   formattingToolbarVisible: z.boolean().default(false),
@@ -127,7 +152,33 @@ export const AppSettingsSchema = z.object({
   frontmatterSidebarWidth: z.number().min(160).max(600).default(288),
   rightSidebarOpen: z.boolean().default(false),
   rightSidebarWidth: z.number().min(160).max(600).default(320),
-  lastActiveRightPanel: z.enum(['frontmatter', 'ai']).default('frontmatter'),
+  templatesPanelVisible: z.boolean().default(false),
+  templatesSidebarWidth: z.number().min(180).max(600).default(300),
+  helpPanelVisible: z.boolean().default(false),
+  helpSidebarWidth: z.number().min(200).max(760).default(380),
+  lastActiveRightPanel: z.enum(['frontmatter', 'ai', 'templates', 'help']).default('frontmatter'),
+  folderIcons: z.record(z.string(), z.string()).default({}),
+  folderColors: z.record(z.string(), z.string()).default({}),
+  collapsedDirs: z.record(z.string(), z.boolean()).default({}),
+  collapsedRoots: z.record(z.string(), z.boolean()).default({}),
+  selectedFolder: z
+    .object({
+      rootId: z.string(),
+      relativePath: z.string()
+    })
+    .nullable()
+    .default(null),
+  customTemplates: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        content: z.string(),
+        updatedAt: z.number()
+      })
+    )
+    .optional(),
   splitViewPercent: z.number().min(20).max(80).default(50),
   statusBarVisible: z.boolean().default(true),
   sidebarControlBarVisible: z.boolean().default(true),

@@ -10,6 +10,7 @@ import rehypeKatex from 'rehype-katex'
 import rehypeStringify from 'rehype-stringify'
 import yaml from 'yaml'
 import { highlightCodeToHtml } from './syntax-highlight'
+import { renderUntitledIconToSvgHtml } from '../icons/untitled-icon-svg'
 
 export interface HeadingItem {
   depth: number
@@ -210,6 +211,12 @@ function transformInlineExtendedSyntax(line: string): string {
         />!([^!\n]+)!<\s*/g,
         '<span class="klartext-spoiler" title="Hover or click to reveal">$1</span>'
       )
+      // :icon[IconName]: (Untitled UI inline icon)
+      out = out.replace(/:icon\[([a-zA-Z0-9_-]+)\]:/g, (full, iconName: string) => {
+        const svg = renderUntitledIconToSvgHtml(iconName, 16)
+        if (!svg) return full
+        return `<span class="klartext-inline-icon-wrap" data-icon="${iconName}">${svg}</span>`
+      })
       return out
     })
     .join('')
@@ -402,7 +409,9 @@ const sanitizeSchema = {
     'msqrt',
     'mtext',
     'annotation',
-    'input'
+    'input',
+    'svg',
+    'path'
   ],
   attributes: {
     ...defaultSchema.attributes,
@@ -420,7 +429,25 @@ const sanitizeSchema = {
     img: ['src', 'alt', 'title', 'width', 'height', 'className', 'class'],
     input: [['type', 'checkbox'], 'checked', 'disabled', 'className'],
     code: ['className', 'class'],
-    span: ['className', 'class', 'style', 'aria-hidden', 'title']
+    span: ['className', 'class', 'style', 'aria-hidden', 'title', 'data-icon'],
+    svg: [
+      'viewBox',
+      'width',
+      'height',
+      'stroke',
+      'strokeWidth',
+      'stroke-width',
+      'fill',
+      'strokeLinecap',
+      'stroke-linecap',
+      'strokeLinejoin',
+      'stroke-linejoin',
+      'ariaHidden',
+      'aria-hidden',
+      'className',
+      'class'
+    ],
+    path: ['d', 'stroke', 'strokeWidth', 'stroke-width', 'fill', 'strokeLinecap', 'stroke-linecap', 'strokeLinejoin', 'stroke-linejoin']
   }
 }
 

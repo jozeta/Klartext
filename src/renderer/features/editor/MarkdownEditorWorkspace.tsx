@@ -37,8 +37,9 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  Languages
-} from 'lucide-react'
+  Languages,
+  Smile
+} from '../../components/icons/untitled-icons'
 import type { EditMode } from '../../../shared/types'
 import {
   renderMarkdownDocument,
@@ -72,6 +73,7 @@ export type EditorDispatchedCommand =
   | 'toggle-inline-ai'
   | 'ai-improve'
   | 'open-mermaid-builder'
+  | 'open-icon-picker'
   | MarkdownFormatCommand
 
 // Per-tab selection and scroll offset cache so switching tabs restores exact cursor & scroll position
@@ -150,9 +152,15 @@ export const MarkdownEditorWorkspace: React.FC<{
     command: EditorDispatchedCommand
     nonce: number
   } | null
+  textInsertTrigger?: {
+    text: string
+    cursorOffset: number | null
+    nonce: number
+  } | null
   onChangeContent: (nextContent: string) => void
   onPasteOrDropAsset: (fileName: string, mimeType: string, base64Data: string) => Promise<string>
   onOpenExcalidrawModal?: (drawingRelPath: string) => void
+  onOpenIconPicker?: () => void
   onTriggerAIQuickAction: (action: string, selectedText: string) => void
   onResolveConflictHunk: (
     hunkIndex: number,
@@ -180,9 +188,11 @@ export const MarkdownEditorWorkspace: React.FC<{
   onChangeSplitPercent,
   scrollToLine,
   editorCommandTrigger,
+  textInsertTrigger,
   onChangeContent,
   onPasteOrDropAsset,
   onOpenExcalidrawModal,
+  onOpenIconPicker,
   onTriggerAIQuickAction,
   onResolveConflictHunk,
   onNavigateLink,
@@ -196,14 +206,29 @@ export const MarkdownEditorWorkspace: React.FC<{
   const splitContainerRef = useRef<HTMLDivElement | null>(null)
   const latestContentRef = useRef(content)
   const lastHandledCommandNonceRef = useRef<number | null>(null)
+  const lastHandledTextInsertNonceRef = useRef<number | null>(null)
 
   const [rendered, setRendered] = useState<RenderedMarkdownResult | null>(null)
   const renderedRef = useRef<RenderedMarkdownResult | null>(null)
   renderedRef.current = rendered
   const onTriggerAIQuickActionRef = useRef(onTriggerAIQuickAction)
   onTriggerAIQuickActionRef.current = onTriggerAIQuickAction
+  const onOpenIconPickerRef = useRef(onOpenIconPicker)
+  onOpenIconPickerRef.current = onOpenIconPicker
 
+  const isMouseDownInEditorRef = useRef(false)
+  const [isMouseSelecting, setIsMouseSelecting] = useState(false)
   const [selectionCoords, setSelectionCoords] = useState<{
+    top: number
+    left: number
+    selectedText: string
+  } | null>(null)
+  const [fadingOutCoords, setFadingOutCoords] = useState<{
+    top: number
+    left: number
+    selectedText: string
+  } | null>(null)
+  const lastActiveCoordsRef = useRef<{
     top: number
     left: number
     selectedText: string
@@ -321,10 +346,34 @@ export const MarkdownEditorWorkspace: React.FC<{
       onTriggerAIQuickActionRef.current('improve', sel || latestContentRef.current)
     } else if (command === 'open-mermaid-builder') {
       setMermaidBuilderTarget({})
+    } else if (command === 'open-icon-picker') {
+      onOpenIconPickerRef.current?.()
     } else if (view) {
       applyMarkdownFormatCommand(view, command as MarkdownFormatCommand)
     }
   }, [editorCommandTrigger])
+
+  // Handle inserting evaluated templates or <% %> variable tags at the active cursor position
+  useEffect(() => {
+    if (!textInsertTrigger) return
+    if (lastHandledTextInsertNonceRef.current === textInsertTrigger.nonce) return
+    lastHandledTextInsertNonceRef.current = textInsertTrigger.nonce
+
+    const view = viewRef.current
+    if (!view) return
+    const { from, to } = view.state.selection.main
+    const { text, cursorOffset } = textInsertTrigger
+    const targetAnchor =
+      cursorOffset !== null && cursorOffset >= 0
+        ? from + Math.min(cursorOffset, text.length)
+        : from + text.length
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: targetAnchor },
+      effects: EditorView.scrollIntoView(targetAnchor, { y: 'center' })
+    })
+    view.focus()
+  }, [textInsertTrigger])
 
   // Close spellcheck context menu on outside click
   useEffect(() => {
@@ -364,6 +413,8 @@ export const MarkdownEditorWorkspace: React.FC<{
       const scroller = editorScrollWrapperRef.current
       if (e.button === 0 && scroller && e.target instanceof Node && scroller.contains(e.target)) {
         isSelectingInEditor = true
+        isMouseDownInEditorRef.current = true
+        setIsMouseSelecting(true)
       } else {
         isSelectingInEditor = false
         dragSelectScrollVelocityRef.current = 0
@@ -412,6 +463,30 @@ export const MarkdownEditorWorkspace: React.FC<{
         cancelAnimationFrame(rafId)
         rafId = null
       }
+      if (isMouseDownInEditorRef.current) {
+        isMouseDownInEditorRef.current = false
+        setIsMouseSelecting(false)
+        const view = viewRef.current
+        if (view) {
+          const sel = view.state.selection.main
+          if (!sel.empty) {
+            const selectedStr = view.state.sliceDoc(sel.from, sel.to)
+            const fromCoords = view.coordsAtPos(sel.from)
+            const toCoords = view.coordsAtPos(sel.to) || fromCoords
+            if (fromCoords && toCoords) {
+              const selectionTop = Math.min(fromCoords.top, toCoords.top)
+              const selectionBottom = Math.max(fromCoords.bottom, toCoords.bottom)
+              const selectionLeft = Math.min(fromCoords.left, toCoords.left)
+              const placeAbove = selectionTop > 110
+              const top = placeAbove ? selectionTop - 68 : selectionBottom + 8
+              const left = Math.max(12, Math.min(window.innerWidth - 420, selectionLeft))
+              setSelectionCoords({ top, left, selectedText: selectedStr })
+            }
+          } else {
+            setSelectionCoords(null)
+          }
+        }
+      }
     }
 
     window.addEventListener('mousedown', onWindowMouseDown)
@@ -424,6 +499,26 @@ export const MarkdownEditorWorkspace: React.FC<{
       if (rafId !== null) cancelAnimationFrame(rafId)
     }
   }, [])
+
+  // Quick fade-out transition when floating selection toolbar closes
+  const activeFloatingCoords =
+    floatingToolbarEnabled && !isMouseSelecting ? selectionCoords : null
+  useEffect(() => {
+    if (activeFloatingCoords) {
+      lastActiveCoordsRef.current = activeFloatingCoords
+      setFadingOutCoords(null)
+      return
+    }
+    if (lastActiveCoordsRef.current) {
+      const prev = lastActiveCoordsRef.current
+      lastActiveCoordsRef.current = null
+      setFadingOutCoords(prev)
+      const timer = setTimeout(() => {
+        setFadingOutCoords(null)
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [activeFloatingCoords])
 
   useEffect(() => {
     setSplitPercent(initialSplitPercent)
@@ -564,8 +659,8 @@ export const MarkdownEditorWorkspace: React.FC<{
       },
       {
         key: 'Mod-Shift-i',
-        run: (view) => {
-          applyMarkdownFormatCommand(view, 'format-doc')
+        run: () => {
+          onOpenIconPickerRef.current?.()
           return true
         }
       },
@@ -873,11 +968,11 @@ export const MarkdownEditorWorkspace: React.FC<{
                   const selectionBottom = Math.max(fromCoords.bottom, toCoords.bottom)
                   const selectionLeft = Math.min(fromCoords.left, toCoords.left)
                   // Always position directly above the selected text (or directly below if near the top edge)
-                  const placeAbove = selectionTop > 96
-                  const top = placeAbove ? selectionTop - 42 : selectionBottom + 8
+                  const placeAbove = selectionTop > 110
+                  const top = placeAbove ? selectionTop - 68 : selectionBottom + 8
                   const left = Math.max(
                     12,
-                    Math.min(window.innerWidth - 560, selectionLeft)
+                    Math.min(window.innerWidth - 420, selectionLeft)
                   )
                   setSelectionCoords({
                     top,
@@ -1740,311 +1835,374 @@ export const MarkdownEditorWorkspace: React.FC<{
         </div>
       )}
 
-      {/* Floating Selection Toolbar (Positioned directly above/below selected text with comprehensive formatting options) */}
-      {selectionCoords && floatingToolbarEnabled && (
+      {/* Floating Selection Toolbar (2 equal-width rows positioned directly above/below selected text, shown on mouseup with quick fade in/out) */}
+      {(activeFloatingCoords || fadingOutCoords) && (
         <div
-          data-testid="floating-selection-toolbar"
+          data-testid={activeFloatingCoords ? 'floating-selection-toolbar' : 'floating-selection-toolbar-fading'}
+          aria-hidden={!activeFloatingCoords}
           style={{
             position: 'fixed',
-            top: `${selectionCoords.top}px`,
-            left: `${selectionCoords.left}px`
+            top: `${(activeFloatingCoords || fadingOutCoords)!.top}px`,
+            left: `${(activeFloatingCoords || fadingOutCoords)!.left}px`
           }}
-          className="z-40 flex items-center gap-0.5 px-2 py-1 rounded-md bg-panel border border-subtle shadow-lg text-xs"
+          className={`z-40 flex flex-col gap-1 px-2 py-1.5 rounded-md bg-panel border border-subtle shadow-lg text-xs transition-opacity duration-150 ease-out ${
+            activeFloatingCoords
+              ? 'opacity-100 klartext-floating-menu-fade'
+              : 'opacity-0 pointer-events-none'
+          }`}
         >
-          <button
-            type="button"
-            data-tooltip="Bold (⌘B)"
-            data-testid="floating-bold-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('bold')
+          {/* Row 1: Inline Text Styles, Headings, Collapsible & Blockquote (+ AI Rewrite when enabled) */}
+          <div
+            data-testid="floating-toolbar-row-1"
+            style={{
+              gridTemplateColumns: `repeat(${aiEnabled ? 14 : 13}, minmax(26px, 1fr))`
             }}
-            className="p-1 rounded hover:bg-secondary text-primary"
+            className="w-full grid gap-0.5 items-center"
           >
-            <Bold className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Italic (⌘I)"
-            data-testid="floating-italic-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('italic')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Italic className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Strikethrough (⇧⌘X)"
-            data-testid="floating-strike-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('strikethrough')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Strikethrough className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Highlight (==)"
-            data-testid="floating-highlight-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('highlight')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Highlighter className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Underline (<u>)"
-            data-testid="floating-underline-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('underline')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Underline className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Inline Code (`)"
-            data-testid="floating-code-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('code')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Code className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Keyboard Key (<kbd>)"
-            data-testid="floating-kbd-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('kbd')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Keyboard className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Spoiler (>! !<)"
-            data-testid="floating-spoiler-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('spoiler')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <EyeOff className="w-3.5 h-3.5" />
-          </button>
-          <span className="h-3.5 w-px bg-subtle mx-0.5" />
-          <button
-            type="button"
-            data-tooltip="Heading 1"
-            data-testid="floating-h1-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('h1')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Heading1 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Heading 2"
-            data-testid="floating-h2-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('h2')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Heading2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Heading 3"
-            data-testid="floating-h3-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('h3')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Heading3 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Blockquote (>)"
-            data-testid="floating-quote-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('quote')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Quote className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Callout Alert (> [!NOTE])"
-            data-testid="floating-callout-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('callout-note')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <AlertCircle className="w-3.5 h-3.5" />
-          </button>
-          <span className="h-3.5 w-px bg-subtle mx-0.5" />
-          <button
-            type="button"
-            data-tooltip="Task List"
-            data-testid="floating-task-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('task')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <CheckSquare className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Bulleted List"
-            data-testid="floating-bullet-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('bullet')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Numbered List"
-            data-testid="floating-numbered-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('numbered')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <ListOrdered className="w-3.5 h-3.5" />
-          </button>
-          <span className="h-3.5 w-px bg-subtle mx-0.5" />
-          <button
-            type="button"
-            data-tooltip="Insert Table"
-            data-testid="floating-table-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('table')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Code Block"
-            data-testid="floating-codeblock-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('codeblock')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <FileCode2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Math ($...$)"
-            data-testid="floating-math-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('math-inline')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Sigma className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Insert Link (⌘K)"
-            data-testid="floating-link-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('link')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <LinkIcon className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Insert Image"
-            data-testid="floating-image-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('image')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <ImageIcon className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Clear Formatting"
-            data-testid="floating-clear-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              executeFormat('clear-format')
-            }}
-            className="p-1 rounded hover:bg-secondary text-primary"
-          >
-            <Eraser className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            data-tooltip="Visual Diagram Builder"
-            aria-label="Visual Diagram Builder"
-            data-testid="floating-mermaid-builder-btn"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              setMermaidBuilderTarget({})
-            }}
-            className="p-1 rounded hover:bg-secondary text-accent"
-          >
-            <Workflow className="w-3.5 h-3.5" />
-          </button>
-          {aiEnabled && (
-            <>
-              <span className="h-3.5 w-px bg-subtle mx-1" />
+            <button
+              type="button"
+              data-tooltip="Bold (⌘B)"
+              data-testid="floating-bold-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('bold')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Bold className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Italic (⌘I)"
+              data-testid="floating-italic-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('italic')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Italic className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Strikethrough (⇧⌘X)"
+              data-testid="floating-strike-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('strikethrough')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Strikethrough className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Highlight (==)"
+              data-testid="floating-highlight-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('highlight')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Highlighter className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Underline (<u>)"
+              data-testid="floating-underline-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('underline')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Underline className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Inline Code (`)"
+              data-testid="floating-code-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('code')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Code className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Keyboard Key (<kbd>)"
+              data-testid="floating-kbd-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('kbd')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Keyboard className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Spoiler (>! !<)"
+              data-testid="floating-spoiler-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('spoiler')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Heading 1"
+              data-testid="floating-h1-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('h1')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Heading1 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Heading 2"
+              data-testid="floating-h2-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('h2')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Heading2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Heading 3"
+              data-testid="floating-h3-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('h3')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Heading3 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Blockquote (>)"
+              data-testid="floating-quote-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('quote')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Quote className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Collapsible Section (<details>)"
+              data-testid="floating-collapsible-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('collapsible')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <ChevronRightSquare className="w-3.5 h-3.5" />
+            </button>
+            {aiEnabled && (
               <button
                 type="button"
+                data-tooltip="AI Rewrite"
+                aria-label="AI Rewrite"
                 data-testid="floating-ai-improve"
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  onTriggerAIQuickAction('improve', selectionCoords.selectedText)
+                  onTriggerAIQuickAction(
+                    'improve',
+                    (activeFloatingCoords || fadingOutCoords)!.selectedText
+                  )
                 }}
-                className="px-2 py-0.5 rounded bg-accent text-white font-medium"
+                className="p-1 rounded bg-accent text-white font-medium flex items-center justify-center"
               >
-                AI Rewrite
+                <Sparkles className="w-3.5 h-3.5" />
               </button>
+            )}
+          </div>
+
+          {/* Row 2: Callouts, Lists, Tables, Blocks, Links, Media, Icons, Diagrams & Clear (+ AI Translate when enabled) */}
+          <div
+            data-testid="floating-toolbar-row-2"
+            style={{
+              gridTemplateColumns: `repeat(${aiEnabled ? 14 : 13}, minmax(26px, 1fr))`,
+              borderColor: 'color-mix(in srgb, var(--border-subtle) 15%, transparent)'
+            }}
+            className="w-full grid gap-0.5 items-center border-t border-subtle/15 pt-1"
+          >
+            <button
+              type="button"
+              data-tooltip="Callout Alert (> [!NOTE])"
+              data-testid="floating-callout-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('callout-note')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Task List"
+              data-testid="floating-task-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('task')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Bulleted List"
+              data-testid="floating-bullet-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('bullet')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Numbered List"
+              data-testid="floating-numbered-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('numbered')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <ListOrdered className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Insert Table"
+              data-testid="floating-table-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('table')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Code Block"
+              data-testid="floating-codeblock-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('codeblock')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <FileCode2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Math ($...$)"
+              data-testid="floating-math-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('math-inline')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Sigma className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Insert Link (⌘K)"
+              data-testid="floating-link-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('link')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <LinkIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Insert Image"
+              data-testid="floating-image-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('image')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Insert Icon (⌘⇧I)"
+              aria-label="Insert Icon"
+              data-testid="floating-insert-icon-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                onOpenIconPicker?.()
+              }}
+              className="p-1 rounded hover:bg-secondary text-accent flex items-center justify-center"
+            >
+              <Smile className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Horizontal Rule (---)"
+              data-testid="floating-hr-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('hr')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Clear Formatting"
+              data-testid="floating-clear-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                executeFormat('clear-format')
+              }}
+              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+            >
+              <Eraser className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              data-tooltip="Visual Diagram Builder"
+              aria-label="Visual Diagram Builder"
+              data-testid="floating-mermaid-builder-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                setMermaidBuilderTarget({})
+              }}
+              className="p-1 rounded hover:bg-secondary text-accent flex items-center justify-center"
+            >
+              <Workflow className="w-3.5 h-3.5" />
+            </button>
+            {aiEnabled && (
               <button
                 type="button"
                 data-tooltip="Translate"
@@ -2052,14 +2210,17 @@ export const MarkdownEditorWorkspace: React.FC<{
                 data-testid="floating-ai-translate-sv"
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  onTriggerAIQuickAction('translate-en-sv', selectionCoords.selectedText)
+                  onTriggerAIQuickAction(
+                    'translate-sv',
+                    (activeFloatingCoords || fadingOutCoords)!.selectedText
+                  )
                 }}
-                className="p-1 rounded bg-secondary text-primary hover:border-accent"
+                className="p-1 rounded bg-secondary text-primary hover:border-accent flex items-center justify-center"
               >
                 <Languages className="w-3.5 h-3.5" />
               </button>
-            </>
-          )}
+            )}
+          </div>
         </div>
       )}
 

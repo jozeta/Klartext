@@ -43,7 +43,8 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       env: {
         ...process.env,
         KLARTEXT_USER_DATA_DIR: userDataDir,
-        KLARTEXT_SEED_STARTER: '1'
+        KLARTEXT_SEED_STARTER: '1',
+        KLARTEXT_E2E_AUTO_SAVE_EXPORT: '1'
       }
     })
 
@@ -57,14 +58,102 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await starterBadge.hover()
       await expect(page.getByTestId('root-path-tooltip')).toContainText('Starter-Workspace')
 
-      // Scenario 1: Mount two additional root folders & save/reopen .klartext-workspace manifest
-      await page.getByTestId('toggle-add-root-path-btn').click()
-      await page.getByTestId('add-root-path-input').fill(rootBDir)
-      await page.getByTestId('confirm-add-root-path-btn').click()
+      // Verify "Mount Root Folder by Path" icon is removed and Open Folder Dialog icon is named "Open new workspace"
+      await expect(page.getByTestId('toggle-add-root-path-btn')).toHaveCount(0)
+      await expect(page.getByTestId('add-folder-dialog-btn')).toHaveAttribute(
+        'aria-label',
+        'Open new workspace'
+      )
 
-      await page.getByTestId('toggle-add-root-path-btn').click()
-      await page.getByTestId('add-root-path-input').fill(rootCDir)
-      await page.getByTestId('confirm-add-root-path-btn').click()
+      // Scenario 1: Mount two additional root folders & save/reopen .klartext-workspace manifest
+      await page.evaluate(
+        async ({ bDir, cDir }) => {
+          await window.klartext.addRoot({ path: bDir })
+          await window.klartext.addRoot({ path: cDir })
+        },
+        { bDir: rootBDir, cDir: rootCDir }
+      )
+      await expect(page.getByText('root-beta')).toBeVisible()
+      await expect(page.getByText('root-gamma')).toBeVisible()
+
+      // Verify creating a new folder in a workspace does NOT create a new .md file inside it
+      await page.getByTestId('new-folder-btn-root-starter').click()
+      await page.getByTestId('inline-rename-folder-input-root-starter').press('Enter')
+      expect(fs.existsSync(path.join(userDataDir, 'Starter-Workspace', 'New-Folder'))).toBe(true)
+      expect(
+        fs.existsSync(path.join(userDataDir, 'Starter-Workspace', 'New-Folder', 'Untitled.md'))
+      ).toBe(false)
+
+      // Verify right-click folder context menu (icons submenu with Nordic outline icons + standard folder icon, background color, add new note, Templates submenu, rename, delete)
+      await page
+        .getByTestId('tree-folder-root-starter-New-Folder')
+        .click({ button: 'right' })
+      await expect(page.getByTestId('file-tree-context-menu')).toBeVisible()
+      await expect(page.getByTestId('context-menu-add-note')).toBeVisible()
+      await expect(page.getByTestId('context-menu-templates-item')).toBeVisible()
+      await expect(page.getByTestId('context-menu-rename')).toBeVisible()
+      await expect(page.getByTestId('context-menu-delete')).toBeVisible()
+      await expect(page.getByTestId('context-menu-folder-icons-item')).toBeVisible()
+      await expect(page.getByTestId('context-menu-folder-colors')).toBeVisible()
+      await page.getByTestId('context-menu-folder-icons-item').hover()
+      await expect(page.getByTestId('context-menu-folder-icons')).toBeVisible()
+      await expect(page.getByTestId('folder-icon-option-folder')).toBeVisible()
+      await page.getByTestId('folder-icon-option-star').click()
+
+      // Set folder background color and create a note from a template inside the folder via right-click -> Templates -> Add Meeting Notes
+      await page
+        .getByTestId('tree-folder-root-starter-New-Folder')
+        .click({ button: 'right' })
+      await page.getByTestId('folder-color-option-Sky Blue').click()
+
+      await page
+        .getByTestId('tree-folder-root-starter-New-Folder')
+        .click({ button: 'right' })
+      await page.getByTestId('context-menu-templates-item').hover()
+      await expect(page.getByTestId('context-menu-templates-submenu')).toBeVisible()
+      await expect(page.getByTestId('context-menu-add-template-tpl-meeting-notes')).toContainText(
+        'Add Meeting Notes'
+      )
+      await page.getByTestId('context-menu-add-template-tpl-meeting-notes').click()
+
+      await expect
+        .poll(() => {
+          const files = fs.readdirSync(
+            path.join(userDataDir, 'Starter-Workspace', 'New-Folder')
+          )
+          return files.some((f) => f.startsWith('Meeting-Notes') && f.endsWith('.md'))
+        })
+        .toBe(true)
+
+      const evaluatedNoteContent = fs.readFileSync(
+        path.join(userDataDir, 'Starter-Workspace', 'New-Folder', 'Meeting-Notes.md'),
+        'utf-8'
+      )
+      expect(evaluatedNoteContent).toContain('New-Folder')
+      expect(evaluatedNoteContent).not.toContain('<% folder_name %>')
+
+      // Verify drag-and-drop folders moves the folder and its content into the target folder
+      await page.getByTestId('tree-file-root-starter-Welcome.md').click()
+      await page.getByTestId('new-folder-btn-root-starter').click()
+      await page.getByTestId('inline-rename-folder-input-root-starter').fill('Archive-Target')
+      await page.getByTestId('inline-rename-folder-input-root-starter').press('Enter')
+      await expect(page.getByTestId('tree-folder-root-starter-Archive-Target')).toBeVisible()
+      await page.getByTestId('tree-folder-root-starter-New-Folder').dispatchEvent('dragstart')
+      await page.getByTestId('tree-folder-root-starter-Archive-Target').dispatchEvent('dragover')
+      await page.getByTestId('tree-folder-root-starter-Archive-Target').dispatchEvent('drop')
+      await expect
+        .poll(() =>
+          fs.existsSync(
+            path.join(
+              userDataDir,
+              'Starter-Workspace',
+              'Archive-Target',
+              'New-Folder',
+              'Meeting-Notes.md'
+            )
+          )
+        )
+        .toBe(true)
 
       const manifestFile = path.join(tmpBase, 'multi.klartext-workspace')
       await page.getByTestId('file-menu-btn').click()
@@ -90,11 +179,66 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('palette-search-input').press('Enter')
       await expect(page.getByTestId('status-active-root')).toContainText('root-beta')
 
-      // Scenario 3: Toggle collapsible left/right sidebars, Zen mode, Edit menu, and Command Palette
+      // Verify Format menu is positioned to the left of View menu
+      const formatBox = await page.getByTestId('format-menu-btn').boundingBox()
+      const viewBox = await page.getByTestId('view-menu-btn').boundingBox()
+      expect(formatBox!.x).toBeLessThan(viewBox!.x)
+
+      // Scenario 3: Toggle collapsible left/right sidebars, Zen mode, Edit -> Insert submenu, Document Cleanup & Diagrams in Edit menu, top menu hover switching, Help menu, Templates panel, and Command Palette
       await page.getByTestId('edit-menu-btn').click()
+      await expect(page.getByTestId('edit-menu-dropdown')).toBeVisible()
+      await expect(
+        page.getByTestId('edit-menu-dropdown').getByTestId('format-menu-prettify-doc')
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('edit-menu-dropdown').getByTestId('format-menu-align-tables')
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('edit-menu-dropdown').getByTestId('format-menu-clear')
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('edit-menu-dropdown').getByTestId('insert-menu-visual-builder')
+      ).toBeVisible()
+      await expect(page.getByTestId('insert-menu-btn')).toBeVisible()
+      await page.getByTestId('insert-menu-btn').hover()
+      await expect(page.getByTestId('insert-menu-dropdown')).toBeVisible()
+
+      // Hover over Format menu while Edit menu is open -> Edit menu closes and Format menu opens
+      await page.getByTestId('format-menu-btn').hover()
+      await expect(page.getByTestId('format-menu-dropdown')).toBeVisible()
+      await expect(page.getByTestId('edit-menu-dropdown')).toHaveCount(0)
+
+      // Hover back to Edit menu and click Copy as Rich HTML
+      await page.getByTestId('edit-menu-btn').hover()
       await expect(page.getByTestId('edit-menu-dropdown')).toBeVisible()
       await expect(page.getByTestId('copy-rich-html-btn')).toBeVisible()
       await page.getByTestId('copy-rich-html-btn').click()
+
+      // Verify Help menu opens the right-sided Help panel (`right-help-panel` / `help-reference-modal`) + right panel bottom control strip (`right-sidebar-bottom-controls`)
+      await page.getByTestId('help-menu-btn').click()
+      await expect(page.getByTestId('help-menu-dropdown')).toBeVisible()
+      await page.getByTestId('help-menu-variables').click()
+      await expect(page.getByTestId('right-help-panel')).toBeVisible()
+      await expect(page.getByTestId('help-reference-modal')).toBeVisible()
+      await expect(page.getByTestId('right-sidebar-bottom-controls')).toBeVisible()
+      await expect(page.getByTestId('right-panel-tab-frontmatter')).toBeVisible()
+      await expect(page.getByTestId('right-panel-tab-templates')).toBeVisible()
+      await expect(page.getByTestId('right-panel-tab-ai')).toBeVisible()
+      await expect(page.getByTestId('right-panel-tab-help')).toBeVisible()
+
+      // Verify View menu lists all available right-side panels and clicking switches to that panel
+      await page.getByTestId('view-menu-btn').click()
+      await expect(page.getByTestId('view-menu-toggle-frontmatter')).toBeVisible()
+      await expect(page.getByTestId('view-menu-toggle-templates')).toBeVisible()
+      await expect(page.getByTestId('view-menu-toggle-ai')).toBeVisible()
+      await expect(page.getByTestId('view-menu-toggle-help')).toBeVisible()
+      await page.getByTestId('view-menu-toggle-templates').click()
+      await expect(page.getByTestId('right-templates-window')).toBeVisible()
+      await expect(page.getByTestId('add-new-template-btn')).toBeVisible()
+      await page.getByTestId('add-new-template-btn').click()
+      await expect(page.getByTestId('doc-tab-__templates__-New-Template.md')).toBeVisible()
+      await page.getByTestId('close-templates-window-btn').click()
+      await expect(page.getByTestId('right-templates-window')).toHaveCount(0)
 
       await page.getByTestId('toggle-left-sidebar-btn').click()
       await expect(page.getByTestId('left-sidebar')).toHaveCount(0)
@@ -193,6 +337,15 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('mermaid-toggle-source').first().click()
       await page.getByTestId('mermaid-source-textarea').first().fill('invalid_mermaid_syntax %%%')
       await expect(page.getByTestId('mermaid-error-banner').first()).toBeVisible()
+
+      // Verify folder status (icons, colors, collapsed state) is persisted and migrated when moved via drag-and-drop
+      const savedFolderSettings = await page.evaluate(() => window.klartext.getSettings())
+      expect(
+        savedFolderSettings.folderIcons?.['root-starter/Archive-Target/New-Folder']
+      ).toBe('star')
+      expect(
+        savedFolderSettings.folderColors?.['root-starter/Archive-Target/New-Folder']
+      ).toBe('rgba(2, 132, 199, 0.22)')
     } finally {
       await app.close()
     }
@@ -253,7 +406,8 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       args: [path.resolve(__dirname, '../../../out/main/index.js')],
       env: {
         ...process.env,
-        KLARTEXT_USER_DATA_DIR: userDataDir
+        KLARTEXT_USER_DATA_DIR: userDataDir,
+        KLARTEXT_E2E_AUTO_SAVE_EXPORT: '1'
       }
     })
 
@@ -261,14 +415,16 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       const page = await app.firstWindow()
       await expect(page.getByTestId('klartext-app-shell')).toBeVisible()
 
-      // Mount both Git roots via UI so React state updates immediately
-      await page.getByTestId('toggle-add-root-path-btn').click()
-      await page.getByTestId('add-root-path-input').fill(rootBDir)
-      await page.getByTestId('confirm-add-root-path-btn').click()
-
-      await page.getByTestId('toggle-add-root-path-btn').click()
-      await page.getByTestId('add-root-path-input').fill(rootCDir)
-      await page.getByTestId('confirm-add-root-path-btn').click()
+      // Mount both Git roots via IPC (triggers EVENT_WATCHER_CHANGE so React state updates immediately)
+      await page.evaluate(
+        async ({ bDir, cDir }) => {
+          await window.klartext.addRoot({ path: bDir })
+          await window.klartext.addRoot({ path: cDir })
+        },
+        { bDir: rootBDir, cDir: rootCDir }
+      )
+      await expect(page.getByText('root-beta')).toBeVisible()
+      await expect(page.getByText('root-gamma')).toBeVisible()
 
       const wsState = await page.evaluate(() => window.klartext.getWorkspaceState())
       const repo1Id = wsState.roots.find((r) => r.path.includes('root-beta'))!.id
@@ -372,17 +528,96 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('view-menu-btn').click()
       await page.getByTestId('view-menu-toggle-wordwrap').click()
 
+      // Verify View menu width is spacious (>= 300px) and never cramped
       await page.getByTestId('view-menu-btn').click()
+      const viewMenuBox = await page.getByTestId('view-menu-dropdown').boundingBox()
+      expect(viewMenuBox!.width).toBeGreaterThanOrEqual(300)
       await page.getByTestId('view-menu-toggle-frontmatter').click()
       await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
       // Mutual exclusion: right-ai-panel must be hidden when right-frontmatter-window is shown
       await expect(page.getByTestId('right-ai-panel')).toHaveCount(0)
 
-      // Toggle Right Panel button hides and re-opens the last activated right panel (Frontmatter)
+      // Verify switching between different right panels keeps the exact same width (does not resize)
+      const fmPanelBox = await page.getByTestId('right-panel-container').boundingBox()
+      await page.getByTestId('right-panel-tab-templates').click()
+      await expect(page.getByTestId('right-templates-window')).toBeVisible()
+      const tplPanelBox = await page.getByTestId('right-panel-container').boundingBox()
+      expect(tplPanelBox!.width).toBe(fmPanelBox!.width)
+
+      await page.getByTestId('right-panel-tab-ai').click()
+      await expect(page.getByTestId('right-ai-panel')).toBeVisible()
+      const aiPanelBox = await page.getByTestId('right-panel-container').boundingBox()
+      expect(aiPanelBox!.width).toBe(fmPanelBox!.width)
+
+      await page.getByTestId('right-panel-tab-help').click()
+      await expect(page.getByTestId('right-help-panel')).toBeVisible()
+      const helpPanelBox = await page.getByTestId('right-panel-container').boundingBox()
+      expect(helpPanelBox!.width).toBe(fmPanelBox!.width)
+
+      // Switch back to Frontmatter and verify Toggle Right Panel button hides and re-opens the last activated right panel
+      await page.getByTestId('right-panel-tab-frontmatter').click()
+      await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
       await page.getByTestId('toggle-right-panel-btn').click()
       await expect(page.getByTestId('right-frontmatter-window')).toHaveCount(0)
       await page.getByTestId('toggle-right-panel-btn').click()
       await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
+
+      // Verify global tooltip portal renders on top of all UI elements (z-index: 2147483647)
+      await page.getByTestId('right-panel-tab-templates').hover()
+      await expect(page.getByTestId('global-tooltip-portal')).toBeVisible()
+      await expect(page.getByTestId('global-tooltip-portal')).toContainText('Templates')
+
+      // Verify Insert Icon via Edit menu (`edit-menu-insert-icon`) opens Command Palette in Icon Search Mode (`icon-picker-modal`)
+      await page.getByTestId('edit-menu-btn').click()
+      await expect(page.getByTestId('edit-menu-insert-icon')).toBeVisible()
+      await page.getByTestId('edit-menu-insert-icon').click()
+      await expect(page.getByTestId('icon-picker-modal')).toBeVisible()
+      await expect(page.getByTestId('icon-picker-grid')).toBeVisible()
+      await page.getByTestId('palette-search-input').fill('Sparkles')
+      await page.getByTestId('icon-picker-item-Sparkles').click()
+      await expect(page.getByTestId('icon-picker-modal')).toHaveCount(0)
+
+      // Verify Saved Themes, Theme Preview Window, and 12 Highlight Colors + Custom Highlight Color in Settings
+      await page.getByTestId('file-menu-btn').click()
+      await page.getByTestId('open-settings-btn').click()
+      await expect(page.getByTestId('settings-modal')).toBeVisible()
+      await page.getByTestId('settings-tab-visual').click()
+      await expect(page.getByTestId('theme-preview-window')).toBeVisible()
+      await expect(page.getByTestId('highlight-color-palette')).toBeVisible()
+      await page.getByTestId('highlight-color-swatch-emerald-mint').click()
+      await page.getByTestId('custom-highlight-hex-input').fill('#FF3399')
+      await page.getByTestId('add-custom-highlight-color-btn').click()
+      const appliedHighlightVar = await page.evaluate(() =>
+        document.documentElement.style.getPropertyValue('--highlight-color')
+      )
+      expect(appliedHighlightVar).toBe('#FF3399')
+
+      // Save a new theme, verify it appears in dropdown, edit it, and export/import
+      await page.getByTestId('save-new-theme-input').fill('My Nordic Theme')
+      await page.getByTestId('save-theme-btn').click()
+      await expect(page.getByTestId('settings-saved-themes-select')).toContainText('My Nordic Theme')
+      await page.getByTestId('export-themes-btn').click()
+      await expect(page.getByTestId('themes-import-export-drawer')).toBeVisible()
+      await expect(page.getByTestId('themes-json-textarea')).toHaveValue(/My Nordic Theme/)
+      await page.getByTestId('close-settings-btn').click()
+
+      // Verify Power-User dynamic variables (CLI exec, sh script, URL fetch, env var)
+      const powerResult = await page.evaluate(async (port) => {
+        return window.klartext.evaluatePowerTemplate({
+          expressions: [
+            'exec: printf "CLI_OK"',
+            'sh: echo "SH_OK"',
+            `json_url: http://127.0.0.1:${port}/api/tags | models.0.name`,
+            'env:PATH'
+          ]
+        })
+      }, ollamaPort)
+      expect(powerResult['exec: printf "CLI_OK"']).toBe('CLI_OK')
+      expect(powerResult['sh: echo "SH_OK"']).toBe('SH_OK')
+      expect(powerResult[`json_url: http://127.0.0.1:${ollamaPort}/api/tags | models.0.name`]).toBe(
+        'gemma4:12b'
+      )
+      expect(powerResult['env:PATH'].length).toBeGreaterThan(0)
 
       // Verify sidebar tab icons are inside left-sidebar-bottom-controls and can be toggled from View menu
       await expect(
@@ -413,11 +648,12 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
           .toBe('true')
       }
 
-      // Verify all settings, panel visibility, sidebar tab, and open tabs are persisted
+      // Verify all settings, panel visibility, sidebar tab, saved themes, and open tabs are persisted
       const persistedSettings = await page.evaluate(() => window.klartext.getSettings())
       expect(persistedSettings.frontmatterPanelVisible).toBe(true)
       expect(persistedSettings.lastActiveRightPanel).toBe('frontmatter')
       expect(persistedSettings.leftSidebarTab).toBe('git')
+      expect(persistedSettings.savedThemes?.some((t) => t.name === 'My Nordic Theme')).toBe(true)
       expect(Array.isArray(persistedSettings.openTabs)).toBe(true)
       expect(persistedSettings.openTabs.length).toBeGreaterThan(0)
     } finally {

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   Folder,
+  FolderOpen,
   FolderPlus,
-  FolderInput,
   FilePlus,
+  FileCode2,
   Trash2,
   GitBranch,
   RefreshCw,
@@ -22,8 +23,28 @@ import {
   Columns,
   Command,
   List,
-  Link2
-} from 'lucide-react'
+  Link2,
+  Star,
+  Bookmark,
+  Terminal,
+  BookOpen,
+  Archive,
+  Layers,
+  Cpu,
+  Globe,
+  Lock,
+  Shield,
+  Calendar,
+  Sparkles,
+  Compass,
+  Zap,
+  Feather,
+  Box,
+  Database,
+  Briefcase,
+  Tag,
+   type LucideIcon
+} from '../../components/icons/untitled-icons'
 import type {
   BacklinkItem,
   EditMode,
@@ -35,6 +56,73 @@ import type {
 import type { HeadingItem } from '../../../shared/markdown/pipeline'
 
 export type LeftSidebarTab = 'explorer' | 'search' | 'outline' | 'backlinks' | 'git'
+
+export interface NordicFolderIconOption {
+  id: string
+  label: string
+  Icon: LucideIcon
+  legacyAliases?: string[]
+}
+
+export const NORDIC_FOLDER_ICONS: NordicFolderIconOption[] = [
+  { id: 'folder', label: 'Standard Folder', Icon: Folder, legacyAliases: ['📁', 'default'] },
+  { id: 'folder-open', label: 'Open Folder', Icon: FolderOpen, legacyAliases: ['📂'] },
+  { id: 'star', label: 'Star', Icon: Star, legacyAliases: ['⭐'] },
+  { id: 'bookmark', label: 'Bookmark', Icon: Bookmark, legacyAliases: ['📌'] },
+  { id: 'file-text', label: 'Notes', Icon: FileText, legacyAliases: ['📝'] },
+  { id: 'book', label: 'Knowledge Base', Icon: BookOpen, legacyAliases: ['📚'] },
+  { id: 'code', label: 'Code & Specs', Icon: Code2, legacyAliases: ['🔧'] },
+  { id: 'terminal', label: 'Terminal & Scripts', Icon: Terminal, legacyAliases: ['🧪'] },
+  { id: 'layers', label: 'Architecture', Icon: Layers, legacyAliases: ['🗂️'] },
+  { id: 'archive', label: 'Archive', Icon: Archive, legacyAliases: ['📦'] },
+  { id: 'calendar', label: 'Journal & Calendar', Icon: Calendar, legacyAliases: ['📅'] },
+  { id: 'sparkles', label: 'Ideas & AI', Icon: Sparkles, legacyAliases: ['💡', '🧠'] },
+  { id: 'zap', label: 'Sprint & Fast', Icon: Zap, legacyAliases: ['🚀', '🔥'] },
+  { id: 'shield', label: 'Security', Icon: Shield, legacyAliases: ['🛡️'] },
+  { id: 'lock', label: 'Private Vault', Icon: Lock },
+  { id: 'globe', label: 'Web & Public', Icon: Globe, legacyAliases: ['🌐'] },
+  { id: 'database', label: 'Data & Storage', Icon: Database, legacyAliases: ['📊'] },
+  { id: 'cpu', label: 'Systems & Hardware', Icon: Cpu },
+  { id: 'compass', label: 'Roadmap & Strategy', Icon: Compass },
+  { id: 'feather', label: 'Writing & Drafts', Icon: Feather, legacyAliases: ['🎨'] },
+  { id: 'briefcase', label: 'Projects & Work', Icon: Briefcase },
+  { id: 'box', label: 'Packages & Assets', Icon: Box },
+  { id: 'tag', label: 'Tags & Taxonomy', Icon: Tag },
+  { id: 'check', label: 'Completed', Icon: Check, legacyAliases: ['✅'] }
+]
+
+function resolveNordicFolderIcon(iconKey?: string): NordicFolderIconOption {
+  if (!iconKey) return NORDIC_FOLDER_ICONS[0]
+  const found = NORDIC_FOLDER_ICONS.find(
+    (item) => item.id === iconKey || item.legacyAliases?.includes(iconKey)
+  )
+  return found || NORDIC_FOLDER_ICONS[0]
+}
+
+const FOLDER_COLOR_PALETTE: Array<{ label: string; value: string }> = [
+  { label: 'Default', value: '' },
+  { label: 'Nordic Slate', value: 'rgba(66, 107, 121, 0.22)' },
+  { label: 'Sage Green', value: 'rgba(59, 122, 87, 0.22)' },
+  { label: 'Amber Gold', value: 'rgba(217, 119, 6, 0.22)' },
+  { label: 'Soft Coral', value: 'rgba(225, 77, 77, 0.20)' },
+  { label: 'Lavender', value: 'rgba(139, 92, 246, 0.22)' },
+  { label: 'Sky Blue', value: 'rgba(2, 132, 199, 0.22)' },
+  { label: 'Teal Mint', value: 'rgba(13, 148, 136, 0.22)' },
+  { label: 'Rose Pink', value: 'rgba(219, 39, 119, 0.20)' }
+]
+
+function findNodesInDir(nodes: FileTreeNode[], dirRelPath: string): FileTreeNode[] {
+  if (!dirRelPath) return nodes
+  for (const n of nodes) {
+    if (n.isDirectory) {
+      if (n.relativePath === dirRelPath) return n.children || []
+      if (dirRelPath.startsWith(`${n.relativePath}/`) && n.children) {
+        return findNodesInDir(n.children, dirRelPath)
+      }
+    }
+  }
+  return []
+}
 
 export const MultiRootSidebar: React.FC<{
   activeTab: LeftSidebarTab
@@ -51,6 +139,23 @@ export const MultiRootSidebar: React.FC<{
   treesByRoot: Record<string, FileTreeNode[]>
   gitStatuses: Record<string, GitRepoStatus>
   activeDoc: { rootId: string; relativePath: string } | null
+  selectedFolder?: { rootId: string; relativePath: string } | null
+  onSelectFolder?: (folder: { rootId: string; relativePath: string } | null) => void
+  collapsedRoots?: Record<string, boolean>
+  collapsedDirs?: Record<string, boolean>
+  onUpdateCollapsedRoots?: (next: Record<string, boolean>) => void
+  onUpdateCollapsedDirs?: (next: Record<string, boolean>) => void
+  folderIcons?: Record<string, string>
+  folderColors?: Record<string, string>
+  onUpdateFolderIcon?: (folderKey: string, icon: string) => void
+  onUpdateFolderColor?: (folderKey: string, color: string) => void
+  availableTemplates?: Array<{ id: string; name: string; content: string }>
+  onCreateNoteFromTemplateInFolder?: (
+    rootId: string,
+    folderRelativePath: string,
+    templateName: string,
+    templateContent: string
+  ) => Promise<void> | void
   headings: HeadingItem[]
   backlinks: BacklinkItem[]
   onOpenDocument: (rootId: string, relativePath: string) => void
@@ -59,6 +164,7 @@ export const MultiRootSidebar: React.FC<{
   onAddRootByPath: (folderPath: string, name?: string) => void
   onRemoveRoot: (rootId: string) => void
   onCreateFileInRoot: (rootId: string, relativePath: string) => Promise<void> | void
+  onCreateFolderInRoot?: (rootId: string, relativePath: string) => Promise<void> | void
   onDeleteFileInRoot?: (rootId: string, relativePath: string) => Promise<void> | void
   onRenameFileInRoot?: (
     rootId: string,
@@ -93,14 +199,26 @@ export const MultiRootSidebar: React.FC<{
   treesByRoot,
   gitStatuses,
   activeDoc,
+  selectedFolder: externalSelectedFolder,
+  onSelectFolder,
+  collapsedRoots: externalCollapsedRoots,
+  collapsedDirs: externalCollapsedDirs,
+  onUpdateCollapsedRoots,
+  onUpdateCollapsedDirs,
+  folderIcons = {},
+  folderColors = {},
+  onUpdateFolderIcon,
+  onUpdateFolderColor,
+  availableTemplates = [],
+  onCreateNoteFromTemplateInFolder,
   headings,
   backlinks,
   onOpenDocument,
   onNavigateToLine,
   onAddRootDialog,
-  onAddRootByPath,
   onRemoveRoot,
   onCreateFileInRoot,
+  onCreateFolderInRoot,
   onDeleteFileInRoot,
   onRenameFileInRoot,
   onMoveFileCrossRoot,
@@ -110,10 +228,44 @@ export const MultiRootSidebar: React.FC<{
   onResolveConflictFromGitPanel,
   onAbortMergeRepo
 }) => {
-  const [collapsedRoots, setCollapsedRoots] = useState<Record<string, boolean>>({})
-  const [collapsedDirs, setCollapsedDirs] = useState<Record<string, boolean>>({})
-  const [customRootPath, setCustomRootPath] = useState('')
-  const [showAddPathInput, setShowAddPathInput] = useState(false)
+  const [internalCollapsedRoots, setInternalCollapsedRoots] = useState<Record<string, boolean>>({})
+  const [internalCollapsedDirs, setInternalCollapsedDirs] = useState<Record<string, boolean>>({})
+  const [internalSelectedFolder, setInternalSelectedFolder] = useState<{
+    rootId: string
+    relativePath: string
+  } | null>(null)
+
+  const collapsedRoots =
+    externalCollapsedRoots !== undefined ? externalCollapsedRoots : internalCollapsedRoots
+  const setCollapsedRoots = (
+    updater:
+      | Record<string, boolean>
+      | ((prev: Record<string, boolean>) => Record<string, boolean>)
+  ) => {
+    const next = typeof updater === 'function' ? updater(collapsedRoots) : updater
+    setInternalCollapsedRoots(next)
+    onUpdateCollapsedRoots?.(next)
+  }
+
+  const collapsedDirs =
+    externalCollapsedDirs !== undefined ? externalCollapsedDirs : internalCollapsedDirs
+  const setCollapsedDirs = (
+    updater:
+      | Record<string, boolean>
+      | ((prev: Record<string, boolean>) => Record<string, boolean>)
+  ) => {
+    const next = typeof updater === 'function' ? updater(collapsedDirs) : updater
+    setInternalCollapsedDirs(next)
+    onUpdateCollapsedDirs?.(next)
+  }
+
+  const selectedFolder =
+    externalSelectedFolder !== undefined ? externalSelectedFolder : internalSelectedFolder
+  const setSelectedFolder = (next: { rootId: string; relativePath: string } | null) => {
+    setInternalSelectedFolder(next)
+    onSelectFolder?.(next)
+  }
+
   const [hoveredRootBadge, setHoveredRootBadge] = useState<{
     rootId: string
     path: string
@@ -121,11 +273,12 @@ export const MultiRootSidebar: React.FC<{
     y: number
   } | null>(null)
 
-  // Inline file rename state (triggered immediately when creating Untitled.md or double-clicking)
+  // Inline file or folder rename state (triggered immediately when creating Untitled.md / New-Folder or double-clicking / right-click Rename)
   const [renamingItem, setRenamingItem] = useState<{
     rootId: string
     relativePath: string
     draftName: string
+    isDirectory?: boolean
   } | null>(null)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -138,6 +291,17 @@ export const MultiRootSidebar: React.FC<{
     name: string
     isDirectory: boolean
   } | null>(null)
+  const [showContextTemplatesSubmenu, setShowContextTemplatesSubmenu] = useState(false)
+  const [showContextFolderIconsSubmenu, setShowContextFolderIconsSubmenu] = useState(false)
+
+  // Drag-and-drop state for moving folders and their contents (and files) within workspace
+  const [draggedTreeItem, setDraggedTreeItem] = useState<{
+    rootId: string
+    relativePath: string
+    name: string
+    isDirectory: boolean
+  } | null>(null)
+  const [dragOverTargetKey, setDragOverTargetKey] = useState<string | null>(null)
 
   const [copiedFileClipboard, setCopiedFileClipboard] = useState<{
     rootId: string
@@ -157,22 +321,37 @@ export const MultiRootSidebar: React.FC<{
   const [commitMessages, setCommitMessages] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    const closeMenu = () => setFileContextMenu(null)
+    const closeMenu = () => {
+      setFileContextMenu(null)
+      setShowContextTemplatesSubmenu(false)
+      setShowContextFolderIconsSubmenu(false)
+    }
     window.addEventListener('click', closeMenu)
     return () => window.removeEventListener('click', closeMenu)
   }, [])
 
+  // Auto-disappear search & replace summary alert after 10 seconds
+  useEffect(() => {
+    if (!replaceSummary) return
+    const timer = setTimeout(() => {
+      setReplaceSummary('')
+    }, 10000)
+    return () => clearTimeout(timer)
+  }, [replaceSummary])
+
   useEffect(() => {
     if (renamingItem && renameInputRef.current) {
       renameInputRef.current.focus()
-      const dotIdx = renamingItem.draftName.lastIndexOf('.')
-      if (dotIdx > 0) {
-        renameInputRef.current.setSelectionRange(0, dotIdx)
-      } else {
-        renameInputRef.current.select()
+      if (!renamingItem.isDirectory) {
+        const dotIdx = renamingItem.draftName.lastIndexOf('.')
+        if (dotIdx > 0) {
+          renameInputRef.current.setSelectionRange(0, dotIdx)
+          return
+        }
       }
+      renameInputRef.current.select()
     }
-  }, [renamingItem?.rootId, renamingItem?.relativePath])
+  }, [renamingItem?.rootId, renamingItem?.relativePath, renamingItem?.isDirectory])
 
   const runSearchQuery = async (q: string, rootScope: string) => {
     if (!q.trim()) {
@@ -221,10 +400,27 @@ export const MultiRootSidebar: React.FC<{
 
   const commitInlineRename = async () => {
     if (!renamingItem) return
-    const { rootId, relativePath, draftName } = renamingItem
+    const { rootId, relativePath, draftName, isDirectory } = renamingItem
     setRenamingItem(null)
     const cleanDraft = draftName.trim()
     if (!cleanDraft) return
+
+    if (isDirectory) {
+      const sanitizedFolder = cleanDraft.replace(/[\\/]+/g, '-')
+      const dirParts = relativePath.split('/')
+      dirParts.pop()
+      const newRelPath =
+        dirParts.length > 0 ? `${dirParts.join('/')}/${sanitizedFolder}` : sanitizedFolder
+      if (newRelPath === relativePath) return
+      if (onRenameFileInRoot) {
+        await onRenameFileInRoot(rootId, relativePath, newRelPath)
+      }
+      if (selectedFolder?.rootId === rootId && selectedFolder.relativePath === relativePath) {
+        setSelectedFolder({ rootId, relativePath: newRelPath })
+      }
+      return
+    }
+
     const finalFileName = cleanDraft.includes('.') ? cleanDraft : `${cleanDraft}.md`
     const dirParts = relativePath.split('/')
     dirParts.pop()
@@ -238,9 +434,16 @@ export const MultiRootSidebar: React.FC<{
     }
   }
 
-  const handleCreateUntitledFile = async (rootId: string, parentDir = '') => {
-    const existingNodes = treesByRoot[rootId] || []
-    const existingNames = new Set(existingNodes.map((n) => n.name.toLowerCase()))
+  const handleCreateUntitledFile = async (rootId: string, explicitParentDir?: string) => {
+    const parentDir =
+      explicitParentDir !== undefined
+        ? explicitParentDir
+        : selectedFolder?.rootId === rootId
+          ? selectedFolder.relativePath
+          : ''
+    const rootNodes = treesByRoot[rootId] || []
+    const dirNodes = findNodesInDir(rootNodes, parentDir)
+    const existingNames = new Set(dirNodes.map((n) => n.name.toLowerCase()))
     let candidateName = 'Untitled.md'
     let counter = 1
     while (existingNames.has(candidateName.toLowerCase())) {
@@ -250,29 +453,49 @@ export const MultiRootSidebar: React.FC<{
     const candidateRel = parentDir ? `${parentDir}/${candidateName}` : candidateName
     await onCreateFileInRoot(rootId, candidateRel)
     setCollapsedRoots((p) => ({ ...p, [rootId]: false }))
+    if (parentDir) {
+      setCollapsedDirs((p) => ({ ...p, [`${rootId}/${parentDir}`]: false }))
+    }
     setRenamingItem({
       rootId,
       relativePath: candidateRel,
-      draftName: candidateName
+      draftName: candidateName,
+      isDirectory: false
     })
   }
 
-  const handleCreateNewSubfolder = async (rootId: string) => {
-    const existingNodes = treesByRoot[rootId] || []
-    const existingNames = new Set(existingNodes.map((n) => n.name.toLowerCase()))
+  const handleCreateNewSubfolder = async (rootId: string, explicitParentDir?: string) => {
+    const parentDir =
+      explicitParentDir !== undefined
+        ? explicitParentDir
+        : selectedFolder?.rootId === rootId
+          ? selectedFolder.relativePath
+          : ''
+    const rootNodes = treesByRoot[rootId] || []
+    const dirNodes = findNodesInDir(rootNodes, parentDir)
+    const existingNames = new Set(dirNodes.map((n) => n.name.toLowerCase()))
     let folderName = 'New-Folder'
     let counter = 1
     while (existingNames.has(folderName.toLowerCase())) {
       folderName = `New-Folder-${counter}`
       counter++
     }
-    const newDocRel = `${folderName}/Untitled.md`
-    await onCreateFileInRoot(rootId, newDocRel)
+    const newFolderRel = parentDir ? `${parentDir}/${folderName}` : folderName
+    if (onCreateFolderInRoot) {
+      await onCreateFolderInRoot(rootId, newFolderRel)
+    } else {
+      await window.klartext.createDirectory(rootId, newFolderRel)
+    }
     setCollapsedRoots((p) => ({ ...p, [rootId]: false }))
+    if (parentDir) {
+      setCollapsedDirs((p) => ({ ...p, [`${rootId}/${parentDir}`]: false }))
+    }
+    setSelectedFolder({ rootId, relativePath: newFolderRel })
     setRenamingItem({
       rootId,
-      relativePath: newDocRel,
-      draftName: 'Untitled.md'
+      relativePath: newFolderRel,
+      draftName: folderName,
+      isDirectory: true
     })
   }
 
@@ -303,6 +526,73 @@ export const MultiRootSidebar: React.FC<{
     } else {
       await window.klartext.deleteDocument(rootId, relativePath)
     }
+    if (
+      selectedFolder?.rootId === rootId &&
+      (selectedFolder.relativePath === relativePath ||
+        selectedFolder.relativePath.startsWith(`${relativePath}/`))
+    ) {
+      setSelectedFolder({ rootId, relativePath: '' })
+    }
+  }
+
+  const resolveDraggedItem = (
+    e: React.DragEvent
+  ): { rootId: string; relativePath: string; name: string; isDirectory: boolean } | null => {
+    if (draggedTreeItem) return draggedTreeItem
+    try {
+      const raw =
+        e.dataTransfer?.getData('application/x-klartext-tree-item') ||
+        e.dataTransfer?.getData('text/plain')
+      if (raw) {
+        return JSON.parse(raw)
+      }
+    } catch {
+      // Ignore parse error
+    }
+    return null
+  }
+
+  const canDropTreeItemIntoFolder = (
+    source: { rootId: string; relativePath: string; name: string; isDirectory: boolean } | null,
+    targetRootId: string,
+    targetFolderRelPath: string
+  ): boolean => {
+    if (!source) return false
+    if (source.rootId !== targetRootId) return false
+    if (source.relativePath === targetFolderRelPath) return false
+    if (source.isDirectory && targetFolderRelPath.startsWith(`${source.relativePath}/`)) {
+      return false
+    }
+    const nextRelPath = targetFolderRelPath
+      ? `${targetFolderRelPath}/${source.name}`
+      : source.name
+    return nextRelPath !== source.relativePath
+  }
+
+  const handleDropIntoTarget = (
+    targetRootId: string,
+    targetFolderRelPath: string,
+    e: React.DragEvent
+  ) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const source = resolveDraggedItem(e)
+    setDragOverTargetKey(null)
+    setDraggedTreeItem(null)
+    if (!canDropTreeItemIntoFolder(source, targetRootId, targetFolderRelPath) || !source) {
+      return
+    }
+    const nextRelPath = targetFolderRelPath
+      ? `${targetFolderRelPath}/${source.name}`
+      : source.name
+    setCollapsedRoots((p) => ({ ...p, [targetRootId]: false }))
+    if (targetFolderRelPath) {
+      setCollapsedDirs((p) => ({
+        ...p,
+        [`${targetRootId}/${targetFolderRelPath}`]: false
+      }))
+    }
+    void onRenameFileInRoot?.(targetRootId, source.relativePath, nextRelPath)
   }
 
   const renderTreeNodes = (rootId: string, nodes: FileTreeNode[]) => {
@@ -310,13 +600,93 @@ export const MultiRootSidebar: React.FC<{
       if (node.isDirectory) {
         const dirKey = `${rootId}/${node.relativePath}`
         const isDirCollapsed = Boolean(collapsedDirs[dirKey])
+        const isFolderSelected =
+          selectedFolder?.rootId === rootId && selectedFolder?.relativePath === node.relativePath
+        const isRenamingFolder =
+          renamingItem?.rootId === rootId &&
+          renamingItem?.relativePath === node.relativePath &&
+          renamingItem?.isDirectory
+        const customIconKey =
+          folderIcons[dirKey] || folderIcons[`${rootId}::${node.relativePath}`]
+        const resolvedIconOption = resolveNordicFolderIcon(customIconKey)
+        const FolderIconComponent = resolvedIconOption.Icon
+        const customBgColor =
+          folderColors[dirKey] || folderColors[`${rootId}::${node.relativePath}`]
+        const isDragOverFolder = dragOverTargetKey === dirKey
+
         return (
-          <div key={dirKey} className="pl-2.5">
+          <div key={dirKey} className="pl-2">
             <div
-              onClick={() => setCollapsedDirs((p) => ({ ...p, [dirKey]: !p[dirKey] }))}
+              data-testid={`tree-folder-${rootId}-${node.relativePath}`}
+              draggable={!isRenamingFolder}
+              onDragStart={(e) => {
+                e.stopPropagation()
+                const item = {
+                  rootId,
+                  relativePath: node.relativePath,
+                  name: node.name,
+                  isDirectory: true
+                }
+                setDraggedTreeItem(item)
+                try {
+                  const payload = JSON.stringify(item)
+                  e.dataTransfer.effectAllowed = 'move'
+                  e.dataTransfer.setData('application/x-klartext-tree-item', payload)
+                  e.dataTransfer.setData('text/plain', payload)
+                } catch {
+                  // Ignore in synthetic drag events
+                }
+              }}
+              onDragEnd={() => {
+                setDraggedTreeItem(null)
+                setDragOverTargetKey(null)
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                const src = resolveDraggedItem(e)
+                if (canDropTreeItemIntoFolder(src, rootId, node.relativePath)) {
+                  e.dataTransfer.dropEffect = 'move'
+                  if (dragOverTargetKey !== dirKey) {
+                    setDragOverTargetKey(dirKey)
+                  }
+                }
+              }}
+              onDragLeave={(e) => {
+                e.stopPropagation()
+                if (dragOverTargetKey === dirKey) {
+                  setDragOverTargetKey(null)
+                }
+              }}
+              onDrop={(e) => handleDropIntoTarget(rootId, node.relativePath, e)}
+              style={
+                {
+                  ...(customBgColor ? { backgroundColor: customBgColor } : {}),
+                  WebkitUserDrag: isRenamingFolder ? 'none' : 'element'
+                } as React.CSSProperties
+              }
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedFolder({ rootId, relativePath: node.relativePath })
+                if (!isRenamingFolder) {
+                  setCollapsedDirs((p) => ({ ...p, [dirKey]: !p[dirKey] }))
+                }
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                setRenamingItem({
+                  rootId,
+                  relativePath: node.relativePath,
+                  draftName: node.name,
+                  isDirectory: true
+                })
+              }}
               onContextMenu={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
+                setSelectedFolder({ rootId, relativePath: node.relativePath })
+                setShowContextTemplatesSubmenu(false)
+                setShowContextFolderIconsSubmenu(false)
                 setFileContextMenu({
                   x: e.clientX,
                   y: e.clientY,
@@ -326,14 +696,55 @@ export const MultiRootSidebar: React.FC<{
                   isDirectory: true
                 })
               }}
-              className="flex items-center gap-1.5 py-1 text-xs font-medium text-muted hover:text-primary cursor-pointer"
+              className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors ${
+                isDragOverFolder
+                  ? 'ring-2 ring-accent bg-accent/20 text-primary'
+                  : isFolderSelected
+                    ? 'ring-1 ring-accent/70 text-primary bg-secondary/80'
+                    : 'text-muted hover:text-primary hover:bg-secondary/40'
+              }`}
             >
               {isDirCollapsed ? (
-                <ChevronRight className="w-3 h-3" />
+                <ChevronRight className="w-3 h-3 shrink-0" />
               ) : (
-                <ChevronDown className="w-3 h-3" />
+                <ChevronDown className="w-3 h-3 shrink-0" />
               )}
-              <span>{node.name}</span>
+              <span
+                className="inline-flex items-center justify-center shrink-0"
+                data-testid={`folder-icon-${dirKey}`}
+                data-icon-id={resolvedIconOption.id}
+              >
+                <FolderIconComponent
+                  className="w-3.5 h-3.5 shrink-0 text-white stroke-[1.75]"
+                  style={{ filter: 'drop-shadow(0 0 1px rgba(15, 23, 42, 0.75))' }}
+                />
+              </span>
+              {isRenamingFolder ? (
+                <input
+                  ref={renameInputRef}
+                  type="text"
+                  data-testid={`inline-rename-folder-input-${rootId}`}
+                  value={renamingItem.draftName}
+                  onChange={(e) =>
+                    setRenamingItem((prev) =>
+                      prev ? { ...prev, draftName: e.target.value } : null
+                    )
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      commitInlineRename()
+                    } else if (e.key === 'Escape') {
+                      setRenamingItem(null)
+                    }
+                  }}
+                  onBlur={() => commitInlineRename()}
+                  className="flex-1 px-1.5 py-0.5 rounded bg-panel border border-accent text-primary text-xs focus:outline-none"
+                />
+              ) : (
+                <span className="truncate">{node.name}</span>
+              )}
             </div>
             {!isDirCollapsed && node.children && renderTreeNodes(rootId, node.children)}
           </div>
@@ -343,19 +754,49 @@ export const MultiRootSidebar: React.FC<{
       const isActive =
         activeDoc?.rootId === rootId && activeDoc?.relativePath === node.relativePath
       const isRenaming =
-        renamingItem?.rootId === rootId && renamingItem?.relativePath === node.relativePath
+        renamingItem?.rootId === rootId &&
+        renamingItem?.relativePath === node.relativePath &&
+        !renamingItem?.isDirectory
       const otherRoots = roots.filter((r) => r.id !== rootId)
 
       return (
         <div
           key={`${rootId}/${node.relativePath}`}
           data-testid={`tree-file-${rootId}-${node.relativePath}`}
+          draggable={!isRenaming}
+          onDragStart={(e) => {
+            e.stopPropagation()
+            const item = {
+              rootId,
+              relativePath: node.relativePath,
+              name: node.name,
+              isDirectory: false
+            }
+            setDraggedTreeItem(item)
+            try {
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData(
+                'application/x-klartext-tree-item',
+                JSON.stringify(item)
+              )
+            } catch {
+              // Ignore synthetic drag events
+            }
+          }}
+          onDragEnd={() => {
+            setDraggedTreeItem(null)
+            setDragOverTargetKey(null)
+          }}
           className={`group flex items-center justify-between px-2 py-1 rounded text-xs cursor-pointer ${
             isActive
               ? 'bg-secondary text-accent font-medium'
               : 'text-primary hover:bg-secondary/60'
           }`}
           onClick={() => {
+            const parentFolder = node.relativePath.includes('/')
+              ? node.relativePath.slice(0, node.relativePath.lastIndexOf('/'))
+              : ''
+            setSelectedFolder({ rootId, relativePath: parentFolder })
             if (!isRenaming) onOpenDocument(rootId, node.relativePath)
           }}
           onDoubleClick={(e) => {
@@ -363,12 +804,15 @@ export const MultiRootSidebar: React.FC<{
             setRenamingItem({
               rootId,
               relativePath: node.relativePath,
-              draftName: node.name
+              draftName: node.name,
+              isDirectory: false
             })
           }}
           onContextMenu={(e) => {
             e.preventDefault()
             e.stopPropagation()
+            setShowContextTemplatesSubmenu(false)
+            setShowContextFolderIconsSubmenu(false)
             setFileContextMenu({
               x: e.clientX,
               y: e.clientY,
@@ -483,16 +927,8 @@ export const MultiRootSidebar: React.FC<{
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                title="Mount Root Folder by Path"
-                data-testid="toggle-add-root-path-btn"
-                onClick={() => setShowAddPathInput((v) => !v)}
-                className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
-              >
-                <FolderInput className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                title="Open Folder Dialog"
+                title="Open new workspace"
+                aria-label="Open new workspace"
                 data-testid="add-folder-dialog-btn"
                 onClick={onAddRootDialog}
                 className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
@@ -502,36 +938,9 @@ export const MultiRootSidebar: React.FC<{
             </div>
           </div>
 
-          {showAddPathInput && (
-            <div className="p-2 rounded bg-panel border border-subtle space-y-1.5 text-xs">
-              <input
-                type="text"
-                data-testid="add-root-path-input"
-                placeholder="/absolute/path/to/folder"
-                value={customRootPath}
-                onChange={(e) => setCustomRootPath(e.target.value)}
-                className="w-full px-2 py-1 rounded bg-app border border-subtle text-primary"
-              />
-              <button
-                type="button"
-                data-testid="confirm-add-root-path-btn"
-                onClick={() => {
-                  if (customRootPath.trim()) {
-                    onAddRootByPath(customRootPath.trim())
-                    setCustomRootPath('')
-                    setShowAddPathInput(false)
-                  }
-                }}
-                className="w-full py-1 rounded bg-accent text-white font-medium"
-              >
-                Mount Root Folder
-              </button>
-            </div>
-          )}
-
           {roots.length === 0 && (
             <div className="px-3 py-6 text-center text-xs text-muted rounded-md border border-dashed border-subtle bg-panel/50">
-              No folders mounted yet. Use the folder icons above or <span className="font-medium text-primary">File → Open Folder…</span> to add a folder.
+              No folders mounted yet. Click <span className="font-medium text-primary">Open new workspace</span> above or <span className="font-medium text-primary">File → Open Folder…</span> to add a workspace folder.
             </div>
           )}
 
@@ -539,19 +948,51 @@ export const MultiRootSidebar: React.FC<{
             const isCollapsed = Boolean(collapsedRoots[root.id])
             const gitStatus = gitStatuses[root.id]
             const nodes = treesByRoot[root.id] || []
+            const activeSubfolderForRoot =
+              selectedFolder?.rootId === root.id && selectedFolder.relativePath
+                ? selectedFolder.relativePath
+                : ''
+            const rootDropKey = `${root.id}/__root__`
+            const isDragOverRoot = dragOverTargetKey === rootDropKey
 
             return (
               <div
                 key={root.id}
                 data-testid={`workspace-root-section-${root.id}`}
-                className="rounded-md border border-subtle bg-panel overflow-hidden"
+                className={`rounded-md border bg-panel overflow-hidden transition-colors ${
+                  isDragOverRoot ? 'border-accent ring-1 ring-accent' : 'border-subtle'
+                }`}
               >
-                <div className="flex items-center justify-between px-2 py-1.5 bg-secondary/60 border-b border-subtle text-xs">
+                <div
+                  data-testid={`workspace-root-header-${root.id}`}
+                  onClick={() => setSelectedFolder({ rootId: root.id, relativePath: '' })}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    const src = resolveDraggedItem(e)
+                    if (canDropTreeItemIntoFolder(src, root.id, '')) {
+                      e.dataTransfer.dropEffect = 'move'
+                      if (dragOverTargetKey !== rootDropKey) {
+                        setDragOverTargetKey(rootDropKey)
+                      }
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    e.stopPropagation()
+                    if (dragOverTargetKey === rootDropKey) {
+                      setDragOverTargetKey(null)
+                    }
+                  }}
+                  onDrop={(e) => handleDropIntoTarget(root.id, '', e)}
+                  className="flex items-center justify-between px-2 py-1.5 bg-secondary/60 border-b border-subtle text-xs cursor-pointer"
+                >
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedFolder({ rootId: root.id, relativePath: '' })
                       setCollapsedRoots((p) => ({ ...p, [root.id]: !p[root.id] }))
-                    }
+                    }}
                     className="flex items-center gap-1 font-semibold text-primary truncate"
                   >
                     {isCollapsed ? (
@@ -562,7 +1003,7 @@ export const MultiRootSidebar: React.FC<{
                     <span className="truncate">{root.name}</span>
                   </button>
 
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <span
                       data-testid={`root-git-badge-${root.id}`}
                       onDoubleClick={(e) => {
@@ -595,7 +1036,11 @@ export const MultiRootSidebar: React.FC<{
                     </span>
                     <button
                       type="button"
-                      title="Create New File (Untitled.md)"
+                      title={
+                        activeSubfolderForRoot
+                          ? `Create New Note in "${activeSubfolderForRoot}"`
+                          : 'Create New File (Untitled.md)'
+                      }
                       data-testid={`new-file-btn-${root.id}`}
                       onClick={() => handleCreateUntitledFile(root.id)}
                       className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
@@ -604,7 +1049,11 @@ export const MultiRootSidebar: React.FC<{
                     </button>
                     <button
                       type="button"
-                      title="Create New Subfolder"
+                      title={
+                        activeSubfolderForRoot
+                          ? `Create New Subfolder in "${activeSubfolderForRoot}"`
+                          : 'Create New Subfolder'
+                      }
                       data-testid={`new-folder-btn-${root.id}`}
                       onClick={() => handleCreateNewSubfolder(root.id)}
                       className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
@@ -653,39 +1102,163 @@ export const MultiRootSidebar: React.FC<{
         </div>
       )}
 
-      {/* Right-Click File Context Menu (Rename, Copy, Paste, Delete) */}
+      {/* Right-Click File & Folder Context Menu */}
       {fileContextMenu && (
         <div
           data-testid="file-tree-context-menu"
           style={{
             position: 'fixed',
-            left: `${Math.min(window.innerWidth - 180, fileContextMenu.x)}px`,
-            top: `${Math.min(window.innerHeight - 160, fileContextMenu.y)}px`
+            left: `${Math.max(8, Math.min(window.innerWidth - 240, fileContextMenu.x))}px`,
+            top: `${Math.max(8, Math.min(window.innerHeight - 360, fileContextMenu.y))}px`
           }}
           onClick={(e) => e.stopPropagation()}
-          className="z-50 w-44 rounded-md bg-panel border border-subtle shadow-xl py-1 text-xs"
+          className="z-50 w-56 rounded-md bg-panel border border-subtle shadow-xl py-1.5 text-xs"
         >
-          <div className="px-2.5 py-1 border-b border-subtle text-[10px] font-mono text-muted truncate">
-            {fileContextMenu.name}
+          <div className="px-3 py-1 border-b border-subtle text-[10px] font-mono text-muted truncate flex items-center justify-between">
+            <span className="truncate">{fileContextMenu.name}</span>
+            <span className="uppercase text-[9px]">
+              {fileContextMenu.isDirectory ? 'Folder' : 'File'}
+            </span>
           </div>
-          {!fileContextMenu.isDirectory && (
-            <button
-              type="button"
-              data-testid="context-menu-rename"
-              onClick={() => {
-                setRenamingItem({
-                  rootId: fileContextMenu.rootId,
-                  relativePath: fileContextMenu.relativePath,
-                  draftName: fileContextMenu.name
-                })
-                setFileContextMenu(null)
-              }}
-              className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-muted" />
-              <span>Rename</span>
-            </button>
+
+          {fileContextMenu.isDirectory && (
+            <>
+              <button
+                type="button"
+                data-testid="context-menu-add-note"
+                onMouseEnter={() => {
+                  setShowContextTemplatesSubmenu(false)
+                  setShowContextFolderIconsSubmenu(false)
+                }}
+                onClick={() => {
+                  const { rootId, relativePath } = fileContextMenu
+                  setFileContextMenu(null)
+                  setShowContextTemplatesSubmenu(false)
+                  setShowContextFolderIconsSubmenu(false)
+                  void handleCreateUntitledFile(rootId, relativePath)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2 font-medium"
+              >
+                <FilePlus className="w-3.5 h-3.5 text-accent" />
+                <span>Add New Note</span>
+              </button>
+              <button
+                type="button"
+                data-testid="context-menu-add-subfolder"
+                onMouseEnter={() => {
+                  setShowContextTemplatesSubmenu(false)
+                  setShowContextFolderIconsSubmenu(false)
+                }}
+                onClick={() => {
+                  const { rootId, relativePath } = fileContextMenu
+                  setFileContextMenu(null)
+                  setShowContextTemplatesSubmenu(false)
+                  setShowContextFolderIconsSubmenu(false)
+                  void handleCreateNewSubfolder(rootId, relativePath)
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+              >
+                <FolderPlus className="w-3.5 h-3.5 text-muted" />
+                <span>New Subfolder</span>
+              </button>
+
+              {/* Templates Expanding Submenu */}
+              <div
+                className="relative"
+                onMouseEnter={() => {
+                  setShowContextTemplatesSubmenu(true)
+                  setShowContextFolderIconsSubmenu(false)
+                }}
+              >
+                <button
+                  type="button"
+                  data-testid="context-menu-templates-item"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowContextTemplatesSubmenu((v) => !v)
+                    setShowContextFolderIconsSubmenu(false)
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between gap-2 font-medium"
+                >
+                  <span className="flex items-center gap-2">
+                    <FileCode2 className="w-3.5 h-3.5 text-accent" />
+                    <span>Templates</span>
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted" />
+                </button>
+
+                {showContextTemplatesSubmenu && (
+                  <div
+                    data-testid="context-menu-templates-submenu"
+                    className="absolute left-full top-0 ml-0.5 z-50 w-56 max-h-64 overflow-y-auto rounded-md bg-panel border border-subtle shadow-xl py-1 text-xs"
+                  >
+                    {availableTemplates.length === 0 ? (
+                      <div className="px-3 py-1.5 text-muted">No templates available</div>
+                    ) : (
+                      availableTemplates.map((tpl) => {
+                        const cleanTplLabel = tpl.name.replace(/\.md$/i, '')
+                        return (
+                          <button
+                            key={tpl.id}
+                            type="button"
+                            data-testid={`context-menu-add-template-${tpl.id}`}
+                            onClick={() => {
+                              const { rootId, relativePath } = fileContextMenu
+                              setFileContextMenu(null)
+                              setShowContextTemplatesSubmenu(false)
+                              setCollapsedRoots((p) => ({ ...p, [rootId]: false }))
+                              if (relativePath) {
+                                setCollapsedDirs((p) => ({
+                                  ...p,
+                                  [`${rootId}/${relativePath}`]: false
+                                }))
+                              }
+                              setSelectedFolder({ rootId, relativePath })
+                              void onCreateNoteFromTemplateInFolder?.(
+                                rootId,
+                                relativePath,
+                                cleanTplLabel,
+                                tpl.content
+                              )
+                            }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2 truncate"
+                          >
+                            <FilePlus className="w-3.5 h-3.5 text-accent shrink-0" />
+                            <span className="truncate">Add {cleanTplLabel}</span>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="my-1 border-t border-subtle" />
+            </>
           )}
+
+          <button
+            type="button"
+            data-testid="context-menu-rename"
+            onMouseEnter={() => {
+              setShowContextTemplatesSubmenu(false)
+              setShowContextFolderIconsSubmenu(false)
+            }}
+            onClick={() => {
+              setRenamingItem({
+                rootId: fileContextMenu.rootId,
+                relativePath: fileContextMenu.relativePath,
+                draftName: fileContextMenu.name,
+                isDirectory: fileContextMenu.isDirectory
+              })
+              setFileContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-muted" />
+            <span>{fileContextMenu.isDirectory ? 'Rename Folder' : 'Rename'}</span>
+          </button>
+
           {!fileContextMenu.isDirectory && (
             <button
               type="button"
@@ -704,10 +1277,15 @@ export const MultiRootSidebar: React.FC<{
               <span>Copy</span>
             </button>
           )}
+
           <button
             type="button"
             data-testid="context-menu-paste"
             disabled={!copiedFileClipboard}
+            onMouseEnter={() => {
+              setShowContextTemplatesSubmenu(false)
+              setShowContextFolderIconsSubmenu(false)
+            }}
             onClick={() => {
               const targetDir = fileContextMenu.isDirectory
                 ? fileContextMenu.relativePath
@@ -731,26 +1309,169 @@ export const MultiRootSidebar: React.FC<{
               Paste{copiedFileClipboard ? ` (${copiedFileClipboard.name})` : ''}
             </span>
           </button>
-          {!fileContextMenu.isDirectory && (
+
+          {fileContextMenu.isDirectory && (
             <>
               <div className="my-1 border-t border-subtle" />
-              <button
-                type="button"
-                data-testid="context-menu-delete"
-                onClick={() => {
-                  handleDeleteTreeFile(
-                    fileContextMenu.rootId,
-                    fileContextMenu.relativePath
-                  )
-                  setFileContextMenu(null)
+
+              {/* Folder Icons Expanding Submenu (Nordic Clean Outline White Icons + Standard Folder Icon) */}
+              <div
+                className="relative"
+                onMouseEnter={() => {
+                  setShowContextFolderIconsSubmenu(true)
+                  setShowContextTemplatesSubmenu(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
               >
-                <Trash2 className="w-3.5 h-3.5 text-muted" />
-                <span>Delete</span>
-              </button>
+                <button
+                  type="button"
+                  data-testid="context-menu-folder-icons-item"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowContextFolderIconsSubmenu((v) => !v)
+                    setShowContextTemplatesSubmenu(false)
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between gap-2 font-medium"
+                >
+                  <span className="flex items-center gap-2">
+                    <Folder
+                      className="w-3.5 h-3.5 text-white stroke-[1.75]"
+                      style={{ filter: 'drop-shadow(0 0 1px rgba(15, 23, 42, 0.75))' }}
+                    />
+                    <span>Folder Icon</span>
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted" />
+                </button>
+
+                {showContextFolderIconsSubmenu && (
+                  <div
+                    data-testid="context-menu-folder-icons"
+                    className="absolute left-full top-0 ml-0.5 z-50 w-56 max-h-72 overflow-y-auto rounded-md bg-panel border border-subtle shadow-xl p-1.5 text-xs space-y-1"
+                  >
+                    <div className="px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted flex items-center justify-between">
+                      <span>Nordic Outline Icons</span>
+                      {folderIcons[`${fileContextMenu.rootId}/${fileContextMenu.relativePath}`] && (
+                        <button
+                          type="button"
+                          data-testid="context-menu-clear-folder-icon"
+                          onClick={() => {
+                            onUpdateFolderIcon?.(
+                              `${fileContextMenu.rootId}/${fileContextMenu.relativePath}`,
+                              ''
+                            )
+                            setFileContextMenu(null)
+                            setShowContextFolderIconsSubmenu(false)
+                          }}
+                          className="text-[10px] text-accent hover:underline font-normal normal-case"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-0.5">
+                      {NORDIC_FOLDER_ICONS.map((iconOpt) => {
+                        const folderKey = `${fileContextMenu.rootId}/${fileContextMenu.relativePath}`
+                        const currentKey = folderIcons[folderKey] || 'folder'
+                        const isSelected =
+                          currentKey === iconOpt.id ||
+                          Boolean(iconOpt.legacyAliases?.includes(currentKey))
+                        const IconComp = iconOpt.Icon
+                        return (
+                          <button
+                            key={iconOpt.id}
+                            type="button"
+                            title={iconOpt.label}
+                            data-testid={`folder-icon-option-${iconOpt.id}`}
+                            onClick={() => {
+                              onUpdateFolderIcon?.(
+                                folderKey,
+                                iconOpt.id === 'folder' ? '' : iconOpt.id
+                              )
+                              setFileContextMenu(null)
+                              setShowContextFolderIconsSubmenu(false)
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded flex items-center justify-between gap-2 hover:bg-secondary ${
+                              isSelected ? 'bg-secondary ring-1 ring-accent text-primary' : 'text-primary'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 truncate">
+                              <IconComp
+                                className="w-3.5 h-3.5 shrink-0 text-white stroke-[1.75]"
+                                style={{ filter: 'drop-shadow(0 0 1px rgba(15, 23, 42, 0.75))' }}
+                              />
+                              <span className="truncate">{iconOpt.label}</span>
+                            </span>
+                            {isSelected && <Check className="w-3 h-3 text-accent shrink-0" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="my-1 border-t border-subtle" />
+              <div
+                className="px-3 py-1 space-y-1"
+                onMouseEnter={() => {
+                  setShowContextTemplatesSubmenu(false)
+                  setShowContextFolderIconsSubmenu(false)
+                }}
+              >
+                <div className="text-[10px] font-semibold uppercase text-muted">
+                  Folder Background Color
+                </div>
+                <div
+                  data-testid="context-menu-folder-colors"
+                  className="flex flex-wrap items-center gap-1.5 pt-0.5"
+                >
+                  {FOLDER_COLOR_PALETTE.map((swatch) => {
+                    const folderKey = `${fileContextMenu.rootId}/${fileContextMenu.relativePath}`
+                    const current = folderColors[folderKey] || ''
+                    const isSelected = current === swatch.value
+                    return (
+                      <button
+                        key={swatch.label}
+                        type="button"
+                        title={swatch.label}
+                        data-testid={`folder-color-option-${swatch.label}`}
+                        onClick={() => {
+                          onUpdateFolderColor?.(folderKey, swatch.value)
+                          setFileContextMenu(null)
+                        }}
+                        style={{
+                          backgroundColor: swatch.value || 'transparent'
+                        }}
+                        className={`w-4 h-4 rounded-full border transition-transform hover:scale-110 flex items-center justify-center ${
+                          isSelected
+                            ? 'border-accent ring-1 ring-accent'
+                            : 'border-subtle'
+                        }`}
+                      >
+                        {!swatch.value && <span className="text-[8px] text-muted">✕</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </>
           )}
+
+          <div className="my-1 border-t border-subtle" />
+          <button
+            type="button"
+            data-testid="context-menu-delete"
+            onClick={() => {
+              handleDeleteTreeFile(
+                fileContextMenu.rootId,
+                fileContextMenu.relativePath
+              )
+              setFileContextMenu(null)
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-danger flex items-center gap-2"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-danger" />
+            <span>{fileContextMenu.isDirectory ? 'Delete Folder' : 'Delete'}</span>
+          </button>
         </div>
       )}
 

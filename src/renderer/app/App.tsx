@@ -11,8 +11,11 @@ import {
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
-  Plus
-} from 'lucide-react'
+  Plus,
+  HelpCircle,
+  FileCode2,
+  Smile
+} from '../components/icons/untitled-icons'
 import type {
   AppSettings,
   BacklinkItem,
@@ -27,6 +30,13 @@ import {
   extractFrontmatter,
   updateFrontmatterInMarkdown
 } from '../../shared/markdown/pipeline'
+import {
+  DEFAULT_BUILT_IN_TEMPLATES,
+  evaluateTemplateFileName,
+  evaluateTemplateVariables,
+  evaluateTemplateVariablesAsync,
+  type TemplateEvaluationContext
+} from '../../shared/templates/template-engine'
 import { MultiRootSidebar, type LeftSidebarTab } from '../features/workspace/MultiRootSidebar'
 import {
   MarkdownEditorWorkspace,
@@ -37,6 +47,8 @@ import {
   type SupportedSpellLanguage
 } from '../features/editor/spellcheck-extension'
 import { LocalAIPanel } from '../features/ai/LocalAIPanel'
+import { TemplatesPanel } from '../features/templates/TemplatesPanel'
+import { HelpModal, type HelpModalTab } from '../components/help/HelpModal'
 import { ExcalidrawCanvasModal } from '../features/diagrams/DiagramWidgets'
 import {
   CommandPaletteModal,
@@ -67,11 +79,50 @@ export const App: React.FC = () => {
   const [activeTabKey, setActiveTabKey] = useState<string | null>(null)
   const [editMode, setEditMode] = useState<EditMode>('inline')
   const [leftSidebarTab, setLeftSidebarTab] = useState<LeftSidebarTab>('explorer')
-  const [lastActiveRightPanel, setLastActiveRightPanel] = useState<'frontmatter' | 'ai'>('ai')
+  const [lastActiveRightPanel, setLastActiveRightPanel] = useState<
+    'frontmatter' | 'ai' | 'templates' | 'help'
+  >('ai')
+  const [selectedFolder, setSelectedFolder] = useState<{
+    rootId: string
+    relativePath: string
+  } | null>(null)
+  const [systemEnvInfo, setSystemEnvInfo] = useState<{
+    userName: string
+    hostName: string
+    osPlatform: string
+    cpuArch: string
+    cpuCores?: number
+    memoryFree?: string
+    uptime?: string
+    ipLocal?: string
+    appVersion: string
+    envVars?: Record<string, string>
+  }>({
+    userName: 'user',
+    hostName: 'localhost',
+    osPlatform: 'macOS',
+    cpuArch: 'arm64',
+    appVersion: '1.1.0'
+  })
+  const [workspaceTemplateFiles, setWorkspaceTemplateFiles] = useState<
+    Array<{
+      id: string
+      name: string
+      rootId: string
+      rootName: string
+      relativePath: string
+      content: string
+    }>
+  >([])
   const [backlinks, setBacklinks] = useState<BacklinkItem[]>([])
   const [scrollToLine, setScrollToLine] = useState<{ line: number; nonce: number } | null>(null)
   const [editorCommandTrigger, setEditorCommandTrigger] = useState<{
     command: EditorDispatchedCommand
+    nonce: number
+  } | null>(null)
+  const [textInsertTrigger, setTextInsertTrigger] = useState<{
+    text: string
+    cursorOffset: number | null
     nonce: number
   } | null>(null)
   const [showFileMenu, setShowFileMenu] = useState(false)
@@ -80,14 +131,67 @@ export const App: React.FC = () => {
   const [showFormatMenu, setShowFormatMenu] = useState(false)
   const [showInsertMenu, setShowInsertMenu] = useState(false)
   const [showAIMenu, setShowAIMenu] = useState(false)
+  const [showHelpMenu, setShowHelpMenu] = useState(false)
+  const [helpModalTab, setHelpModalTab] = useState<HelpModalTab>('formatting')
   const [customFrontmatterKey, setCustomFrontmatterKey] = useState('')
+
+  // Top-level fixed Tooltip Portal state so tooltips are ALWAYS on top of everything
+  const [portalTooltip, setPortalTooltip] = useState<{
+    text: string
+    top: number
+    left: number
+    pos: 'top' | 'bottom'
+  } | null>(null)
+
+  useEffect(() => {
+    const updateTooltipFromTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) {
+        setPortalTooltip(null)
+        return
+      }
+      const el = target.closest('[data-tooltip]') as HTMLElement | null
+      if (!el) {
+        setPortalTooltip(null)
+        return
+      }
+      const text = el.getAttribute('data-tooltip')
+      if (!text) {
+        setPortalTooltip(null)
+        return
+      }
+      const rect = el.getBoundingClientRect()
+      const explicitPos = el.getAttribute('data-tooltip-pos')
+      const pos: 'top' | 'bottom' =
+        explicitPos === 'bottom' || (explicitPos !== 'top' && rect.top < 42)
+          ? 'bottom'
+          : 'top'
+      const rawLeft = rect.left + rect.width / 2
+      const clampedLeft = Math.max(64, Math.min(window.innerWidth - 64, rawLeft))
+      const top = pos === 'top' ? rect.top - 7 : rect.bottom + 7
+      setPortalTooltip({ text, top, left: clampedLeft, pos })
+    }
+
+    document.body.dataset.portalTooltips = 'true'
+    const onMouseOver = (e: MouseEvent) => updateTooltipFromTarget(e.target)
+    const onMouseDown = () => setPortalTooltip(null)
+    const onScroll = () => setPortalTooltip(null)
+    window.addEventListener('mouseover', onMouseOver, true)
+    window.addEventListener('mousedown', onMouseDown, true)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      delete document.body.dataset.portalTooltips
+      window.removeEventListener('mouseover', onMouseOver, true)
+      window.removeEventListener('mousedown', onMouseDown, true)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [])
 
   // Tab bar horizontal scroll state when many tabs are open
   const tabBarScrollRef = useRef<HTMLDivElement | null>(null)
   const [tabBarHasOverflow, setTabBarHasOverflow] = useState(false)
 
   // Modals & Overlays
-  const [paletteMode, setPaletteMode] = useState<'commands' | 'files' | null>(null)
+  const [paletteMode, setPaletteMode] = useState<'commands' | 'files' | 'icons' | null>(null)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [excalidrawTarget, setExcalidrawTarget] = useState<{
     rootId: string
@@ -124,11 +228,12 @@ export const App: React.FC = () => {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }, [settings?.theme])
 
-  // Resizable Left & Right Sidebar widths
+  // Resizable Left & Unified Right Sidebar width (constant across all right panels)
   const [leftSidebarWidth, setLeftSidebarWidth] = useState<number>(260)
-  const [frontmatterSidebarWidth, setFrontmatterSidebarWidth] = useState<number>(288)
-  const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(320)
-  const activeSidebarDragRef = useRef<'left' | 'frontmatter' | 'right' | null>(null)
+  const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(340)
+  const activeSidebarDragRef = useRef<
+    'left' | 'frontmatter' | 'right' | 'templates' | 'help' | null
+  >(null)
 
   const updateTabBarOverflow = useCallback(() => {
     const el = tabBarScrollRef.current
@@ -148,21 +253,15 @@ export const App: React.FC = () => {
     tabs.length,
     leftSidebarWidth,
     rightSidebarWidth,
-    frontmatterSidebarWidth,
     settings?.pageTabsPosition
   ])
 
   useEffect(() => {
     if (settings?.leftSidebarWidth) setLeftSidebarWidth(settings.leftSidebarWidth)
-    if (settings?.frontmatterSidebarWidth) {
-      setFrontmatterSidebarWidth(settings.frontmatterSidebarWidth)
+    if (settings?.rightSidebarWidth) {
+      setRightSidebarWidth(settings.rightSidebarWidth)
     }
-    if (settings?.rightSidebarWidth) setRightSidebarWidth(settings.rightSidebarWidth)
-  }, [
-    settings?.leftSidebarWidth,
-    settings?.frontmatterSidebarWidth,
-    settings?.rightSidebarWidth
-  ])
+  }, [settings?.leftSidebarWidth, settings?.rightSidebarWidth])
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
@@ -170,25 +269,23 @@ export const App: React.FC = () => {
       if (activeSidebarDragRef.current === 'left') {
         const nextW = Math.max(180, Math.min(520, e.clientX))
         setLeftSidebarWidth(nextW)
-      } else if (activeSidebarDragRef.current === 'frontmatter') {
-        const rightOffset = settings?.rightSidebarOpen ? rightSidebarWidth : 0
-        const nextW = Math.max(
-          200,
-          Math.min(520, window.innerWidth - e.clientX - rightOffset)
-        )
-        setFrontmatterSidebarWidth(nextW)
-      } else if (activeSidebarDragRef.current === 'right') {
-        const nextW = Math.max(220, Math.min(560, window.innerWidth - e.clientX))
+      } else {
+        const nextW = Math.max(240, Math.min(640, window.innerWidth - e.clientX))
         setRightSidebarWidth(nextW)
       }
     }
     const onMouseUp = () => {
       if (activeSidebarDragRef.current === 'left') {
         window.klartext.updateSettings({ leftSidebarWidth }).catch(() => {})
-      } else if (activeSidebarDragRef.current === 'frontmatter') {
-        window.klartext.updateSettings({ frontmatterSidebarWidth }).catch(() => {})
-      } else if (activeSidebarDragRef.current === 'right') {
-        window.klartext.updateSettings({ rightSidebarWidth }).catch(() => {})
+      } else if (activeSidebarDragRef.current) {
+        window.klartext
+          .updateSettings({
+            rightSidebarWidth,
+            frontmatterSidebarWidth: rightSidebarWidth,
+            templatesSidebarWidth: rightSidebarWidth,
+            helpSidebarWidth: rightSidebarWidth
+          })
+          .catch(() => {})
       }
       activeSidebarDragRef.current = null
     }
@@ -198,18 +295,17 @@ export const App: React.FC = () => {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [
-    leftSidebarWidth,
-    frontmatterSidebarWidth,
-    rightSidebarWidth,
-    settings?.rightSidebarOpen
-  ])
+  }, [leftSidebarWidth, rightSidebarWidth])
 
   const dispatchEditorCommand = useCallback((command: EditorDispatchedCommand) => {
     setEditorCommandTrigger({ command, nonce: Date.now() + Math.random() })
   }, [])
 
-  // Auto-collapse File, Edit, View, Format, Insert & AI menus when clicking anywhere in the app
+  const dispatchTextInsert = useCallback((text: string, cursorOffset: number | null = null) => {
+    setTextInsertTrigger({ text, cursorOffset, nonce: Date.now() + Math.random() })
+  }, [])
+
+  // Auto-collapse File, Edit, View, Format, Insert, AI & Help menus when clicking anywhere in the app
   useEffect(() => {
     if (
       !showFileMenu &&
@@ -217,7 +313,8 @@ export const App: React.FC = () => {
       !showViewMenu &&
       !showFormatMenu &&
       !showInsertMenu &&
-      !showAIMenu
+      !showAIMenu &&
+      !showHelpMenu
     )
       return
     const handleGlobalClick = () => {
@@ -227,6 +324,7 @@ export const App: React.FC = () => {
       setShowFormatMenu(false)
       setShowInsertMenu(false)
       setShowAIMenu(false)
+      setShowHelpMenu(false)
     }
     window.addEventListener('click', handleGlobalClick)
     return () => window.removeEventListener('click', handleGlobalClick)
@@ -236,10 +334,11 @@ export const App: React.FC = () => {
     showViewMenu,
     showFormatMenu,
     showInsertMenu,
-    showAIMenu
+    showAIMenu,
+    showHelpMenu
   ])
 
-  // Apply theme, white-paper-in-dark-mode, & granular typography CSS variables to documentElement
+  // Apply theme, highlight color, custom theme colors, & granular typography CSS variables to documentElement
   useEffect(() => {
     const rootEl = document.documentElement
     rootEl.setAttribute('data-theme', resolvedTheme)
@@ -288,8 +387,26 @@ export const App: React.FC = () => {
         )
       })
 
-      if (settings.accentColorOverride) {
-        rootEl.style.setProperty('--accent-primary', settings.accentColorOverride)
+      const activeAccent =
+        settings.highlightColor || settings.accentColorOverride || '#4C78A8'
+      rootEl.style.setProperty('--accent-primary', activeAccent)
+      rootEl.style.setProperty('--accent-hover', activeAccent)
+      rootEl.style.setProperty('--highlight-color', activeAccent)
+
+      const customColors = settings.customThemeColors || {}
+      if (customColors.bgApp) rootEl.style.setProperty('--bg-app', customColors.bgApp)
+      else rootEl.style.removeProperty('--bg-app')
+
+      if (customColors.bgPanel) rootEl.style.setProperty('--bg-panel', customColors.bgPanel)
+      else rootEl.style.removeProperty('--bg-panel')
+
+      if (customColors.bgEditor) rootEl.style.setProperty('--bg-editor', customColors.bgEditor)
+      else rootEl.style.removeProperty('--bg-editor')
+
+      if (customColors.textPrimary) {
+        rootEl.style.setProperty('--text-primary', customColors.textPrimary)
+      } else {
+        rootEl.style.removeProperty('--text-primary')
       }
     }
   }, [resolvedTheme, settings])
@@ -301,12 +418,28 @@ export const App: React.FC = () => {
     // Enforce mutual exclusion on the right side: only one right panel visible at a time
     if (effective.frontmatterPanelVisible === true) {
       effective.rightSidebarOpen = false
+      effective.templatesPanelVisible = false
+      effective.helpPanelVisible = false
       effective.lastActiveRightPanel = 'frontmatter'
       setLastActiveRightPanel('frontmatter')
     } else if (effective.rightSidebarOpen === true) {
       effective.frontmatterPanelVisible = false
+      effective.templatesPanelVisible = false
+      effective.helpPanelVisible = false
       effective.lastActiveRightPanel = 'ai'
       setLastActiveRightPanel('ai')
+    } else if (effective.templatesPanelVisible === true) {
+      effective.frontmatterPanelVisible = false
+      effective.rightSidebarOpen = false
+      effective.helpPanelVisible = false
+      effective.lastActiveRightPanel = 'templates'
+      setLastActiveRightPanel('templates')
+    } else if (effective.helpPanelVisible === true) {
+      effective.frontmatterPanelVisible = false
+      effective.rightSidebarOpen = false
+      effective.templatesPanelVisible = false
+      effective.lastActiveRightPanel = 'help'
+      setLastActiveRightPanel('help')
     }
 
     setSettings((prev) => (prev ? { ...prev, ...effective } : prev))
@@ -317,6 +450,14 @@ export const App: React.FC = () => {
       // Keep optimistic state if main process update fails
     }
   }, [])
+
+  const openRightHelpPanel = useCallback(
+    (tab: HelpModalTab = 'formatting') => {
+      setHelpModalTab(tab)
+      handleUpdateSettings({ helpPanelVisible: true })
+    },
+    [handleUpdateSettings]
+  )
 
   const handleSelectLeftSidebarTab = useCallback(
     (tab: LeftSidebarTab) => {
@@ -332,6 +473,70 @@ export const App: React.FC = () => {
       handleUpdateSettings({ defaultEditMode: mode })
     },
     [handleUpdateSettings]
+  )
+
+  const collectWorkspaceTemplateFiles = useCallback(
+    async (
+      rootList: WorkspaceRoot[],
+      trees: Record<string, FileTreeNode[]>
+    ) => {
+      const candidates: Array<{
+        rootId: string
+        rootName: string
+        relativePath: string
+        name: string
+      }> = []
+
+      for (const r of rootList) {
+        const walk = (nodes: FileTreeNode[], insideTemplateFolder: boolean) => {
+          for (const n of nodes) {
+            const lowerName = n.name.toLowerCase()
+            const isTplDir =
+              insideTemplateFolder ||
+              (n.isDirectory &&
+                (lowerName === 'templates' ||
+                  lowerName === '_templates' ||
+                  lowerName === '.templates'))
+            if (n.isDirectory && n.children) {
+              walk(n.children, isTplDir)
+            } else if (!n.isDirectory && isTplDir && lowerName.endsWith('.md')) {
+              candidates.push({
+                rootId: r.id,
+                rootName: r.name,
+                relativePath: n.relativePath,
+                name: n.name.replace(/\.md$/i, '')
+              })
+            }
+          }
+        }
+        walk(trees[r.id] || [], false)
+      }
+
+      if (candidates.length === 0) {
+        setWorkspaceTemplateFiles([])
+        return
+      }
+
+      const loaded = await Promise.all(
+        candidates.map(async (c) => {
+          try {
+            const { content } = await window.klartext.readDocument(c.rootId, c.relativePath)
+            return {
+              id: `ws-tpl::${c.rootId}::${c.relativePath}`,
+              name: c.name,
+              rootId: c.rootId,
+              rootName: c.rootName,
+              relativePath: c.relativePath,
+              content
+            }
+          } catch {
+            return null
+          }
+        })
+      )
+      setWorkspaceTemplateFiles(loaded.filter((x): x is NonNullable<typeof x> => x !== null))
+    },
+    []
   )
 
   const refreshWorkspaceAndTrees = useCallback(async () => {
@@ -356,7 +561,8 @@ export const App: React.FC = () => {
       statusMap[st.rootId] = st
     }
     setGitStatuses(statusMap)
-  }, [])
+    await collectWorkspaceTemplateFiles(ws.roots, nextTrees)
+  }, [collectWorkspaceTemplateFiles])
 
   const openDocument = useCallback(
     async (rootId: string, relativePath: string) => {
@@ -395,6 +601,15 @@ export const App: React.FC = () => {
     [openDocument]
   )
 
+  // Auto-disappear export notification banner after 10 seconds
+  useEffect(() => {
+    if (!exportStatusBanner) return
+    const timer = setTimeout(() => {
+      setExportStatusBanner(null)
+    }, 10000)
+    return () => clearTimeout(timer)
+  }, [exportStatusBanner])
+
   const handleExportHtml = useCallback(async () => {
     if (!activeTab) return
     const res = await window.klartext.exportHtml({
@@ -403,6 +618,7 @@ export const App: React.FC = () => {
       markdown: activeTab.content,
       title: activeTab.relativePath
     })
+    if ((res as any)?.canceled || !res.outputPath) return
     setExportStatusBanner(`Exported HTML: ${res.outputPath}`)
   }, [activeTab])
 
@@ -414,10 +630,11 @@ export const App: React.FC = () => {
       markdown: activeTab.content,
       title: activeTab.relativePath
     })
+    if ((res as any)?.canceled || !res.outputPath) return
     setExportStatusBanner(`Exported PDF (${res.sizeBytes} bytes): ${res.outputPath}`)
   }, [activeTab])
 
-  // Subscribe to native application File, Edit, View, Format & Insert Menu actions
+  // Subscribe to native application File, Edit, View, Format, Insert & Help Menu actions
   useEffect(() => {
     if (!window.klartext.onMenuAction) return
     const unsubscribe = window.klartext.onMenuAction(async (action) => {
@@ -444,10 +661,28 @@ export const App: React.FC = () => {
         await handleUpdateSettings({
           frontmatterPanelVisible: !settings.frontmatterPanelVisible
         })
+      } else if (action === 'toggle-templates' && settings) {
+        await handleUpdateSettings({
+          templatesPanelVisible: !settings.templatesPanelVisible
+        })
+      } else if (action === 'toggle-ai-panel' && settings) {
+        await handleUpdateSettings({
+          rightSidebarOpen: !settings.rightSidebarOpen
+        })
+      } else if (action === 'toggle-help-panel' && settings) {
+        await handleUpdateSettings({
+          helpPanelVisible: !settings.helpPanelVisible
+        })
       } else if (action === 'toggle-spellcheck' && settings) {
         await handleUpdateSettings({
           spellcheckEnabled: settings.spellcheckEnabled === false
         })
+      } else if (action === 'help:formatting') {
+        openRightHelpPanel('formatting')
+      } else if (action === 'help:variables') {
+        openRightHelpPanel('variables')
+      } else if (action === 'help:shortcuts') {
+        openRightHelpPanel('shortcuts')
       } else if (action.startsWith('editor:')) {
         dispatchEditorCommand(action.slice('editor:'.length) as EditorDispatchedCommand)
       }
@@ -460,26 +695,41 @@ export const App: React.FC = () => {
     refreshWorkspaceAndTrees,
     settings,
     resolvedTheme,
-    handleUpdateSettings
+    handleUpdateSettings,
+    openRightHelpPanel
   ])
 
   // Initial boot: load settings, workspace roots, recovery snapshots, and saved open tabs in parallel
   useEffect(() => {
     const init = async () => {
-      const [loadedSettings, ws, statuses, snaps] = await Promise.all([
+      const [loadedSettings, ws, statuses, snaps, envInfo] = await Promise.all([
         window.klartext.getSettings(),
         window.klartext.getWorkspaceState(),
         window.klartext.getAllGitStatus(),
-        window.klartext.listRecoverySnapshots()
+        window.klartext.listRecoverySnapshots(),
+        window.klartext.getSystemEnvInfo
+          ? window.klartext.getSystemEnvInfo().catch(() => null)
+          : Promise.resolve(null)
       ])
+      if (envInfo) {
+        setSystemEnvInfo(envInfo)
+      }
       const normalizedSettings: AppSettings = {
         ...loadedSettings,
+        customTemplates:
+          Array.isArray(loadedSettings.customTemplates) && loadedSettings.customTemplates.length > 0
+            ? loadedSettings.customTemplates
+            : DEFAULT_BUILT_IN_TEMPLATES,
         ...(loadedSettings.frontmatterPanelVisible && loadedSettings.rightSidebarOpen
           ? { rightSidebarOpen: false }
           : {})
       }
       if (normalizedSettings.frontmatterPanelVisible) {
         setLastActiveRightPanel('frontmatter')
+      } else if (normalizedSettings.templatesPanelVisible) {
+        setLastActiveRightPanel('templates')
+      } else if (normalizedSettings.helpPanelVisible) {
+        setLastActiveRightPanel('help')
       } else if (normalizedSettings.rightSidebarOpen) {
         setLastActiveRightPanel('ai')
       } else if (normalizedSettings.lastActiveRightPanel) {
@@ -488,14 +738,14 @@ export const App: React.FC = () => {
       if (normalizedSettings.leftSidebarWidth) {
         setLeftSidebarWidth(normalizedSettings.leftSidebarWidth)
       }
-      if (normalizedSettings.frontmatterSidebarWidth) {
-        setFrontmatterSidebarWidth(normalizedSettings.frontmatterSidebarWidth)
-      }
       if (normalizedSettings.rightSidebarWidth) {
         setRightSidebarWidth(normalizedSettings.rightSidebarWidth)
       }
       if (normalizedSettings.leftSidebarTab) {
         setLeftSidebarTab(normalizedSettings.leftSidebarTab)
+      }
+      if (normalizedSettings.selectedFolder) {
+        setSelectedFolder(normalizedSettings.selectedFolder)
       }
       setSettings(normalizedSettings)
       setEditMode(normalizedSettings.defaultEditMode || 'inline')
@@ -509,6 +759,7 @@ export const App: React.FC = () => {
         nextTrees[rootId] = nodes
       }
       setTreesByRoot(nextTrees)
+      await collectWorkspaceTemplateFiles(ws.roots, nextTrees)
 
       const statusMap: Record<string, GitRepoStatus> = {}
       for (const st of statuses) {
@@ -522,6 +773,21 @@ export const App: React.FC = () => {
       if (Array.isArray(normalizedSettings.openTabs) && normalizedSettings.openTabs.length > 0) {
         const tabResults = await Promise.all(
           normalizedSettings.openTabs.map(async (savedTab) => {
+            if (savedTab.rootId === '__templates__') {
+              const matchedTpl = (normalizedSettings.customTemplates || []).find(
+                (t) => t.name === savedTab.relativePath || t.id === savedTab.relativePath
+              )
+              if (!matchedTpl) return null
+              return {
+                key: `__templates__::${matchedTpl.name}`,
+                rootId: '__templates__',
+                rootName: 'Templates',
+                relativePath: matchedTpl.name,
+                content: matchedTpl.content,
+                savedContent: matchedTpl.content,
+                dirty: false
+              } satisfies OpenDocumentTab
+            }
             const rootObj = ws.roots.find((r) => r.id === savedTab.rootId)
             if (!rootObj) return null
             try {
@@ -584,7 +850,7 @@ export const App: React.FC = () => {
       isBootedRef.current = true
     }
     init()
-  }, [])
+  }, [collectWorkspaceTemplateFiles])
 
   // Persist open document tabs and active tab key across restarts
   useEffect(() => {
@@ -673,12 +939,15 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
-      if (mod && e.key.toLowerCase() === 'k') {
+      if (mod && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setPaletteMode((p) => (p === 'commands' ? null : 'commands'))
       } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault()
         setPaletteMode((p) => (p === 'files' ? null : 'files'))
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === 'i') {
+        e.preventDefault()
+        setPaletteMode((p) => (p === 'icons' ? null : 'icons'))
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         if (settings) {
@@ -696,22 +965,47 @@ export const App: React.FC = () => {
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault()
         if (activeTab) {
-          window.klartext
-            .writeDocument(activeTab.rootId, activeTab.relativePath, activeTab.content)
-            .then(() => {
-              setTabs((prev) =>
-                prev.map((t) =>
-                  t.key === activeTab.key
-                    ? {
-                        ...t,
-                        savedContent: t.content,
-                        dirty: false,
-                        externalConflictContent: undefined
-                      }
-                    : t
-                )
+          if (activeTab.rootId === '__templates__') {
+            const currentTpls =
+              settings?.customTemplates && settings.customTemplates.length > 0
+                ? settings.customTemplates
+                : DEFAULT_BUILT_IN_TEMPLATES
+            const nextTpls = currentTpls.map((t) =>
+              t.name === activeTab.relativePath
+                ? { ...t, content: activeTab.content, updatedAt: Date.now() }
+                : t
+            )
+            handleUpdateSettings({ customTemplates: nextTpls })
+            setTabs((prev) =>
+              prev.map((t) =>
+                t.key === activeTab.key
+                  ? {
+                      ...t,
+                      savedContent: t.content,
+                      dirty: false,
+                      externalConflictContent: undefined
+                    }
+                  : t
               )
-            })
+            )
+          } else {
+            window.klartext
+              .writeDocument(activeTab.rootId, activeTab.relativePath, activeTab.content)
+              .then(() => {
+                setTabs((prev) =>
+                  prev.map((t) =>
+                    t.key === activeTab.key
+                      ? {
+                          ...t,
+                          savedContent: t.content,
+                          dirty: false,
+                          externalConflictContent: undefined
+                        }
+                      : t
+                  )
+                )
+              })
+          }
         }
       }
     }
@@ -740,6 +1034,31 @@ export const App: React.FC = () => {
 
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(async () => {
+      if (rootId === '__templates__') {
+        const currentTpls =
+          settings?.customTemplates && settings.customTemplates.length > 0
+            ? settings.customTemplates
+            : DEFAULT_BUILT_IN_TEMPLATES
+        const nextTpls = currentTpls.map((t) =>
+          t.name === relativePath
+            ? { ...t, content: nextContent, updatedAt: Date.now() }
+            : t
+        )
+        await handleUpdateSettings({ customTemplates: nextTpls })
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.key === tabKey
+              ? {
+                  ...t,
+                  savedContent: nextContent,
+                  dirty: t.content !== nextContent,
+                  externalConflictContent: undefined
+                }
+              : t
+          )
+        )
+        return
+      }
       await window.klartext.saveRecoverySnapshot(rootId, relativePath, nextContent)
       await window.klartext.writeDocument(rootId, relativePath, nextContent)
       setTabs((prev) =>
@@ -756,6 +1075,35 @@ export const App: React.FC = () => {
       )
     }, settings?.autosaveDelayMs || 900)
   }
+
+  const openTemplateInEditor = useCallback(
+    (tpl: { id: string; name: string; content: string }) => {
+      const fileName = tpl.name.endsWith('.md') ? tpl.name : `${tpl.name}.md`
+      const key = `__templates__::${fileName}`
+      setTabs((prev) => {
+        const existing = prev.find((t) => t.key === key)
+        if (existing) {
+          return prev.map((t) =>
+            t.key === key ? { ...t, content: tpl.content, savedContent: tpl.content, dirty: false } : t
+          )
+        }
+        return [
+          ...prev,
+          {
+            key,
+            rootId: '__templates__',
+            rootName: 'Templates',
+            relativePath: fileName,
+            content: tpl.content,
+            savedContent: tpl.content,
+            dirty: false
+          }
+        ]
+      })
+      setActiveTabKey(key)
+    },
+    []
+  )
 
   const handlePasteOrDropAsset = async (
     fileName: string,
@@ -884,8 +1232,187 @@ export const App: React.FC = () => {
     return list
   }, [roots, treesByRoot])
 
+  const templateEvaluationContext: TemplateEvaluationContext = useMemo(() => {
+    const activeRootObj =
+      activeTab && activeTab.rootId !== '__templates__'
+        ? roots.find((r) => r.id === activeTab.rootId)
+        : selectedFolder
+          ? roots.find((r) => r.id === selectedFolder.rootId)
+          : roots[0]
+    const relPath =
+      activeTab && activeTab.rootId !== '__templates__' ? activeTab.relativePath : ''
+    const parts = relPath.split('/').filter(Boolean)
+    const fileName = parts.length > 0 ? parts[parts.length - 1] : 'Untitled.md'
+    const fileTitle = fileName.replace(/\.(md|markdown)$/i, '')
+    const folderRelPath =
+      selectedFolder &&
+      (!activeTab ||
+        activeTab.rootId === '__templates__' ||
+        selectedFolder.rootId === activeTab.rootId)
+        ? selectedFolder.relativePath
+        : parts.length > 1
+          ? parts.slice(0, -1).join('/')
+          : ''
+    const folderParts = folderRelPath.split('/').filter(Boolean)
+    const folderName =
+      folderParts.length > 0
+        ? folderParts[folderParts.length - 1]
+        : activeRootObj?.name || 'Workspace'
+    const parentFolderName =
+      folderParts.length > 1
+        ? folderParts[folderParts.length - 2]
+        : activeRootObj?.name || 'Workspace'
+    const gitSt = activeRootObj ? gitStatuses[activeRootObj.id] : undefined
+    const folderNoteCount = activeRootObj
+      ? allWorkspaceFiles.filter((f) => {
+          if (f.rootId !== activeRootObj.id) return false
+          const fParts = f.relativePath.split('/').filter(Boolean)
+          const fFolder = fParts.length > 1 ? fParts.slice(0, -1).join('/') : ''
+          return fFolder === folderRelPath
+        }).length
+      : 0
+
+    return {
+      fileName,
+      fileTitle,
+      relativePath: relPath || (folderRelPath ? `${folderRelPath}/${fileName}` : fileName),
+      folderName,
+      folderPath: folderRelPath || '/',
+      parentFolderName,
+      rootName: activeRootObj?.name || 'Workspace',
+      rootPath: activeRootObj?.path || '',
+      allRootNames: roots.map((r) => r.name),
+      noteCount: allWorkspaceFiles.length,
+      folderNoteCount,
+      gitBranch: gitSt?.branch || 'main',
+      gitStatus: gitSt?.state || 'Local',
+      userName: systemEnvInfo.userName,
+      hostName: systemEnvInfo.hostName,
+      osPlatform: systemEnvInfo.osPlatform,
+      cpuArch: systemEnvInfo.cpuArch,
+      cpuCores: systemEnvInfo.cpuCores,
+      memoryFree: systemEnvInfo.memoryFree,
+      uptime: systemEnvInfo.uptime,
+      ipLocal: systemEnvInfo.ipLocal,
+      appVersion: systemEnvInfo.appVersion,
+      envVars: systemEnvInfo.envVars,
+      locale: navigator.language || 'en-US'
+    }
+  }, [activeTab, selectedFolder, roots, gitStatuses, systemEnvInfo, allWorkspaceFiles])
+
+  const allAvailableTemplates = useMemo(() => {
+    const baseList =
+      settings?.customTemplates && settings.customTemplates.length > 0
+        ? settings.customTemplates
+        : DEFAULT_BUILT_IN_TEMPLATES
+    const combined: Array<{ id: string; name: string; content: string }> = baseList.map((t) => ({
+      id: t.id,
+      name: t.name,
+      content: t.content
+    }))
+    for (const wf of workspaceTemplateFiles) {
+      if (!combined.some((c) => c.id === wf.id)) {
+        combined.push({
+          id: wf.id,
+          name: wf.name,
+          content: wf.content
+        })
+      }
+    }
+    return combined
+  }, [settings?.customTemplates, workspaceTemplateFiles])
+
+  const createNoteFromTemplateInFolder = useCallback(
+    async (
+      targetRootId: string,
+      folderRelativePath: string,
+      templateName: string,
+      rawTemplateContent: string
+    ) => {
+      const rootObj = roots.find((r) => r.id === targetRootId) || roots[0]
+      if (!rootObj) return
+
+      const now = new Date()
+      const folderParts = folderRelativePath.split('/').filter(Boolean)
+      const folderName =
+        folderParts.length > 0 ? folderParts[folderParts.length - 1] : rootObj.name
+      const parentFolderName =
+        folderParts.length > 1 ? folderParts[folderParts.length - 2] : rootObj.name
+      const gitSt = gitStatuses[rootObj.id]
+      const folderNoteCount = allWorkspaceFiles.filter((f) => {
+        if (f.rootId !== rootObj.id) return false
+        const fParts = f.relativePath.split('/').filter(Boolean)
+        const fFolder = fParts.length > 1 ? fParts.slice(0, -1).join('/') : ''
+        return fFolder === folderRelativePath
+      }).length
+
+      const preliminaryCtx: TemplateEvaluationContext = {
+        ...templateEvaluationContext,
+        now,
+        folderName,
+        folderPath: folderRelativePath || '/',
+        parentFolderName,
+        rootName: rootObj.name,
+        rootPath: rootObj.path,
+        noteCount: allWorkspaceFiles.length,
+        folderNoteCount,
+        gitBranch: gitSt?.branch || 'main',
+        gitStatus: gitSt?.state || 'Local'
+      }
+
+      // Evaluate any <% ... %> dynamic variables inside the template's name
+      const evaluatedTitle =
+        evaluateTemplateFileName(templateName, preliminaryCtx).replace(/\.(md|markdown)$/i, '') ||
+        'Note'
+      const safeStem = evaluatedTitle
+        .replace(/[^a-zA-Z0-9-_ ]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+
+      // Avoid overwriting existing files in the target folder
+      const existingInRoot = allWorkspaceFiles
+        .filter((f) => f.rootId === rootObj.id)
+        .map((f) => f.relativePath.toLowerCase())
+      let baseFile = `${safeStem || 'Note'}.md`
+      let relPath = folderRelativePath ? `${folderRelativePath}/${baseFile}` : baseFile
+      let counter = 1
+      while (existingInRoot.includes(relPath.toLowerCase())) {
+        baseFile = `${safeStem || 'Note'}-${counter}.md`
+        relPath = folderRelativePath ? `${folderRelativePath}/${baseFile}` : baseFile
+        counter++
+      }
+
+      const folderEvalCtx: TemplateEvaluationContext = {
+        ...preliminaryCtx,
+        fileName: baseFile,
+        fileTitle: baseFile.replace(/\.md$/i, ''),
+        relativePath: relPath
+      }
+
+      const evaluated = await evaluateTemplateVariablesAsync(rawTemplateContent, folderEvalCtx)
+      await window.klartext.createDocument(rootObj.id, relPath, evaluated.content)
+      await refreshWorkspaceAndTrees()
+      await openDocument(rootObj.id, relPath)
+    },
+    [
+      roots,
+      allWorkspaceFiles,
+      gitStatuses,
+      templateEvaluationContext,
+      refreshWorkspaceAndTrees,
+      openDocument
+    ]
+  )
+
   const commandActions: CommandActionItem[] = useMemo(
     () => [
+      {
+        id: 'insert-icon',
+        category: 'Insert',
+        label: 'Insert Icon from Untitled UI Free Icons (:icon[Name]:)',
+        shortcut: 'Mod+Shift+I',
+        run: () => setPaletteMode('icons')
+      },
       {
         id: 'mode-source',
         category: 'Editor',
@@ -923,6 +1450,22 @@ export const App: React.FC = () => {
           handleUpdateSettings({
             frontmatterPanelVisible: !settings.frontmatterPanelVisible
           })
+      },
+      {
+        id: 'templates-panel-toggle',
+        category: 'View',
+        label: 'Toggle Right Templates Panel (<% %>)',
+        run: () =>
+          settings &&
+          handleUpdateSettings({
+            templatesPanelVisible: !settings.templatesPanelVisible
+          })
+      },
+      {
+        id: 'help-variables-guide',
+        category: 'Help',
+        label: 'Open Help: Dynamic Variables (<% %>) & Formatting Reference',
+        run: () => openRightHelpPanel('variables')
       },
       {
         id: 'spellcheck-toggle',
@@ -1036,6 +1579,28 @@ export const App: React.FC = () => {
 
   const currentSpellLangs = settings.spellcheckLanguages || ['en-US', 'sv-SE']
 
+  const isAnyTopMenuOpen =
+    showFileMenu ||
+    showEditMenu ||
+    showViewMenu ||
+    showFormatMenu ||
+    showAIMenu ||
+    showHelpMenu
+
+  const openExclusiveTopMenu = (
+    menu: 'file' | 'edit' | 'view' | 'format' | 'ai' | 'help' | null
+  ) => {
+    setShowFileMenu(menu === 'file')
+    setShowEditMenu(menu === 'edit')
+    setShowViewMenu(menu === 'view')
+    setShowFormatMenu(menu === 'format')
+    setShowAIMenu(menu === 'ai')
+    setShowHelpMenu(menu === 'help')
+    if (menu !== 'edit') {
+      setShowInsertMenu(false)
+    }
+  }
+
   return (
     <div
       data-testid="klartext-app-shell"
@@ -1069,19 +1634,15 @@ export const App: React.FC = () => {
               Klartext
             </span>
 
-            {/* File Menu (Open Folder, Export HTML/PDF, Settings) */}
+            {/* File Menu (Open new workspace, Export HTML/PDF, Settings) */}
             <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 data-testid="file-menu-btn"
-                onClick={() => {
-                  setShowFileMenu((v) => !v)
-                  setShowEditMenu(false)
-                  setShowViewMenu(false)
-                  setShowFormatMenu(false)
-                  setShowInsertMenu(false)
-                  setShowAIMenu(false)
+                onMouseEnter={() => {
+                  if (isAnyTopMenuOpen) openExclusiveTopMenu('file')
                 }}
+                onClick={() => openExclusiveTopMenu(showFileMenu ? null : 'file')}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <span>File</span>
@@ -1102,7 +1663,7 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary"
                   >
-                    Open Folder...
+                    Open new workspace...
                   </button>
                   <div className="my-1 border-t border-subtle" />
                   <button
@@ -1146,19 +1707,15 @@ export const App: React.FC = () => {
               )}
             </div>
 
-            {/* Edit Menu (Undo, Redo, Cut, Copy, Paste, Select All, Find, Copy Rich HTML) */}
+            {/* Edit Menu (Undo, Redo, Cut, Copy, Paste, Select All, Insert Submenu, Find, Copy Rich HTML, Document Cleanup, Diagrams) */}
             <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 data-testid="edit-menu-btn"
-                onClick={() => {
-                  setShowEditMenu((v) => !v)
-                  setShowFileMenu(false)
-                  setShowViewMenu(false)
-                  setShowFormatMenu(false)
-                  setShowInsertMenu(false)
-                  setShowAIMenu(false)
+                onMouseEnter={() => {
+                  if (isAnyTopMenuOpen) openExclusiveTopMenu('edit')
                 }}
+                onClick={() => openExclusiveTopMenu(showEditMenu ? null : 'edit')}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <span>Edit</span>
@@ -1168,16 +1725,17 @@ export const App: React.FC = () => {
               {showEditMenu && (
                 <div
                   data-testid="edit-menu-dropdown"
-                  className="absolute left-0 top-7 z-50 w-56 rounded-md bg-panel border border-subtle shadow-lg py-1 text-xs"
+                  className="absolute left-0 top-7 z-50 w-64 rounded-md bg-panel border border-subtle shadow-lg py-1 text-xs"
                 >
                   <button
                     type="button"
                     data-testid="edit-menu-undo"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
                       dispatchEditorCommand('undo')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Undo</span>
                     <kbd className="text-[10px] font-mono text-muted">⌘Z</kbd>
@@ -1185,11 +1743,12 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     data-testid="edit-menu-redo"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
                       dispatchEditorCommand('redo')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Redo</span>
                     <kbd className="text-[10px] font-mono text-muted">⇧⌘Z</kbd>
@@ -1198,11 +1757,12 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     data-testid="edit-menu-cut"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
                       dispatchEditorCommand('cut')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Cut</span>
                     <kbd className="text-[10px] font-mono text-muted">⌘X</kbd>
@@ -1210,11 +1770,12 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     data-testid="edit-menu-copy"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
                       dispatchEditorCommand('copy')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Copy</span>
                     <kbd className="text-[10px] font-mono text-muted">⌘C</kbd>
@@ -1222,11 +1783,12 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     data-testid="edit-menu-paste"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
                       dispatchEditorCommand('paste')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Paste</span>
                     <kbd className="text-[10px] font-mono text-muted">⌘V</kbd>
@@ -1234,21 +1796,324 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     data-testid="edit-menu-select-all"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
                       dispatchEditorCommand('select-all')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Select All</span>
                     <kbd className="text-[10px] font-mono text-muted">⌘A</kbd>
                   </button>
                   <div className="my-1 border-t border-subtle" />
+
+                  {/* Insert Submenu inside Edit Menu */}
+                  <div
+                    className="relative"
+                    onMouseEnter={() => setShowInsertMenu(true)}
+                  >
+                    <button
+                      type="button"
+                      data-testid="insert-menu-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowInsertMenu((v) => !v)
+                      }}
+                      className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between font-medium"
+                    >
+                      <span>Insert</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted" />
+                    </button>
+
+                    {showInsertMenu && (
+                      <div
+                        data-testid="insert-menu-dropdown"
+                        className="absolute left-full top-0 ml-0.5 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
+                      >
+                        <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                          Tables
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-table-2x2"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('table-2x2')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Insert Table (2 × 2)</span>
+                          <kbd className="text-[10px] font-mono text-muted">2 cols</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-table-3x3"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('table-3x3')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Insert Table (3 × 3)</span>
+                          <kbd className="text-[10px] font-mono text-muted">3 cols</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-table-4x4"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('table-4x4')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Insert Table (4 × 4)</span>
+                          <kbd className="text-[10px] font-mono text-muted">4 cols</kbd>
+                        </button>
+
+                        <div className="my-1 border-t border-subtle" />
+                        <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                          Callouts &amp; Alerts
+                        </div>
+                        {(
+                          [
+                            ['callout-note', 'Note Callout', '> [!NOTE]'],
+                            ['callout-tip', 'Tip Callout', '> [!TIP]'],
+                            ['callout-important', 'Important Callout', '> [!IMPORTANT]'],
+                            ['callout-warning', 'Warning Alert', '> [!WARNING]'],
+                            ['callout-caution', 'Caution Alert', '> [!CAUTION]']
+                          ] as const
+                        ).map(([cmd, label, syntax]) => (
+                          <button
+                            key={cmd}
+                            type="button"
+                            data-testid={`insert-menu-${cmd}`}
+                            onClick={() => {
+                              setShowInsertMenu(false)
+                              setShowEditMenu(false)
+                              dispatchEditorCommand(cmd)
+                            }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                          >
+                            <span>{label}</span>
+                            <kbd className="text-[10px] font-mono text-muted">{syntax}</kbd>
+                          </button>
+                        ))}
+
+                        <div className="my-1 border-t border-subtle" />
+                        <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                          Code, Math &amp; Structure
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-codeblock"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('codeblock')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Fenced Code Block</span>
+                          <kbd className="text-[10px] font-mono text-muted">```ts</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-math-inline"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('math-inline')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Inline Math Formula (KaTeX)</span>
+                          <kbd className="text-[10px] font-mono text-muted">$E = mc^2$</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-math-block"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('math-block')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Display Math Equation Block</span>
+                          <kbd className="text-[10px] font-mono text-muted">$$ ... $$</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-details"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('details')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Collapsible Accordion Section</span>
+                          <kbd className="text-[10px] font-mono text-muted">&lt;details&gt;</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-hr"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('hr')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Horizontal Divider Line</span>
+                          <kbd className="text-[10px] font-mono text-muted">---</kbd>
+                        </button>
+
+                        <div className="my-1 border-t border-subtle" />
+                        <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                          Links, Media &amp; Metadata
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-link"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('link')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Hyperlink</span>
+                          <kbd className="text-[10px] font-mono text-muted">[text](url) · ⌘K</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-wikilink"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('wikilink')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Wiki-Link to Document</span>
+                          <kbd className="text-[10px] font-mono text-muted">[[Doc]]</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-image"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('image')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Image Reference</span>
+                          <kbd className="text-[10px] font-mono text-muted">![alt](img)</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-icon"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            setPaletteMode('icons')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-accent font-medium flex items-center justify-between"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Smile className="w-3.5 h-3.5" />
+                            <span>Insert Icon (Untitled UI)...</span>
+                          </span>
+                          <kbd className="text-[10px] font-mono text-muted">:icon[Name]: · ⌘⇧I</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-footnote"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('footnote')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Footnote Reference</span>
+                          <kbd className="text-[10px] font-mono text-muted">[^1]</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-toc"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('toc')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Table of Contents</span>
+                          <kbd className="text-[10px] font-mono text-muted">[[_TOC_]]</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-frontmatter"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('frontmatter')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>YAML Frontmatter Block</span>
+                          <kbd className="text-[10px] font-mono text-muted">---</kbd>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="insert-menu-date"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('date')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Current Date (ISO)</span>
+                          <kbd className="text-[10px] font-mono text-muted">YYYY-MM-DD</kbd>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    data-testid="edit-menu-insert-icon"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      setPaletteMode('icons')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-accent font-medium flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Smile className="w-3.5 h-3.5" />
+                      <span>Insert Icon...</span>
+                    </span>
+                    <kbd className="text-[10px] font-mono text-muted">⌘⇧I</kbd>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
                   <button
                     type="button"
                     data-testid="edit-menu-find"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
+                      setShowInsertMenu(false)
                       if (!settings.leftSidebarOpen) {
                         handleUpdateSettings({ leftSidebarOpen: true, leftSidebarTab: 'search' })
                       } else {
@@ -1256,272 +2121,138 @@ export const App: React.FC = () => {
                       }
                       setLeftSidebarTab('search')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Find in Workspace...</span>
                     <kbd className="text-[10px] font-mono text-muted">⌘F</kbd>
                   </button>
-                  <div className="my-1 border-t border-subtle" />
                   <button
                     type="button"
                     data-testid="copy-rich-html-btn"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                     onClick={() => {
                       setShowEditMenu(false)
+                      setShowInsertMenu(false)
                       dispatchEditorCommand('copy-rich-html')
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Copy Rich HTML</span>
                   </button>
-                </div>
-              )}
-            </div>
 
-            {/* View & Spellcheck Menu Dropdown */}
-            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                data-testid="view-menu-btn"
-                onClick={() => {
-                  setShowViewMenu((v) => !v)
-                  setShowFileMenu(false)
-                  setShowEditMenu(false)
-                  setShowFormatMenu(false)
-                  setShowInsertMenu(false)
-                  setShowAIMenu(false)
-                }}
-                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
-              >
-                <span>View</span>
-                <ChevronDown className="w-3 h-3" />
-              </button>
-
-              {showViewMenu && (
-                <div
-                  data-testid="view-menu-dropdown"
-                  className="absolute left-0 top-7 z-50 w-64 rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
-                >
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-theme"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        theme: resolvedTheme === 'dark' ? 'light' : 'dark'
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>
-                      Switch to {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-                    </span>
-                    <span>{resolvedTheme === 'dark' ? '☀️' : '🌙'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-lightpaper"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        lightPaperInDarkMode: !settings.lightPaperInDarkMode
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>White Paper Background in Dark Mode</span>
-                    <span>{settings.lightPaperInDarkMode ? '✓' : ''}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-wordwrap"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        wordWrap: settings.wordWrap === false
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Word Wrap (Off = Infinite Workspace)</span>
-                    <span>{settings.wordWrap !== false ? '✓' : ''}</span>
-                  </button>
-
+                  {/* Document Cleanup Section (moved from Format menu to Edit menu) */}
                   <div className="my-1 border-t border-subtle" />
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-toolbar"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        formattingToolbarVisible: !settings.formattingToolbarVisible
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  <div
+                    className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted"
+                    onMouseEnter={() => setShowInsertMenu(false)}
                   >
-                    <span>Show Formatting Toolbar Row</span>
-                    <span>{settings.formattingToolbarVisible ? '✓' : ''}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-statusbar"
-                    onClick={() => {
-                      handleUpdateSettings({ statusBarVisible: !settings.statusBarVisible })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Show Bottom Status Row</span>
-                    <span>{settings.statusBarVisible ? '✓' : ''}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-sidebar-bar"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        sidebarControlBarVisible: settings.sidebarControlBarVisible === false
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Show Left Panel Control Bar</span>
-                    <span>{settings.sidebarControlBarVisible !== false ? '✓' : ''}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-frontmatter"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        frontmatterPanelVisible: !settings.frontmatterPanelVisible
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Show Right Frontmatter Window</span>
-                    <span>{settings.frontmatterPanelVisible ? '✓' : ''}</span>
-                  </button>
-
-                  <div className="my-1 border-t border-subtle" />
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-outline"
-                    onClick={() => {
-                      const nextVal = settings.showOutlineTab === false
-                      if (!nextVal && leftSidebarTab === 'outline') {
-                        setLeftSidebarTab('explorer')
-                        handleUpdateSettings({
-                          showOutlineTab: nextVal,
-                          leftSidebarTab: 'explorer'
-                        })
-                      } else {
-                        handleUpdateSettings({ showOutlineTab: nextVal })
-                      }
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Show Outline in Sidebar</span>
-                    <span>{settings.showOutlineTab !== false ? '✓' : ''}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-links"
-                    onClick={() => {
-                      const nextVal = settings.showBacklinksTab === false
-                      if (!nextVal && leftSidebarTab === 'backlinks') {
-                        setLeftSidebarTab('explorer')
-                        handleUpdateSettings({
-                          showBacklinksTab: nextVal,
-                          leftSidebarTab: 'explorer'
-                        })
-                      } else {
-                        handleUpdateSettings({ showBacklinksTab: nextVal })
-                      }
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Show Links in Sidebar</span>
-                    <span>{settings.showBacklinksTab !== false ? '✓' : ''}</span>
-                  </button>
-
-                  <div className="my-1 border-t border-subtle" />
-
-                  <button
-                    type="button"
-                    data-testid="view-menu-toggle-spellcheck"
-                    onClick={() => {
-                      handleUpdateSettings({
-                        spellcheckEnabled: settings.spellcheckEnabled === false
-                      })
-                      setShowViewMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Spellcheck (Red Squiggly Underlines)</span>
-                    <span>{settings.spellcheckEnabled !== false ? '✓' : ''}</span>
-                  </button>
-
-                  <div className="px-3 py-1.5 space-y-1">
-                    <div className="text-[10px] font-semibold uppercase text-muted">
-                      Spellcheck Languages:
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {(Object.keys(SPELL_LANGUAGE_LABELS) as SupportedSpellLanguage[]).map(
-                        (lang) => {
-                          const active = currentSpellLangs.includes(lang)
-                          return (
-                            <button
-                              key={lang}
-                              type="button"
-                              data-testid={`view-menu-spell-lang-${lang}`}
-                              onClick={() => {
-                                const next = active
-                                  ? currentSpellLangs.filter((l) => l !== lang)
-                                  : [...currentSpellLangs, lang]
-                                handleUpdateSettings({
-                                  spellcheckLanguages: next.length > 0 ? next : ['en-US']
-                                })
-                              }}
-                              className={`px-2 py-0.5 rounded text-[10px] border font-medium ${
-                                active
-                                  ? 'bg-accent text-white border-accent'
-                                  : 'bg-app border-subtle text-muted hover:text-primary'
-                              }`}
-                            >
-                              {lang}
-                            </button>
-                          )
-                        }
-                      )}
-                    </div>
+                    Document Cleanup
                   </div>
+                  <button
+                    type="button"
+                    data-testid="format-menu-prettify-doc"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('format-doc')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between font-medium"
+                  >
+                    <span>Format &amp; Prettify Document</span>
+                    <kbd className="text-[10px] font-mono text-muted">⇧⌘I</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-align-tables"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('format-tables')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Align All GFM Tables</span>
+                    <kbd className="text-[10px] font-mono text-muted">| A | B |</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="format-menu-clear"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('clear-format')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Clear Formatting</span>
+                  </button>
+
+                  {/* Diagrams (Mermaid) Section (moved from Insert to Edit menu) */}
+                  <div className="my-1 border-t border-subtle" />
+                  <div
+                    className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                  >
+                    Diagrams (Mermaid)
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="insert-menu-visual-builder"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('open-mermaid-builder')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-accent font-medium flex items-center justify-between"
+                  >
+                    <span>Open Visual Diagram Builder...</span>
+                    <kbd className="text-[10px] font-mono text-muted">Canvas</kbd>
+                  </button>
+                  {(
+                    [
+                      ['mermaid', 'Flowchart Diagram', 'flowchart LR'],
+                      ['mermaid-sequence', 'Sequence Diagram', 'sequenceDiagram'],
+                      ['mermaid-state', 'State Diagram', 'stateDiagram-v2'],
+                      ['mermaid-class', 'Class Diagram', 'classDiagram'],
+                      ['mermaid-er', 'ER Diagram', 'erDiagram'],
+                      ['mermaid-gantt', 'Gantt Roadmap', 'gantt'],
+                      ['mermaid-pie', 'Pie Chart', 'pie'],
+                      ['mermaid-mindmap', 'Mindmap', 'mindmap']
+                    ] as const
+                  ).map(([cmd, label, syntax]) => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      data-testid={`insert-menu-${cmd}`}
+                      onMouseEnter={() => setShowInsertMenu(false)}
+                      onClick={() => {
+                        setShowEditMenu(false)
+                        setShowInsertMenu(false)
+                        dispatchEditorCommand(cmd)
+                      }}
+                      className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+                    >
+                      <span>{label}</span>
+                      <kbd className="text-[10px] font-mono text-muted">{syntax}</kbd>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Format Menu Dropdown (Comprehensive Word-Inspired Text Styles, Headings, Lists, Quotes & Document Formatting) */}
+            {/* Format Menu Dropdown (Moved to the left of View menu) */}
             <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 data-testid="format-menu-btn"
-                onClick={() => {
-                  setShowFormatMenu((v) => !v)
-                  setShowFileMenu(false)
-                  setShowEditMenu(false)
-                  setShowViewMenu(false)
-                  setShowInsertMenu(false)
-                  setShowAIMenu(false)
+                onMouseEnter={() => {
+                  if (isAnyTopMenuOpen) openExclusiveTopMenu('format')
                 }}
+                onClick={() => openExclusiveTopMenu(showFormatMenu ? null : 'format')}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <span>Format</span>
@@ -1762,338 +2493,284 @@ export const App: React.FC = () => {
                     <span>Blockquote</span>
                     <kbd className="text-[10px] font-mono text-muted">&gt; quote</kbd>
                   </button>
-
-                  <div className="my-1 border-t border-subtle" />
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    Document Cleanup
-                  </div>
-                  <button
-                    type="button"
-                    data-testid="format-menu-prettify-doc"
-                    onClick={() => {
-                      setShowFormatMenu(false)
-                      dispatchEditorCommand('format-doc')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between font-medium"
-                  >
-                    <span>Format &amp; Prettify Document</span>
-                    <kbd className="text-[10px] font-mono text-muted">⇧⌘I</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="format-menu-align-tables"
-                    onClick={() => {
-                      setShowFormatMenu(false)
-                      dispatchEditorCommand('format-tables')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Align All GFM Tables</span>
-                    <kbd className="text-[10px] font-mono text-muted">| A | B |</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="format-menu-clear"
-                    onClick={() => {
-                      setShowFormatMenu(false)
-                      dispatchEditorCommand('clear-format')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Clear Formatting</span>
-                  </button>
                 </div>
               )}
             </div>
 
-            {/* Insert Menu Dropdown (Tables, Callouts/Alerts, Code & Math, Mermaid Diagrams, Links, Media & Metadata) */}
+            {/* View & Right Panels Menu Dropdown */}
             <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
-                data-testid="insert-menu-btn"
-                onClick={() => {
-                  setShowInsertMenu((v) => !v)
-                  setShowFileMenu(false)
-                  setShowEditMenu(false)
-                  setShowViewMenu(false)
-                  setShowFormatMenu(false)
-                  setShowAIMenu(false)
+                data-testid="view-menu-btn"
+                onMouseEnter={() => {
+                  if (isAnyTopMenuOpen) openExclusiveTopMenu('view')
                 }}
+                onClick={() => openExclusiveTopMenu(showViewMenu ? null : 'view')}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
               >
-                <span>Insert</span>
+                <span>View</span>
                 <ChevronDown className="w-3 h-3" />
               </button>
 
-              {showInsertMenu && (
+              {showViewMenu && (
                 <div
-                  data-testid="insert-menu-dropdown"
-                  className="absolute left-0 top-7 z-50 w-72 max-h-[82vh] overflow-y-auto rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
+                  data-testid="view-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-80 min-w-[320px] rounded-md bg-panel border border-subtle shadow-lg p-2 space-y-0.5 text-xs"
                 >
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    Tables
-                  </div>
                   <button
                     type="button"
-                    data-testid="insert-menu-table-2x2"
+                    data-testid="view-menu-toggle-theme"
                     onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('table-2x2')
+                      handleUpdateSettings({
+                        theme: resolvedTheme === 'dark' ? 'light' : 'dark'
+                      })
+                      setShowViewMenu(false)
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Insert Table (2 × 2)</span>
-                    <kbd className="text-[10px] font-mono text-muted">2 cols</kbd>
+                    <span>
+                      Switch to {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                    </span>
+                    <span>{resolvedTheme === 'dark' ? '☀️' : '🌙'}</span>
                   </button>
+
                   <button
                     type="button"
-                    data-testid="insert-menu-table-3x3"
+                    data-testid="view-menu-toggle-lightpaper"
                     onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('table-3x3')
+                      handleUpdateSettings({
+                        lightPaperInDarkMode: !settings.lightPaperInDarkMode
+                      })
+                      setShowViewMenu(false)
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Insert Table (3 × 3)</span>
-                    <kbd className="text-[10px] font-mono text-muted">3 cols</kbd>
+                    <span>White Paper Background in Dark Mode</span>
+                    <span>{settings.lightPaperInDarkMode ? '✓' : ''}</span>
                   </button>
+
                   <button
                     type="button"
-                    data-testid="insert-menu-table-4x4"
+                    data-testid="view-menu-toggle-wordwrap"
                     onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('table-4x4')
+                      handleUpdateSettings({
+                        wordWrap: settings.wordWrap === false
+                      })
+                      setShowViewMenu(false)
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Insert Table (4 × 4)</span>
-                    <kbd className="text-[10px] font-mono text-muted">4 cols</kbd>
+                    <span>Word Wrap (Off = Infinite Workspace)</span>
+                    <span>{settings.wordWrap !== false ? '✓' : ''}</span>
                   </button>
 
                   <div className="my-1 border-t border-subtle" />
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    Callouts &amp; Alerts
-                  </div>
-                  {(
-                    [
-                      ['callout-note', 'Note Callout', '> [!NOTE]'],
-                      ['callout-tip', 'Tip Callout', '> [!TIP]'],
-                      ['callout-important', 'Important Callout', '> [!IMPORTANT]'],
-                      ['callout-warning', 'Warning Alert', '> [!WARNING]'],
-                      ['callout-caution', 'Caution Alert', '> [!CAUTION]']
-                    ] as const
-                  ).map(([cmd, label, syntax]) => (
-                    <button
-                      key={cmd}
-                      type="button"
-                      data-testid={`insert-menu-${cmd}`}
-                      onClick={() => {
-                        setShowInsertMenu(false)
-                        dispatchEditorCommand(cmd)
-                      }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                    >
-                      <span>{label}</span>
-                      <kbd className="text-[10px] font-mono text-muted">{syntax}</kbd>
-                    </button>
-                  ))}
 
-                  <div className="my-1 border-t border-subtle" />
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    Code, Math &amp; Structure
-                  </div>
                   <button
                     type="button"
-                    data-testid="insert-menu-codeblock"
+                    data-testid="view-menu-toggle-toolbar"
                     onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('codeblock')
+                      handleUpdateSettings({
+                        formattingToolbarVisible: !settings.formattingToolbarVisible
+                      })
+                      setShowViewMenu(false)
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Fenced Code Block</span>
-                    <kbd className="text-[10px] font-mono text-muted">```ts</kbd>
+                    <span>Show Formatting Toolbar Row</span>
+                    <span>{settings.formattingToolbarVisible ? '✓' : ''}</span>
                   </button>
+
                   <button
                     type="button"
-                    data-testid="insert-menu-math-inline"
+                    data-testid="view-menu-toggle-statusbar"
                     onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('math-inline')
+                      handleUpdateSettings({ statusBarVisible: !settings.statusBarVisible })
+                      setShowViewMenu(false)
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Inline Math Formula (KaTeX)</span>
-                    <kbd className="text-[10px] font-mono text-muted">$E = mc^2$</kbd>
+                    <span>Show Bottom Status Row</span>
+                    <span>{settings.statusBarVisible ? '✓' : ''}</span>
                   </button>
+
                   <button
                     type="button"
-                    data-testid="insert-menu-math-block"
+                    data-testid="view-menu-toggle-sidebar-bar"
                     onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('math-block')
+                      handleUpdateSettings({
+                        sidebarControlBarVisible: settings.sidebarControlBarVisible === false
+                      })
+                      setShowViewMenu(false)
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Display Math Equation Block</span>
-                    <kbd className="text-[10px] font-mono text-muted">$$ ... $$</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-details"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('details')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Collapsible Accordion Section</span>
-                    <kbd className="text-[10px] font-mono text-muted">&lt;details&gt;</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-hr"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('hr')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Horizontal Divider Line</span>
-                    <kbd className="text-[10px] font-mono text-muted">---</kbd>
+                    <span>Show Left Panel Control Bar</span>
+                    <span>{settings.sidebarControlBarVisible !== false ? '✓' : ''}</span>
                   </button>
 
                   <div className="my-1 border-t border-subtle" />
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    Diagrams (Mermaid)
+                  <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Right Side Panels
                   </div>
+
                   <button
                     type="button"
-                    data-testid="insert-menu-visual-builder"
+                    data-testid="view-menu-toggle-frontmatter"
                     onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('open-mermaid-builder')
+                      handleUpdateSettings({
+                        frontmatterPanelVisible: !settings.frontmatterPanelVisible
+                      })
+                      setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-accent font-medium flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Open Visual Diagram Builder...</span>
-                    <kbd className="text-[10px] font-mono text-muted">Canvas</kbd>
+                    <span>Show Right Frontmatter Window</span>
+                    <span>{settings.frontmatterPanelVisible ? '✓' : ''}</span>
                   </button>
-                  {(
-                    [
-                      ['mermaid', 'Flowchart Diagram', 'flowchart LR'],
-                      ['mermaid-sequence', 'Sequence Diagram', 'sequenceDiagram'],
-                      ['mermaid-state', 'State Diagram', 'stateDiagram-v2'],
-                      ['mermaid-class', 'Class Diagram', 'classDiagram'],
-                      ['mermaid-er', 'ER Diagram', 'erDiagram'],
-                      ['mermaid-gantt', 'Gantt Roadmap', 'gantt'],
-                      ['mermaid-pie', 'Pie Chart', 'pie'],
-                      ['mermaid-mindmap', 'Mindmap', 'mindmap']
-                    ] as const
-                  ).map(([cmd, label, syntax]) => (
-                    <button
-                      key={cmd}
-                      type="button"
-                      data-testid={`insert-menu-${cmd}`}
-                      onClick={() => {
-                        setShowInsertMenu(false)
-                        dispatchEditorCommand(cmd)
-                      }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                    >
-                      <span>{label}</span>
-                      <kbd className="text-[10px] font-mono text-muted">{syntax}</kbd>
-                    </button>
-                  ))}
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-templates"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        templatesPanelVisible: !settings.templatesPanelVisible
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Right Templates Panel (&lt;% %&gt;)</span>
+                    <span>{settings.templatesPanelVisible ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-ai"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        rightSidebarOpen: !settings.rightSidebarOpen
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Right Local AI Panel</span>
+                    <span>{settings.rightSidebarOpen ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-help"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        helpPanelVisible: !settings.helpPanelVisible
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Right Help &amp; Reference Panel</span>
+                    <span>{settings.helpPanelVisible ? '✓' : ''}</span>
+                  </button>
 
                   <div className="my-1 border-t border-subtle" />
-                  <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    Links, Media &amp; Metadata
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-outline"
+                    onClick={() => {
+                      const nextVal = settings.showOutlineTab === false
+                      if (!nextVal && leftSidebarTab === 'outline') {
+                        setLeftSidebarTab('explorer')
+                        handleUpdateSettings({
+                          showOutlineTab: nextVal,
+                          leftSidebarTab: 'explorer'
+                        })
+                      } else {
+                        handleUpdateSettings({ showOutlineTab: nextVal })
+                      }
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Outline in Sidebar</span>
+                    <span>{settings.showOutlineTab !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-links"
+                    onClick={() => {
+                      const nextVal = settings.showBacklinksTab === false
+                      if (!nextVal && leftSidebarTab === 'backlinks') {
+                        setLeftSidebarTab('explorer')
+                        handleUpdateSettings({
+                          showBacklinksTab: nextVal,
+                          leftSidebarTab: 'explorer'
+                        })
+                      } else {
+                        handleUpdateSettings({ showBacklinksTab: nextVal })
+                      }
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Show Links in Sidebar</span>
+                    <span>{settings.showBacklinksTab !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <div className="my-1 border-t border-subtle" />
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-toggle-spellcheck"
+                    onClick={() => {
+                      handleUpdateSettings({
+                        spellcheckEnabled: settings.spellcheckEnabled === false
+                      })
+                      setShowViewMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Spellcheck (Red Squiggly Underlines)</span>
+                    <span>{settings.spellcheckEnabled !== false ? '✓' : ''}</span>
+                  </button>
+
+                  <div className="px-3 py-1.5 space-y-1">
+                    <div className="text-[10px] font-semibold uppercase text-muted">
+                      Spellcheck Languages:
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {(Object.keys(SPELL_LANGUAGE_LABELS) as SupportedSpellLanguage[]).map(
+                        (lang) => {
+                          const active = currentSpellLangs.includes(lang)
+                          return (
+                            <button
+                              key={lang}
+                              type="button"
+                              data-testid={`view-menu-spell-lang-${lang}`}
+                              onClick={() => {
+                                const next = active
+                                  ? currentSpellLangs.filter((l) => l !== lang)
+                                  : [...currentSpellLangs, lang]
+                                handleUpdateSettings({
+                                  spellcheckLanguages: next.length > 0 ? next : ['en-US']
+                                })
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] border font-medium ${
+                                active
+                                  ? 'bg-accent text-white border-accent'
+                                  : 'bg-app border-subtle text-muted hover:text-primary'
+                              }`}
+                            >
+                              {lang}
+                            </button>
+                          )
+                        }
+                      )}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-link"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('link')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Hyperlink</span>
-                    <kbd className="text-[10px] font-mono text-muted">[text](url) · ⌘K</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-wikilink"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('wikilink')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Wiki-Link to Document</span>
-                    <kbd className="text-[10px] font-mono text-muted">[[Doc]]</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-image"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('image')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Image Reference</span>
-                    <kbd className="text-[10px] font-mono text-muted">![alt](img)</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-footnote"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('footnote')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Footnote Reference</span>
-                    <kbd className="text-[10px] font-mono text-muted">[^1]</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-toc"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('toc')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Table of Contents</span>
-                    <kbd className="text-[10px] font-mono text-muted">[[_TOC_]]</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-frontmatter"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('frontmatter')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>YAML Frontmatter Block</span>
-                    <kbd className="text-[10px] font-mono text-muted">---</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="insert-menu-date"
-                    onClick={() => {
-                      setShowInsertMenu(false)
-                      dispatchEditorCommand('date')
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
-                  >
-                    <span>Current Date (ISO)</span>
-                    <kbd className="text-[10px] font-mono text-muted">YYYY-MM-DD</kbd>
-                  </button>
                 </div>
               )}
             </div>
@@ -2103,14 +2780,10 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 data-testid="ai-menu-btn"
-                onClick={() => {
-                  setShowAIMenu((v) => !v)
-                  setShowFileMenu(false)
-                  setShowEditMenu(false)
-                  setShowViewMenu(false)
-                  setShowFormatMenu(false)
-                  setShowInsertMenu(false)
+                onMouseEnter={() => {
+                  if (isAnyTopMenuOpen) openExclusiveTopMenu('ai')
                 }}
+                onClick={() => openExclusiveTopMenu(showAIMenu ? null : 'ai')}
                 className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <Sparkles className="w-3 h-3 text-accent" />
@@ -2164,6 +2837,85 @@ export const App: React.FC = () => {
                       <Sparkles className="w-3 h-3 text-accent" />
                       <span>AI Improve (SV/EN)</span>
                     </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Help Menu Dropdown (Opens Right Help & Reference Panel) */}
+            <div className="relative titlebar-no-drag" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                data-testid="help-menu-btn"
+                onMouseEnter={() => {
+                  if (isAnyTopMenuOpen) openExclusiveTopMenu('help')
+                }}
+                onClick={() => openExclusiveTopMenu(showHelpMenu ? null : 'help')}
+                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+              >
+                <HelpCircle className="w-3 h-3 text-accent" />
+                <span>Help</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showHelpMenu && (
+                <div
+                  data-testid="help-menu-dropdown"
+                  className="absolute left-0 top-7 z-50 w-72 rounded-md bg-panel border border-subtle shadow-lg py-1.5 text-xs"
+                >
+                  <button
+                    type="button"
+                    data-testid="help-menu-formatting"
+                    onClick={() => {
+                      setShowHelpMenu(false)
+                      openRightHelpPanel('formatting')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Markdown Formatting Guide...</span>
+                    <kbd className="text-[10px] font-mono text-muted">Syntax</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="help-menu-variables"
+                    onClick={() => {
+                      setShowHelpMenu(false)
+                      openRightHelpPanel('variables')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between font-medium"
+                  >
+                    <span>Dynamic Variables (&lt;% %&gt;) Guide...</span>
+                    <kbd className="text-[10px] font-mono text-accent">&lt;% %&gt;</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="help-menu-shortcuts"
+                    onClick={() => {
+                      setShowHelpMenu(false)
+                      openRightHelpPanel('shortcuts')
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Smart Editing &amp; Shortcuts...</span>
+                    <kbd className="text-[10px] font-mono text-muted">Keys</kbd>
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
+                    data-testid="help-menu-open-templates"
+                    onClick={() => {
+                      setShowHelpMenu(false)
+                      handleUpdateSettings({
+                        templatesPanelVisible: !settings.templatesPanelVisible
+                      })
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <FileCode2 className="w-3.5 h-3.5 text-accent" />
+                      <span>Show Right Templates Panel</span>
+                    </span>
+                    <span>{settings.templatesPanelVisible ? '✓' : ''}</span>
                   </button>
                 </div>
               )}
@@ -2266,30 +3018,66 @@ export const App: React.FC = () => {
               aria-label="Toggle Right Panel"
               data-testid="toggle-right-panel-btn"
               onClick={() => {
-                if (settings.frontmatterPanelVisible || settings.rightSidebarOpen) {
-                  const lastPanel = settings.frontmatterPanelVisible ? 'frontmatter' : 'ai'
+                if (
+                  settings.frontmatterPanelVisible ||
+                  settings.rightSidebarOpen ||
+                  settings.templatesPanelVisible ||
+                  settings.helpPanelVisible
+                ) {
+                  const lastPanel = settings.frontmatterPanelVisible
+                    ? 'frontmatter'
+                    : settings.templatesPanelVisible
+                      ? 'templates'
+                      : settings.helpPanelVisible
+                        ? 'help'
+                        : 'ai'
                   setLastActiveRightPanel(lastPanel)
                   handleUpdateSettings({
                     frontmatterPanelVisible: false,
                     rightSidebarOpen: false,
+                    templatesPanelVisible: false,
+                    helpPanelVisible: false,
                     lastActiveRightPanel: lastPanel
                   })
                 } else if (lastActiveRightPanel === 'frontmatter') {
                   handleUpdateSettings({
                     frontmatterPanelVisible: true,
                     rightSidebarOpen: false,
+                    templatesPanelVisible: false,
+                    helpPanelVisible: false,
                     lastActiveRightPanel: 'frontmatter'
+                  })
+                } else if (lastActiveRightPanel === 'templates') {
+                  handleUpdateSettings({
+                    templatesPanelVisible: true,
+                    frontmatterPanelVisible: false,
+                    rightSidebarOpen: false,
+                    helpPanelVisible: false,
+                    lastActiveRightPanel: 'templates'
+                  })
+                } else if (lastActiveRightPanel === 'help') {
+                  handleUpdateSettings({
+                    helpPanelVisible: true,
+                    frontmatterPanelVisible: false,
+                    rightSidebarOpen: false,
+                    templatesPanelVisible: false,
+                    lastActiveRightPanel: 'help'
                   })
                 } else {
                   handleUpdateSettings({
                     rightSidebarOpen: true,
                     frontmatterPanelVisible: false,
+                    templatesPanelVisible: false,
+                    helpPanelVisible: false,
                     lastActiveRightPanel: 'ai'
                   })
                 }
               }}
               className={`p-1 rounded hover:bg-secondary ${
-                settings.frontmatterPanelVisible || settings.rightSidebarOpen
+                settings.frontmatterPanelVisible ||
+                settings.rightSidebarOpen ||
+                settings.templatesPanelVisible ||
+                settings.helpPanelVisible
                   ? 'text-accent'
                   : 'text-muted hover:text-primary'
               }`}
@@ -2409,7 +3197,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main Workspace Area: Resizable Collapsible Left Sidebar + Editor Canvas + Resizable Right Frontmatter Window + Resizable Right AI Panel */}
+      {/* Main Workspace Area: Resizable Collapsible Left Sidebar + Editor Canvas + Resizable Right Frontmatter / Templates / AI Panel */}
       <div className="flex-1 flex overflow-hidden">
         {!settings.zenMode && settings.leftSidebarOpen && (
           <>
@@ -2436,6 +3224,35 @@ export const App: React.FC = () => {
                     ? { rootId: activeTab.rootId, relativePath: activeTab.relativePath }
                     : null
                 }
+                selectedFolder={selectedFolder}
+                onSelectFolder={(folder) => {
+                  setSelectedFolder(folder)
+                  handleUpdateSettings({ selectedFolder: folder })
+                }}
+                collapsedRoots={settings.collapsedRoots || {}}
+                collapsedDirs={settings.collapsedDirs || {}}
+                onUpdateCollapsedRoots={(next) =>
+                  handleUpdateSettings({ collapsedRoots: next })
+                }
+                onUpdateCollapsedDirs={(next) =>
+                  handleUpdateSettings({ collapsedDirs: next })
+                }
+                folderIcons={settings.folderIcons || {}}
+                folderColors={settings.folderColors || {}}
+                onUpdateFolderIcon={(folderKey, iconName) => {
+                  const next = { ...(settings.folderIcons || {}) }
+                  if (!iconName) delete next[folderKey]
+                  else next[folderKey] = iconName
+                  handleUpdateSettings({ folderIcons: next })
+                }}
+                onUpdateFolderColor={(folderKey, colorValue) => {
+                  const next = { ...(settings.folderColors || {}) }
+                  if (!colorValue) delete next[folderKey]
+                  else next[folderKey] = colorValue
+                  handleUpdateSettings({ folderColors: next })
+                }}
+                availableTemplates={allAvailableTemplates}
+                onCreateNoteFromTemplateInFolder={createNoteFromTemplateInFolder}
                 headings={headings}
                 backlinks={backlinks}
                 onOpenDocument={openDocument}
@@ -2460,24 +3277,45 @@ export const App: React.FC = () => {
                   await refreshWorkspaceAndTrees()
                 }}
                 onCreateFileInRoot={async (rootId, relativePath) => {
+                  const baseTitle =
+                    (relativePath.split('/').pop() || relativePath).replace(/\.md$/i, '')
                   await window.klartext.createDocument(
                     rootId,
                     relativePath,
-                    `# ${relativePath.replace(/\.md$/i, '')}\n\n`
+                    `# ${baseTitle}\n\n`
                   )
                   await refreshWorkspaceAndTrees()
                   await openDocument(rootId, relativePath)
                 }}
+                onCreateFolderInRoot={async (rootId, relativePath) => {
+                  await window.klartext.createDirectory(rootId, relativePath)
+                  await refreshWorkspaceAndTrees()
+                }}
                 onDeleteFileInRoot={async (rootId, relativePath) => {
                   await window.klartext.deleteDocument(rootId, relativePath)
                   const closedKey = `${rootId}::${relativePath}`
+                  const folderPrefix = `${rootId}::${relativePath}/`
                   setTabs((prev) => {
-                    const remaining = prev.filter((t) => t.key !== closedKey)
-                    if (activeTabKey === closedKey) {
+                    const remaining = prev.filter(
+                      (t) => t.key !== closedKey && !t.key.startsWith(folderPrefix)
+                    )
+                    if (
+                      activeTabKey === closedKey ||
+                      (activeTabKey && activeTabKey.startsWith(folderPrefix))
+                    ) {
                       setActiveTabKey(remaining[0]?.key || null)
                     }
                     return remaining
                   })
+                  if (
+                    selectedFolder &&
+                    selectedFolder.rootId === rootId &&
+                    (selectedFolder.relativePath === relativePath ||
+                      selectedFolder.relativePath.startsWith(`${relativePath}/`))
+                  ) {
+                    setSelectedFolder(null)
+                    handleUpdateSettings({ selectedFolder: null })
+                  }
                   await refreshWorkspaceAndTrees()
                 }}
                 onRenameFileInRoot={async (rootId, oldRelativePath, newRelativePath) => {
@@ -2485,16 +3323,100 @@ export const App: React.FC = () => {
                   await refreshWorkspaceAndTrees()
                   const oldKey = `${rootId}::${oldRelativePath}`
                   const newKey = `${rootId}::${newRelativePath}`
+                  const oldFolderKey = `${rootId}/${oldRelativePath}`
+                  const newFolderKey = `${rootId}/${newRelativePath}`
+                  const oldFolderPrefix = `${oldRelativePath}/`
+
+                  // Migrate folder icons, colors & collapsed state if a folder was renamed
+                  const currentIcons = settings.folderIcons || {}
+                  const currentColors = settings.folderColors || {}
+                  const currentCollapsedDirs = settings.collapsedDirs || {}
+                  const nextIcons = { ...currentIcons }
+                  const nextColors = { ...currentColors }
+                  const nextCollapsedDirs = { ...currentCollapsedDirs }
+                  let folderSettingsChanged = false
+
+                  for (const k of Object.keys(currentIcons)) {
+                    if (k === oldKey || k === oldFolderKey) {
+                      nextIcons[newFolderKey] = nextIcons[k]
+                      delete nextIcons[k]
+                      folderSettingsChanged = true
+                    } else if (k.startsWith(`${oldFolderKey}/`)) {
+                      const updated = `${newFolderKey}/${k.slice(oldFolderKey.length + 1)}`
+                      nextIcons[updated] = nextIcons[k]
+                      delete nextIcons[k]
+                      folderSettingsChanged = true
+                    }
+                  }
+                  for (const k of Object.keys(currentColors)) {
+                    if (k === oldKey || k === oldFolderKey) {
+                      nextColors[newFolderKey] = nextColors[k]
+                      delete nextColors[k]
+                      folderSettingsChanged = true
+                    } else if (k.startsWith(`${oldFolderKey}/`)) {
+                      const updated = `${newFolderKey}/${k.slice(oldFolderKey.length + 1)}`
+                      nextColors[updated] = nextColors[k]
+                      delete nextColors[k]
+                      folderSettingsChanged = true
+                    }
+                  }
+                  for (const k of Object.keys(currentCollapsedDirs)) {
+                    if (k === oldKey || k === oldFolderKey) {
+                      nextCollapsedDirs[newFolderKey] = nextCollapsedDirs[k]
+                      delete nextCollapsedDirs[k]
+                      folderSettingsChanged = true
+                    } else if (k.startsWith(`${oldFolderKey}/`)) {
+                      const updated = `${newFolderKey}/${k.slice(oldFolderKey.length + 1)}`
+                      nextCollapsedDirs[updated] = nextCollapsedDirs[k]
+                      delete nextCollapsedDirs[k]
+                      folderSettingsChanged = true
+                    }
+                  }
+
+                  let updatedSelectedFolder = selectedFolder
+                  if (
+                    selectedFolder &&
+                    selectedFolder.rootId === rootId &&
+                    (selectedFolder.relativePath === oldRelativePath ||
+                      selectedFolder.relativePath.startsWith(oldFolderPrefix))
+                  ) {
+                    const nextRel =
+                      selectedFolder.relativePath === oldRelativePath
+                        ? newRelativePath
+                        : `${newRelativePath}/${selectedFolder.relativePath.slice(oldFolderPrefix.length)}`
+                    updatedSelectedFolder = { rootId, relativePath: nextRel }
+                    setSelectedFolder(updatedSelectedFolder)
+                    folderSettingsChanged = true
+                  }
+
+                  if (folderSettingsChanged) {
+                    handleUpdateSettings({
+                      folderIcons: nextIcons,
+                      folderColors: nextColors,
+                      collapsedDirs: nextCollapsedDirs,
+                      selectedFolder: updatedSelectedFolder
+                    })
+                  }
+
                   setTabs((prev) =>
-                    prev.map((t) =>
-                      t.key === oldKey
-                        ? { ...t, key: newKey, relativePath: newRelativePath }
-                        : t
-                    )
+                    prev.map((t) => {
+                      if (t.key === oldKey) {
+                        return { ...t, key: newKey, relativePath: newRelativePath }
+                      }
+                      if (t.rootId === rootId && t.relativePath.startsWith(oldFolderPrefix)) {
+                        const updatedRel = `${newRelativePath}/${t.relativePath.slice(oldFolderPrefix.length)}`
+                        return {
+                          ...t,
+                          key: `${rootId}::${updatedRel}`,
+                          relativePath: updatedRel
+                        }
+                      }
+                      return t
+                    })
                   )
                   if (activeTabKey === oldKey) {
                     setActiveTabKey(newKey)
-                  } else {
+                  } else if (/\.(md|markdown|svg)$/i.test(newRelativePath)) {
                     await openDocument(rootId, newRelativePath)
                   }
                 }}
@@ -2637,6 +3559,7 @@ export const App: React.FC = () => {
               customDictionaryWords={settings.customDictionaryWords || []}
               scrollToLine={scrollToLine}
               editorCommandTrigger={editorCommandTrigger}
+              textInsertTrigger={textInsertTrigger}
               initialSplitPercent={settings.splitViewPercent ?? 50}
               onChangeSplitPercent={(percent) =>
                 handleUpdateSettings({ splitViewPercent: percent })
@@ -2705,6 +3628,7 @@ export const App: React.FC = () => {
                   })
                 }
               }}
+              onOpenIconPicker={() => setPaletteMode('icons')}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted text-sm">
@@ -2713,138 +3637,325 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {/* Right-Aligned Resizable Frontmatter Properties Window (mutually exclusive with Local AI Panel) */}
-        {!settings.zenMode && settings.frontmatterPanelVisible && activeTab && (
-          <>
-            <div
-              data-testid="frontmatter-sidebar-resizer"
-              title="Drag to resize Frontmatter Window"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                activeSidebarDragRef.current = 'frontmatter'
-              }}
-              className="w-1 h-full cursor-col-resize bg-transparent hover:bg-accent transition-colors shrink-0 z-20"
-            />
-            <aside
-              data-testid="right-frontmatter-window"
-              style={{ width: `${frontmatterSidebarWidth}px` }}
-              className="h-full shrink-0 bg-app border-l border-subtle flex flex-col overflow-hidden select-none"
-            >
-              <div className="flex items-center justify-between px-3 py-2 bg-panel border-b border-subtle text-xs">
-                <div className="flex items-center gap-1.5 font-semibold text-primary">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
-                  <span>Frontmatter Properties</span>
-                </div>
-                <button
-                  type="button"
-                  title="Hide Frontmatter Window"
-                  data-testid="close-frontmatter-window-btn"
-                  onClick={() => handleUpdateSettings({ frontmatterPanelVisible: false })}
-                  className="p-0.5 rounded hover:bg-secondary text-muted hover:text-primary"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
+        {/* Right-Aligned Resizable Panels (Frontmatter, Templates, Local AI, Help & Reference) + Bottom Right-Panel Control Strip */}
+        {!settings.zenMode &&
+          (settings.frontmatterPanelVisible ||
+            settings.templatesPanelVisible ||
+            settings.rightSidebarOpen ||
+            settings.helpPanelVisible) && (
+            <>
+              <div
+                data-testid={
+                  settings.frontmatterPanelVisible
+                    ? 'frontmatter-sidebar-resizer'
+                    : settings.templatesPanelVisible
+                      ? 'templates-sidebar-resizer'
+                      : settings.helpPanelVisible
+                        ? 'help-sidebar-resizer'
+                        : 'right-sidebar-resizer'
+                }
+                title="Drag to resize Right Panel"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  activeSidebarDragRef.current = settings.frontmatterPanelVisible
+                    ? 'frontmatter'
+                    : settings.templatesPanelVisible
+                      ? 'templates'
+                      : settings.helpPanelVisible
+                        ? 'help'
+                        : 'right'
+                }}
+                className="w-1 h-full cursor-col-resize bg-transparent hover:bg-accent transition-colors shrink-0 z-20"
+              />
+              <div
+                data-testid="right-panel-container"
+                style={{
+                  width: `${rightSidebarWidth}px`
+                }}
+                className="h-full shrink-0 flex flex-col overflow-hidden bg-app"
+              >
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  {/* 1. Frontmatter Properties Window */}
+                  {settings.frontmatterPanelVisible && (
+                    <aside
+                      data-testid="right-frontmatter-window"
+                      className="h-full w-full bg-app border-l border-subtle flex flex-col overflow-hidden select-none"
+                    >
+                      <div className="flex items-center justify-between px-3 py-2 bg-panel border-b border-subtle text-xs">
+                        <div className="flex items-center gap-1.5 font-semibold text-primary">
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
+                          <span>Frontmatter Properties</span>
+                        </div>
+                        <button
+                          type="button"
+                          title="Hide Frontmatter Window"
+                          data-testid="close-frontmatter-window-btn"
+                          onClick={() => handleUpdateSettings({ frontmatterPanelVisible: false })}
+                          className="p-0.5 rounded hover:bg-secondary text-muted hover:text-primary"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
 
-              <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
-                {!parsedFrontmatter.frontmatter && (
-                  <div className="text-[11px] text-muted bg-panel border border-subtle rounded p-2">
-                    No YAML frontmatter in this document yet. Type in any field below to create it automatically.
-                  </div>
-                )}
+                      <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
+                        {!parsedFrontmatter.frontmatter && (
+                          <div className="text-[11px] text-muted bg-panel border border-subtle rounded p-2">
+                            No YAML frontmatter in this document yet. Type in any field below to create it automatically.
+                          </div>
+                        )}
 
-                {allFrontmatterKeys.map((key) => {
-                  const rawVal = parsedFrontmatter.frontmatter?.[key]
-                  const strVal = Array.isArray(rawVal)
-                    ? rawVal.join(', ')
-                    : rawVal !== undefined && rawVal !== null
-                      ? String(rawVal)
-                      : ''
-                  return (
-                    <div key={key} className="space-y-1">
-                      <label className="block text-[11px] font-medium text-muted capitalize">
-                        {key}
-                      </label>
-                      <input
-                        type="text"
-                        data-testid={`frontmatter-input-${key}`}
-                        placeholder={`Enter ${key}...`}
-                        value={strVal}
-                        onChange={(e) => updateFrontmatterField(key, e.target.value)}
-                        className="w-full px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
-                      />
-                    </div>
-                  )
-                })}
+                        {allFrontmatterKeys.map((key) => {
+                          const rawVal = parsedFrontmatter.frontmatter?.[key]
+                          const strVal = Array.isArray(rawVal)
+                            ? rawVal.join(', ')
+                            : rawVal !== undefined && rawVal !== null
+                              ? String(rawVal)
+                              : ''
+                          return (
+                            <div key={key} className="space-y-1">
+                              <label className="block text-[11px] font-medium text-muted capitalize">
+                                {key}
+                              </label>
+                              <input
+                                type="text"
+                                data-testid={`frontmatter-input-${key}`}
+                                placeholder={`Enter ${key}...`}
+                                value={strVal}
+                                onChange={(e) => updateFrontmatterField(key, e.target.value)}
+                                className="w-full px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                              />
+                            </div>
+                          )
+                        })}
 
-                {/* Add custom frontmatter property */}
-                <div className="pt-2 border-t border-subtle space-y-1.5">
-                  <label className="block text-[10px] font-semibold uppercase text-muted">
-                    Add Custom Property
-                  </label>
-                  <div className="flex gap-1">
-                    <input
-                      type="text"
-                      placeholder="Property key..."
-                      value={customFrontmatterKey}
-                      onChange={(e) => setCustomFrontmatterKey(e.target.value)}
-                      className="flex-1 px-2 py-1 rounded bg-panel border border-subtle text-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const k = customFrontmatterKey.trim()
-                        if (k) {
-                          updateFrontmatterField(k, '')
-                          setCustomFrontmatterKey('')
+                        {/* Add custom frontmatter property */}
+                        <div className="pt-2 border-t border-subtle space-y-1.5">
+                          <label className="block text-[10px] font-semibold uppercase text-muted">
+                            Add Custom Property
+                          </label>
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              placeholder="Property key..."
+                              value={customFrontmatterKey}
+                              onChange={(e) => setCustomFrontmatterKey(e.target.value)}
+                              className="flex-1 px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const k = customFrontmatterKey.trim()
+                                if (k) {
+                                  updateFrontmatterField(k, '')
+                                  setCustomFrontmatterKey('')
+                                }
+                              }}
+                              className="px-2 py-1 rounded bg-accent text-white"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </aside>
+                  )}
+
+                  {/* 2. Templates Panel (<% %> Dynamic Variables) */}
+                  {settings.templatesPanelVisible && !settings.frontmatterPanelVisible && (
+                    <TemplatesPanel
+                      customTemplates={
+                        settings.customTemplates && settings.customTemplates.length > 0
+                          ? settings.customTemplates
+                          : DEFAULT_BUILT_IN_TEMPLATES
+                      }
+                      workspaceTemplateFiles={workspaceTemplateFiles}
+                      evaluationContext={templateEvaluationContext}
+                      onSaveCustomTemplates={(nextTemplates) =>
+                        handleUpdateSettings({ customTemplates: nextTemplates })
+                      }
+                      onOpenTemplateInEditor={openTemplateInEditor}
+                      onOpenWorkspaceTemplateInEditor={openDocument}
+                      onInsertRenderedTemplate={(renderedText, cursorOffset) => {
+                        if (activeTab) {
+                          dispatchTextInsert(renderedText, cursorOffset)
                         }
                       }}
-                      className="px-2 py-1 rounded bg-accent text-white"
+                      onCreateNoteFromTemplate={async (templateName, rawTemplateContent) => {
+                        const targetRootId =
+                          selectedFolder?.rootId || activeTab?.rootId || roots[0]?.id
+                        if (!targetRootId) return
+                        const folderPrefix =
+                          selectedFolder && selectedFolder.rootId === targetRootId
+                            ? selectedFolder.relativePath
+                            : ''
+                        await createNoteFromTemplateInFolder(
+                          targetRootId,
+                          folderPrefix,
+                          templateName,
+                          rawTemplateContent
+                        )
+                      }}
+                      onEvaluateActiveDocument={async () => {
+                        if (!activeTab) return
+                        const res = await evaluateTemplateVariablesAsync(
+                          activeTab.content,
+                          templateEvaluationContext,
+                          (expressions, cwd) =>
+                            window.klartext.evaluatePowerTemplate({ expressions, cwd })
+                        )
+                        handleEditorContentChange(res.content)
+                      }}
+                      onOpenHelpVariables={() => openRightHelpPanel('variables')}
+                      onClose={() => handleUpdateSettings({ templatesPanelVisible: false })}
+                    />
+                  )}
+
+                  {/* 3. Local AI Assistant & Hardware Advisor Panel */}
+                  {settings.rightSidebarOpen &&
+                    !settings.frontmatterPanelVisible &&
+                    !settings.templatesPanelVisible &&
+                    !settings.helpPanelVisible && (
+                      <LocalAIPanel
+                        settings={settings}
+                        roots={roots}
+                        activeRootName={activeTab?.rootName || 'None'}
+                        activeFilePath={activeTab?.relativePath || 'None'}
+                        selectedTextOrDoc={activeTab?.content || ''}
+                        pendingDiff={pendingAIDiff}
+                        onUpdateSettings={handleUpdateSettings}
+                        onStartAIAction={handleTriggerAIAction}
+                        onCancelStream={(requestId) => window.klartext.cancelAIStream(requestId)}
+                        onAcceptDiff={(proposedText) => {
+                          handleEditorContentChange(proposedText)
+                          setPendingAIDiff(null)
+                        }}
+                        onRejectDiff={() => setPendingAIDiff(null)}
+                      />
+                    )}
+
+                  {/* 4. Right-Side Help & Reference Panel (Formatting, Dynamic Variables <% %>, Shortcuts) */}
+                  {settings.helpPanelVisible &&
+                    !settings.frontmatterPanelVisible &&
+                    !settings.templatesPanelVisible && (
+                      <HelpModal
+                        initialTab={helpModalTab}
+                        evaluationContext={templateEvaluationContext}
+                        onInsertVariableTag={(tag) => {
+                          if (activeTab) {
+                            dispatchTextInsert(tag, null)
+                          }
+                        }}
+                        onClose={() => handleUpdateSettings({ helpPanelVisible: false })}
+                      />
+                    )}
+                </div>
+
+                {/* Bottom Right-Window Control Strip (Matching the bottom bar of the left panel, with icons equal to all available right panel windows) */}
+                {settings.sidebarControlBarVisible !== false && (
+                  <div
+                    data-testid="right-sidebar-bottom-controls"
+                    className="px-1.5 py-1.5 bg-panel border-t border-l border-subtle flex items-center justify-between gap-1 shrink-0 select-none"
+                  >
+                    <div
+                      className="flex items-center bg-secondary p-0.5 rounded border border-subtle gap-0.5"
+                      data-testid="right-panel-tab-switcher"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <button
+                        type="button"
+                        data-tooltip="Frontmatter Properties"
+                        data-tooltip-pos="top"
+                        aria-label="Frontmatter Properties"
+                        data-testid="right-panel-tab-frontmatter"
+                        onClick={() =>
+                          handleUpdateSettings({ frontmatterPanelVisible: true })
+                        }
+                        className={`p-1 rounded transition-colors ${
+                          settings.frontmatterPanelVisible
+                            ? 'bg-panel text-accent shadow-sm'
+                            : 'text-muted hover:text-primary'
+                        }`}
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        data-tooltip="Templates (<% %>)"
+                        data-tooltip-pos="top"
+                        aria-label="Templates (<% %>)"
+                        data-testid="right-panel-tab-templates"
+                        onClick={() =>
+                          handleUpdateSettings({ templatesPanelVisible: true })
+                        }
+                        className={`p-1 rounded transition-colors ${
+                          settings.templatesPanelVisible
+                            ? 'bg-panel text-accent shadow-sm'
+                            : 'text-muted hover:text-primary'
+                        }`}
+                      >
+                        <FileCode2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        data-tooltip="Local AI Assistant"
+                        data-tooltip-pos="top"
+                        aria-label="Local AI Assistant"
+                        data-testid="right-panel-tab-ai"
+                        onClick={() =>
+                          handleUpdateSettings({ rightSidebarOpen: true })
+                        }
+                        className={`p-1 rounded transition-colors ${
+                          settings.rightSidebarOpen
+                            ? 'bg-panel text-accent shadow-sm'
+                            : 'text-muted hover:text-primary'
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        data-tooltip="Help & Reference"
+                        data-tooltip-pos="top"
+                        aria-label="Help & Reference"
+                        data-testid="right-panel-tab-help"
+                        onClick={() =>
+                          handleUpdateSettings({ helpPanelVisible: true })
+                        }
+                        className={`p-1 rounded transition-colors ${
+                          settings.helpPanelVisible
+                            ? 'bg-panel text-accent shadow-sm'
+                            : 'text-muted hover:text-primary'
+                        }`}
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      data-tooltip="Hide Right Panel"
+                      data-tooltip-pos="top"
+                      aria-label="Hide Right Panel"
+                      data-testid="collapse-right-sidebar-btn"
+                      onClick={() =>
+                        handleUpdateSettings({
+                          frontmatterPanelVisible: false,
+                          templatesPanelVisible: false,
+                          rightSidebarOpen: false,
+                          helpPanelVisible: false
+                        })
+                      }
+                      className="p-1 rounded bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
+                    >
+                      <PanelRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
+                )}
               </div>
-            </aside>
-          </>
-        )}
-
-        {/* Right Collapsible & Resizable Local AI Assistant & Hardware Advisor Panel (mutually exclusive with Frontmatter Window) */}
-        {!settings.zenMode && settings.rightSidebarOpen && !settings.frontmatterPanelVisible && (
-          <>
-            <div
-              data-testid="right-sidebar-resizer"
-              title="Drag to resize Local AI Panel"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                activeSidebarDragRef.current = 'right'
-              }}
-              className="w-1 h-full cursor-col-resize bg-transparent hover:bg-accent transition-colors shrink-0 z-20"
-            />
-            <div
-              style={{ width: `${rightSidebarWidth}px` }}
-              className="h-full shrink-0"
-            >
-              <LocalAIPanel
-                settings={settings}
-                roots={roots}
-                activeRootName={activeTab?.rootName || 'None'}
-                activeFilePath={activeTab?.relativePath || 'None'}
-                selectedTextOrDoc={activeTab?.content || ''}
-                pendingDiff={pendingAIDiff}
-                onUpdateSettings={handleUpdateSettings}
-                onStartAIAction={handleTriggerAIAction}
-                onCancelStream={(requestId) => window.klartext.cancelAIStream(requestId)}
-                onAcceptDiff={(proposedText) => {
-                  handleEditorContentChange(proposedText)
-                  setPendingAIDiff(null)
-                }}
-                onRejectDiff={() => setPendingAIDiff(null)}
-              />
-            </div>
-          </>
-        )}
+            </>
+          )}
       </div>
 
       {/* Collapsible Bottom Status Bar (5 center icons moved to bottom of left sidebar window per user request) */}
@@ -2947,13 +4058,18 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* Command Palette / Quick Switcher */}
+      {/* Command Palette / Quick Switcher / Icon Picker */}
       {paletteMode && (
         <CommandPaletteModal
           mode={paletteMode}
           actions={commandActions}
           files={allWorkspaceFiles}
           onSelectFile={openDocument}
+          onSelectIcon={(iconSyntax) => {
+            if (activeTab) {
+              dispatchTextInsert(iconSyntax, null)
+            }
+          }}
           onClose={() => setPaletteMode(null)}
         />
       )}
@@ -2976,6 +4092,26 @@ export const App: React.FC = () => {
           onClose={() => setShowSettingsModal(false)}
         />
       )}
+
+      {/* Top-Level Global Tooltip Portal (Always Above All Stacking Contexts & Overflow Containers) */}
+      {portalTooltip && (
+        <div
+          data-testid="global-tooltip-portal"
+          style={{
+            position: 'fixed',
+            top: `${portalTooltip.top}px`,
+            left: `${portalTooltip.left}px`,
+            transform:
+              portalTooltip.pos === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            zIndex: 2147483647,
+            pointerEvents: 'none'
+          }}
+          className="px-2 py-0.5 rounded bg-app border border-subtle text-primary text-[10px] font-medium whitespace-nowrap shadow-lg"
+        >
+          {portalTooltip.text}
+        </div>
+      )}
     </div>
   )
 }
+

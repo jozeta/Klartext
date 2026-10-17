@@ -1,5 +1,12 @@
 import fs from 'fs'
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
+import os from 'os'
+import path from 'path'
+import { exec, execFile } from 'child_process'
+import { promisify } from 'util'
+import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron'
+
+const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 import { z } from 'zod'
 import { IPC_CHANNELS } from '../../../shared/constants'
 import {
@@ -85,6 +92,14 @@ export function registerAllIpcHandlers(
     const added = registry.addRoot(input)
     watcher.watchRoot(added.id, added.path)
     gitManager.syncInstancesWithRegistry()
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.EVENT_WATCHER_CHANGE, {
+        rootId: added.id,
+        relativePath: '',
+        eventType: 'addDir'
+      })
+    }
     return added
   })
 
@@ -227,6 +242,13 @@ export function registerAllIpcHandlers(
     return { ok: true, relativePath }
   })
 
+  ipcMain.handle(IPC_CHANNELS.DOC_CREATE_DIR, async (_e, rawInput) => {
+    const { rootId, relativePath } = RootScopedPathSchema.parse(rawInput)
+    const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
+    await fs.promises.mkdir(absPath, { recursive: true })
+    return { ok: true, relativePath }
+  })
+
   ipcMain.handle(IPC_CHANNELS.DOC_DELETE, async (_e, rawInput) => {
     const { rootId, relativePath } = RootScopedPathSchema.parse(rawInput)
     const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
@@ -239,12 +261,245 @@ export function registerAllIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.DOC_RENAME, async (_e, rawInput) => {
     const { rootId, oldRelativePath, newRelativePath } = DocRenameRequestSchema.parse(rawInput)
+    const oldAbs = registry.pathGuard.resolveScopedPath(rootId, oldRelativePath)
+    const newAbs = registry.pathGuard.resolveScopedPath(rootId, newRelativePath)
+    if (fs.existsSync(oldAbs) && fs.statSync(oldAbs).isDirectory()) {
+      await fs.promises.mkdir(path.dirname(newAbs), { recursive: true })
+      await fs.promises.rename(oldAbs, newAbs)
+      return { ok: true, newRelativePath, updatedMarkdown: '' }
+    }
     const res = await assetService.renameDocumentAndRefactorLinks({
       rootId,
       oldRelativePath,
       newRelativePath
     })
     return { ok: true, newRelativePath: res.newRelativePath, updatedMarkdown: res.updatedMarkdown }
+  })
+
+  const getLocalIpAddress = (): string => {
+    try {
+      const nets = os.networkInterfaces()
+      for (const name of Object.keys(nets)) {
+        for (const net of nets[name] || []) {
+          if (net.family === 'IPv4' && !net.internal) {
+            return net.address
+          }
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    return '127.0.0.1'
+  }
+
+  const formatSystemUptime = (): string => {
+    const sec = Math.floor(os.uptime())
+    const days = Math.floor(sec / 86400)
+    const hours = Math.floor((sec % 86400) / 3600)
+    const mins = Math.floor((sec % 3600) / 60)
+    if (days > 0) return `${days}d ${hours}h ${mins}m`
+    if (hours > 0) return `${hours}h ${mins}m`
+    return `${mins}m`
+  }
+
+  ipcMain.handle(IPC_CHANNELS.SYSTEM_GET_ENV_INFO, async () => {
+    let userName = 'user'
+    try {
+      userName = os.userInfo().username || 'user'
+    } catch {
+      // Fallback if userInfo is unavailable
+    }
+    const freeGb = (os.freemem() / (1024 * 1024 * 1024)).toFixed(1)
+    return {
+      userName,
+      hostName: os.hostname() || 'localhost',
+      osPlatform:
+        process.platform === 'darwin'
+          ? 'macOS'
+          : process.platform === 'win32'
+            ? 'Windows'
+            : 'Linux',
+      cpuArch: process.arch || 'arm64',
+      cpuCores: os.cpus()?.length || 8,
+      memoryFree: `${freeGb} GB`,
+      uptime: formatSystemUptime(),
+      ipLocal: getLocalIpAddress(),
+      appVersion: app.getVersion() || '1.1.0',
+      envVars: {
+        USER: userName,
+        SHELL: process.env.SHELL || '/bin/zsh',
+        HOME: os.homedir() || '~',
+        LANG: process.env.LANG || 'en_US.UTF-8',
+        PATH: process.env.PATH || ''
+      }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.TEMPLATE_EVALUATE_POWER, async (_e, rawInput) => {
+    const schema = z.object({
+      expressions: z.array(z.string()).max(60),
+      cwd: z.string().optional()
+    })
+    const { expressions, cwd } = schema.parse(rawInput || { expressions: [] })
+    const defaultRootPath = registry.getState().roots[0]?.path || os.homedir()
+    const execCwd = cwd && fs.existsSync(cwd) ? cwd : defaultRootPath
+    const powerVariables: Record<string, string> = {}
+
+    for (const rawExpr of expressions) {
+      const expr = rawExpr.trim()
+      const lower = expr.toLowerCase()
+      try {
+        if (lower === 'git_commit' || lower === 'commit' || lower === 'git_sha') {
+          const { stdout } = await execAsync('git rev-parse --short HEAD', {
+            cwd: execCwd,
+            timeout: 3000
+          })
+          powerVariables[expr] = stdout.trim() || 'HEAD'
+          continue
+        }
+        if (lower === 'git_author' || lower === 'commit_author') {
+          const { stdout } = await execAsync('git config user.name', {
+            cwd: execCwd,
+            timeout: 3000
+          })
+          powerVariables[expr] = stdout.trim() || os.userInfo().username || 'user'
+          continue
+        }
+        if (lower === 'git_remote' || lower === 'remote_url' || lower === 'origin') {
+          const { stdout } = await execAsync('git config --get remote.origin.url', {
+            cwd: execCwd,
+            timeout: 3000
+          })
+          powerVariables[expr] = stdout.trim() || 'local'
+          continue
+        }
+        if (lower === 'cpu_cores' || lower === 'cores' || lower === 'cpus') {
+          powerVariables[expr] = String(os.cpus()?.length || 8)
+          continue
+        }
+        if (lower === 'memory_free' || lower === 'mem_free' || lower === 'free_memory') {
+          powerVariables[expr] = `${(os.freemem() / (1024 * 1024 * 1024)).toFixed(1)} GB`
+          continue
+        }
+        if (lower === 'uptime' || lower === 'system_uptime') {
+          powerVariables[expr] = formatSystemUptime()
+          continue
+        }
+        if (lower === 'ip_local' || lower === 'local_ip' || lower === 'ip') {
+          powerVariables[expr] = getLocalIpAddress()
+          continue
+        }
+
+        const envMatch = expr.match(/^env:\s*(.+)$/i)
+        if (envMatch) {
+          const varName = envMatch[1].trim()
+          powerVariables[expr] = process.env[varName] ?? ''
+          continue
+        }
+
+        const execMatch = expr.match(
+          /^(exec|cli|cmd|sh|bash|zsh|script|applescript|osascript|url|fetch|curl|http|json_url|json):\s*(.+)$/i
+        )
+        if (execMatch) {
+          const kind = execMatch[1].toLowerCase()
+          const payload = execMatch[2].trim()
+
+          if (kind === 'exec' || kind === 'cli' || kind === 'cmd') {
+            const { stdout } = await execAsync(payload, {
+              cwd: execCwd,
+              timeout: 5000,
+              maxBuffer: 512 * 1024
+            })
+            powerVariables[expr] = stdout.trim()
+            continue
+          }
+
+          if (kind === 'sh' || kind === 'bash' || kind === 'zsh' || kind === 'script') {
+            const shellBin = kind === 'zsh' ? '/bin/zsh' : kind === 'bash' ? '/bin/bash' : '/bin/sh'
+            let cmdToRun = payload
+            if (payload.startsWith('~/')) {
+              cmdToRun = path.join(os.homedir(), payload.slice(2))
+            } else if (
+              !payload.includes(' ') &&
+              !payload.startsWith('/') &&
+              fs.existsSync(path.join(execCwd, payload))
+            ) {
+              cmdToRun = path.join(execCwd, payload)
+            }
+            const { stdout } = await execAsync(cmdToRun, {
+              cwd: execCwd,
+              shell: fs.existsSync(shellBin) ? shellBin : undefined,
+              timeout: 5000,
+              maxBuffer: 512 * 1024
+            })
+            powerVariables[expr] = stdout.trim()
+            continue
+          }
+
+          if (kind === 'applescript' || kind === 'osascript') {
+            if (process.platform === 'darwin') {
+              const { stdout } = await execFileAsync('osascript', ['-e', payload], {
+                cwd: execCwd,
+                timeout: 5000
+              })
+              powerVariables[expr] = stdout.trim()
+            } else {
+              powerVariables[expr] = `[applescript:${payload}]`
+            }
+            continue
+          }
+
+          if (kind === 'url' || kind === 'fetch' || kind === 'curl' || kind === 'http') {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 5000)
+            try {
+              const res = await fetch(payload, { signal: controller.signal })
+              const text = await res.text()
+              powerVariables[expr] = text.trim().slice(0, 4000)
+            } finally {
+              clearTimeout(timer)
+            }
+            continue
+          }
+
+          if (kind === 'json_url' || kind === 'json') {
+            const parts = payload.split('|').map((s) => s.trim())
+            const targetUrl = parts[0]
+            const keyPath = parts[1] || ''
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 5000)
+            try {
+              const res = await fetch(targetUrl, { signal: controller.signal })
+              const data = await res.json()
+              if (!keyPath) {
+                powerVariables[expr] = JSON.stringify(data)
+              } else {
+                const val = keyPath
+                  .split('.')
+                  .reduce<unknown>(
+                    (acc, key) =>
+                      acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined,
+                    data
+                  )
+                powerVariables[expr] =
+                  val === undefined || val === null
+                    ? ''
+                    : typeof val === 'object'
+                      ? JSON.stringify(val)
+                      : String(val)
+              }
+            } finally {
+              clearTimeout(timer)
+            }
+            continue
+          }
+        }
+      } catch (err) {
+        powerVariables[expr] = `[error: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}]`
+      }
+    }
+
+    return { ...powerVariables, powerVariables }
   })
 
   ipcMain.handle(IPC_CHANNELS.DOC_CHECK_CROSS_ROOT_ASSETS, async (_e, rawInput) => {
@@ -483,18 +738,69 @@ export function registerAllIpcHandlers(
   // Export
   ipcMain.handle(IPC_CHANNELS.EXPORT_HTML, async (_e, rawInput) => {
     const input = ExportRequestSchema.parse(rawInput)
-    return exportService.exportToHtmlFile(input)
+    let targetFilePath = input.targetFilePath
+    if (!targetFilePath && process.env.KLARTEXT_E2E_AUTO_SAVE_EXPORT !== '1') {
+      let defaultHtmlOut: string
+      try {
+        defaultHtmlOut = registry.pathGuard.resolveScopedPath(
+          input.rootId,
+          input.relativePath.replace(/\.(md|markdown)$/i, '') + '.export.html'
+        )
+      } catch {
+        defaultHtmlOut = path.join(
+          app.getPath('documents'),
+          path.basename(input.relativePath).replace(/\.(md|markdown)$/i, '') + '.export.html'
+        )
+      }
+      const win = getMainWindow()
+      const saveRes = await dialog.showSaveDialog(win!, {
+        title: 'Export Document to Standalone HTML',
+        defaultPath: defaultHtmlOut,
+        buttonLabel: 'Export HTML',
+        filters: [{ name: 'HTML Document', extensions: ['html', 'htm'] }]
+      })
+      if (saveRes.canceled || !saveRes.filePath) {
+        return { outputPath: '', html: '', canceled: true }
+      }
+      targetFilePath = saveRes.filePath
+    }
+    return exportService.exportToHtmlFile({
+      ...input,
+      targetFilePath
+    })
   })
 
   ipcMain.handle(IPC_CHANNELS.EXPORT_PDF, async (_e, rawInput) => {
     const input = ExportRequestSchema.parse(rawInput)
-    const html = await exportService.generateStandaloneHtml(input)
-    const defaultPdfOut = registry.pathGuard.resolveScopedPath(
-      input.rootId,
-      input.relativePath.replace(/\.(md|markdown)$/i, '') + '.pdf'
-    )
-    const outputPath = input.targetFilePath || defaultPdfOut
+    let defaultPdfOut: string
+    try {
+      defaultPdfOut = registry.pathGuard.resolveScopedPath(
+        input.rootId,
+        input.relativePath.replace(/\.(md|markdown)$/i, '') + '.pdf'
+      )
+    } catch {
+      defaultPdfOut = path.join(
+        app.getPath('documents'),
+        path.basename(input.relativePath).replace(/\.(md|markdown)$/i, '') + '.pdf'
+      )
+    }
+    let outputPath = input.targetFilePath
+    if (!outputPath && process.env.KLARTEXT_E2E_AUTO_SAVE_EXPORT !== '1') {
+      const win = getMainWindow()
+      const saveRes = await dialog.showSaveDialog(win!, {
+        title: 'Export Document to PDF',
+        defaultPath: defaultPdfOut,
+        buttonLabel: 'Export PDF',
+        filters: [{ name: 'PDF Document', extensions: ['pdf'] }]
+      })
+      if (saveRes.canceled || !saveRes.filePath) {
+        return { outputPath: '', sizeBytes: 0, canceled: true }
+      }
+      outputPath = saveRes.filePath
+    }
+    outputPath = outputPath || defaultPdfOut
 
+    const html = await exportService.generateStandaloneHtml(input)
     const printWin = new BrowserWindow({
       show: false,
       webPreferences: {

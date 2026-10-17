@@ -290,16 +290,52 @@ body {
   visibility: hidden;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
   transition: opacity 70ms ease-out 65ms, transform 70ms ease-out 65ms, visibility 0ms linear 65ms;
-  z-index: 90;
+  z-index: 2147483647;
 }
-[data-tooltip][data-tooltip-pos='top']::after {
+[data-tooltip][data-tooltip-pos='top']::after,
+[data-testid='floating-selection-toolbar'] [data-tooltip]::after {
   top: auto;
-  bottom: calc(100% + 5px);
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%) translateY(2px);
 }
 [data-tooltip]:hover::after {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
+}
+body[data-portal-tooltips='true'] [data-tooltip]::after {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+@keyframes floatingMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.klartext-floating-menu-fade {
+  animation: floatingMenuFadeIn 130ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transition: opacity 130ms cubic-bezier(0.22, 1, 0.36, 1), transform 130ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.klartext-inline-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -0.16em;
+  margin: 0 1px;
+  color: var(--accent-primary);
+}
+.klartext-inline-icon {
+  width: 1.05em;
+  height: 1.05em;
+  stroke: currentColor;
 }
 
 /* Hide horizontal scrollbar on tab strip while preserving scrollability */
@@ -496,7 +532,7 @@ body {
 .cm-live-highlight,
 .klartext-highlight,
 .klartext-preview-body mark {
-  background-color: rgba(230, 184, 77, 0.32);
+  background-color: color-mix(in srgb, var(--highlight-color, #E6B84D) 30%, transparent);
   color: inherit;
   padding: 1px 4px;
   border-radius: 3px;
@@ -504,7 +540,7 @@ body {
 [data-theme='dark'] .cm-live-highlight,
 [data-theme='dark'] .klartext-highlight,
 [data-theme='dark'] .klartext-preview-body mark {
-  background-color: rgba(230, 184, 77, 0.26);
+  background-color: color-mix(in srgb, var(--highlight-color, #E6B84D) 26%, transparent);
 }
 
 .cm-live-spoiler,

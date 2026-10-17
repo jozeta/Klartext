@@ -62,6 +62,11 @@ export const klartextApi = {
     content: string
   ): Promise<{ ok: boolean; relativePath: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.DOC_CREATE, { rootId, relativePath, content }),
+  createDirectory: (
+    rootId: string,
+    relativePath: string
+  ): Promise<{ ok: boolean; relativePath: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DOC_CREATE_DIR, { rootId, relativePath }),
   deleteDocument: (rootId: string, relativePath: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.DOC_DELETE, { rootId, relativePath }),
   renameDocument: (
@@ -70,6 +75,23 @@ export const klartextApi = {
     newRelativePath: string
   ): Promise<{ ok: boolean; newRelativePath: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.DOC_RENAME, { rootId, oldRelativePath, newRelativePath }),
+  getSystemEnvInfo: (): Promise<{
+    userName: string
+    hostName: string
+    osPlatform: string
+    cpuArch: string
+    cpuCores?: number
+    memoryFree?: string
+    uptime?: string
+    ipLocal?: string
+    appVersion: string
+    envVars?: Record<string, string>
+  }> => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_GET_ENV_INFO),
+  evaluatePowerTemplate: (payload: {
+    expressions: string[]
+    cwd?: string
+  }): Promise<{ powerVariables: Record<string, string> }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TEMPLATE_EVALUATE_POWER, payload),
   checkCrossRootAssets: (sourceRootId: string, sourceRelativePath: string): Promise<string[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.DOC_CHECK_CROSS_ROOT_ASSETS, {
       rootId: sourceRootId,
