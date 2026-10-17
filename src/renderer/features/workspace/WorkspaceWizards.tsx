@@ -6,10 +6,13 @@ import type {
   DynamicWorkspaceDef
 } from '../../../shared/types'
 import {
+  completeOrAppendTagInInput,
+  extractActiveTagFilterQuery,
   formatDynamicRuleSummary,
   formatTagWithHash,
   matchesDynamicFilterRule,
   parseTagListInput,
+  stripTagHash,
   type DynamicCandidateDocument
 } from '../../../shared/markdown/dynamic-workspace'
 import {
@@ -423,19 +426,53 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
   }, [editingFolder, editingRootRules, targetWorkspace])
 
   const [rules, setRules] = useState<DynamicFilterRule>(initialRules)
+  const [isTypingTags, setIsTypingTags] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const matchingDocs = useMemo(() => {
     return candidateDocuments.filter((doc) => matchesDynamicFilterRule(doc, rules))
   }, [candidateDocuments, rules])
 
+  const allSuggestedTags = useMemo(() => {
+    const defaults = [
+      '#architecture',
+      '#compliance',
+      '#incident',
+      '#iso27001',
+      '#meeting',
+      '#pentest',
+      '#roadmap',
+      '#security',
+      '#sprint',
+      '#vulnerability'
+    ]
+    const set = new Set<string>(
+      [...defaults, ...knownTags].map((t) => formatTagWithHash(t)).filter(Boolean)
+    )
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [knownTags])
+
+  const activeTagQuery = extractActiveTagFilterQuery(rules.tagsPattern, isTypingTags)
+
+  const filteredSuggestedTags = useMemo(() => {
+    if (!activeTagQuery) return allSuggestedTags
+    return allSuggestedTags.filter((t) =>
+      stripTagHash(t).toLowerCase().includes(activeTagQuery)
+    )
+  }, [allSuggestedTags, activeTagQuery])
+
   const handleAppendTagChip = (tag: string): void => {
     const normalized = formatTagWithHash(tag)
     if (!normalized) return
-    const existing = parseTagListInput(rules.tagsPattern)
-    if (existing.some((t) => t.toLowerCase() === normalized.toLowerCase())) return
-    const next = [...existing, normalized].join(', ')
-    setRules((prev) => ({ ...prev, tagsPattern: next }))
+    const currentParsed = isTypingTags ? [] : parseTagListInput(rules.tagsPattern)
+    const { formattedInput } = completeOrAppendTagInInput({
+      currentTags: currentParsed,
+      rawInput: rules.tagsPattern,
+      isActivelyTyping: isTypingTags,
+      selectedTag: normalized
+    })
+    setIsTypingTags(false)
+    setRules((prev) => ({ ...prev, tagsPattern: formattedInput }))
   }
 
   const handleAddCustomFilterRow = (): void => {
@@ -774,8 +811,13 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                     type="text"
                     data-testid="dynamic-wizard-tags-input"
                     value={rules.tagsPattern}
-                    onChange={(e) => setRules((prev) => ({ ...prev, tagsPattern: e.target.value }))}
+                    onFocus={() => setIsTypingTags(false)}
+                    onChange={(e) => {
+                      setIsTypingTags(true)
+                      setRules((prev) => ({ ...prev, tagsPattern: e.target.value }))
+                    }}
                     onBlur={() => {
+                      setIsTypingTags(false)
                       if (rules.tagsPattern.trim()) {
                         setRules((prev) => ({
                           ...prev,
@@ -786,14 +828,23 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
                     placeholder="e.g. #sec*, #incident*, or #tag1 Tag2"
                     className="w-full px-2.5 py-1.5 rounded-md bg-app border border-subtle text-primary focus:outline-none focus:border-accent font-mono text-xs"
                   />
-                  {knownTags.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {knownTags.slice(0, 7).map((tag) => {
+                  {filteredSuggestedTags.length > 0 && (
+                    <div
+                      data-testid="dynamic-wizard-tag-suggestions"
+                      className="mt-1 flex flex-wrap gap-1"
+                    >
+                      {filteredSuggestedTags.map((tag) => {
                         const hashed = formatTagWithHash(tag)
+                        const bare = stripTagHash(hashed)
                         return (
                           <button
                             key={hashed}
                             type="button"
+                            data-testid={`dynamic-wizard-tag-suggestion-${bare}`}
+                            onMouseDown={(e) => {
+                              // Prevent input blur before click completes so partial tag completion works cleanly
+                              e.preventDefault()
+                            }}
                             onClick={() => handleAppendTagChip(hashed)}
                             className="px-1.5 py-0.5 rounded bg-secondary border border-subtle hover:border-accent text-[10px] font-mono text-primary flex items-center gap-0.5"
                           >

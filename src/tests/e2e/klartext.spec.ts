@@ -98,6 +98,13 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('dynamic-wizard-workspace-name-input').fill('Nordic Dynamic Hub')
       await page.getByTestId('dynamic-wizard-folder-name-input').fill('Beta & Welcome Docs')
       await page.getByTestId('dynamic-wizard-next-btn').click()
+      // Verify typing a partial tag (#sec) filters suggestions and clicking #security completes the tag
+      await page.getByTestId('dynamic-wizard-tags-input').fill('#sec')
+      await expect(page.getByTestId('dynamic-wizard-tag-suggestion-security')).toBeVisible()
+      await expect(page.getByTestId('dynamic-wizard-tag-suggestion-architecture')).toHaveCount(0)
+      await page.getByTestId('dynamic-wizard-tag-suggestion-security').click()
+      await expect(page.getByTestId('dynamic-wizard-tags-input')).toHaveValue('#security')
+      await page.getByTestId('dynamic-wizard-tags-input').fill('')
       await page.getByTestId('dynamic-wizard-title-input').fill('*Beta*')
       await expect(page.getByTestId('dynamic-wizard-live-preview')).toContainText('BetaDoc.md')
       await page.getByTestId('dynamic-wizard-submit-btn').click()
@@ -776,6 +783,24 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
           .toBe('true')
       }
 
+      // Verify View Menu Page Margins (Small, Medium, Wide, Dynamic Word Flow)
+      await page.getByTestId('view-menu-btn').click()
+      await expect(page.getByTestId('view-menu-margin-small')).toBeVisible()
+      await expect(page.getByTestId('view-menu-margin-medium')).toBeVisible()
+      await expect(page.getByTestId('view-menu-margin-wide')).toBeVisible()
+      await expect(page.getByTestId('view-menu-margin-word-flow')).toBeVisible()
+      await page.getByTestId('view-menu-margin-wide').click()
+      await expect(page.getByTestId('codemirror-editor-container')).toHaveAttribute(
+        'data-margin-mode',
+        'wide'
+      )
+      await page.getByTestId('view-menu-btn').click()
+      await page.getByTestId('view-menu-margin-word-flow').click()
+      await expect(page.getByTestId('codemirror-editor-container')).toHaveAttribute(
+        'data-margin-mode',
+        'word-flow'
+      )
+
       // Verify Tab Right-Click Menu: Split / Duplicate View into 2 side-by-side windows, and closing the last page closes that window
       const firstDocTab = page.locator('[data-testid^="doc-tab-"]').first()
       await expect(firstDocTab).toBeVisible()
@@ -798,10 +823,19 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('calendar-today-btn-date').click()
       await expect(page.getByTestId('frontmatter-calendar-popover-date')).toHaveCount(0)
 
-      // 2. Tags dropdown with previously entered tags
+      // 2. Tags dropdown: click first suggestion, click second suggestion, and type partial tag (#sec) then click #security to complete it
       await page.getByTestId('frontmatter-tags-dropdown-btn-tags').click()
       await expect(page.getByTestId('frontmatter-tags-dropdown-tags')).toBeVisible()
+      await page.getByTestId('frontmatter-tag-suggestion-tags-architecture').click()
+      await expect(page.getByTestId('frontmatter-tag-chip-tags-architecture')).toBeVisible()
+      await page.getByTestId('frontmatter-tag-suggestion-tags-roadmap').click()
+      await expect(page.getByTestId('frontmatter-tag-chip-tags-roadmap')).toBeVisible()
+      await page.getByTestId('frontmatter-input-tags').fill('#architecture, #roadmap, #sec')
+      await expect(page.getByTestId('frontmatter-tag-suggestion-tags-security')).toBeVisible()
+      await expect(page.getByTestId('frontmatter-tag-suggestion-tags-incident')).toHaveCount(0)
       await page.getByTestId('frontmatter-tag-suggestion-tags-security').click()
+      await expect(page.getByTestId('frontmatter-tag-chip-tags-security')).toBeVisible()
+      await expect(page.getByTestId('frontmatter-tag-chip-tags-sec')).toHaveCount(0)
       await page.getByTestId('frontmatter-tags-dropdown-btn-tags').click()
 
       // 3. Status dropdown with add (+) and remove (x) options

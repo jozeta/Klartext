@@ -19,6 +19,11 @@ import {
   Copy,
   ArrowRightLeft,
   FolderOpen,
+  FolderPlus,
+  Download,
+  FileText,
+  BookOpen,
+  Keyboard,
   Trash2
 } from '../components/icons/untitled-icons'
 import type {
@@ -2002,7 +2007,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Open new workspace...</span>
+                    <span className="flex items-center gap-2">
+                      <FolderPlus className="w-3.5 h-3.5 text-muted shrink-0" />
+                      <span>Open new workspace...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-muted">⌘O</kbd>
                   </button>
                   <button
@@ -2014,8 +2022,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Add Git workspace...</span>
-                    <GitBranch className="w-3.5 h-3.5 text-accent" />
+                    <span className="flex items-center gap-2">
+                      <GitBranch className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>Add Git workspace...</span>
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -2030,8 +2040,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Create a new dynamic workspace...</span>
-                    <Sparkles className="w-3.5 h-3.5 text-accent" />
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>Create a new dynamic workspace...</span>
+                    </span>
                   </button>
                   <div className="my-1 border-t border-subtle" />
                   <button
@@ -2043,7 +2055,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Export to Standalone HTML...</span>
+                    <span className="flex items-center gap-2">
+                      <Download className="w-3.5 h-3.5 text-muted shrink-0" />
+                      <span>Export to Standalone HTML...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-muted">⇧⌘E</kbd>
                   </button>
                   <button
@@ -2055,7 +2070,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Export to PDF...</span>
+                    <span className="flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5 text-muted shrink-0" />
+                      <span>Export to PDF...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-muted">⌥⌘E</kbd>
                   </button>
                   <div className="my-1 border-t border-subtle" />
@@ -2068,7 +2086,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Settings...</span>
+                    <span className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-muted shrink-0" />
+                      <span>Settings...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-muted">⌘,</kbd>
                   </button>
                 </div>
@@ -2894,12 +2915,14 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0">
+                      {resolvedTheme === 'dark' ? '☀️' : '🌙'}
+                    </span>
                     <span>
                       Switch to {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                     </span>
-                    <span>{resolvedTheme === 'dark' ? '☀️' : '🌙'}</span>
                   </button>
 
                   <button
@@ -2911,10 +2934,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.lightPaperInDarkMode ? '✓' : ''}
+                    </span>
                     <span>White Paper Background in Dark Mode</span>
-                    <span>{settings.lightPaperInDarkMode ? '✓' : ''}</span>
                   </button>
 
                   <button
@@ -2926,11 +2951,50 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.wordWrap !== false ? '✓' : ''}
+                    </span>
                     <span>Word Wrap (Off = Infinite Workspace)</span>
-                    <span>{settings.wordWrap !== false ? '✓' : ''}</span>
                   </button>
+
+                  <div className="my-1 border-t border-subtle" />
+                  <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Page Margins &amp; Word Flow
+                  </div>
+
+                  {(
+                    [
+                      ['small', 'Small Margins'],
+                      ['medium', 'Medium Margins'],
+                      ['wide', 'Wide Margins'],
+                      ['word-flow', 'Word Flow (Dynamic Auto-Reflow)']
+                    ] as const
+                  ).map(([modeValue, modeLabel]) => {
+                    const currentMarginMode = settings.editorMarginMode || 'medium'
+                    const isCurrentMode = currentMarginMode === modeValue
+                    return (
+                      <button
+                        key={modeValue}
+                        type="button"
+                        data-testid={`view-menu-margin-${modeValue}`}
+                        onClick={() => {
+                          handleUpdateSettings({
+                            editorMarginMode: modeValue,
+                            wordWrap: true
+                          })
+                          setShowViewMenu(false)
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+                      >
+                        <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                          {isCurrentMode ? '✓' : ''}
+                        </span>
+                        <span>{modeLabel}</span>
+                      </button>
+                    )
+                  })}
 
                   <div className="my-1 border-t border-subtle" />
 
@@ -2943,10 +3007,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.formattingToolbarVisible ? '✓' : ''}
+                    </span>
                     <span>Show Formatting Toolbar Row</span>
-                    <span>{settings.formattingToolbarVisible ? '✓' : ''}</span>
                   </button>
 
                   <button
@@ -2956,10 +3022,12 @@ export const App: React.FC = () => {
                       handleUpdateSettings({ statusBarVisible: !settings.statusBarVisible })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.statusBarVisible ? '✓' : ''}
+                    </span>
                     <span>Show Bottom Status Row</span>
-                    <span>{settings.statusBarVisible ? '✓' : ''}</span>
                   </button>
 
                   <button
@@ -2971,10 +3039,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.sidebarControlBarVisible !== false ? '✓' : ''}
+                    </span>
                     <span>Show Left Panel Control Bar</span>
-                    <span>{settings.sidebarControlBarVisible !== false ? '✓' : ''}</span>
                   </button>
 
                   <div className="my-1 border-t border-subtle" />
@@ -2991,10 +3061,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.frontmatterPanelVisible ? '✓' : ''}
+                    </span>
                     <span>Show Right Frontmatter Window</span>
-                    <span>{settings.frontmatterPanelVisible ? '✓' : ''}</span>
                   </button>
 
                   <button
@@ -3006,10 +3078,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.templatesPanelVisible ? '✓' : ''}
+                    </span>
                     <span>Show Right Templates Panel (&lt;% %&gt;)</span>
-                    <span>{settings.templatesPanelVisible ? '✓' : ''}</span>
                   </button>
 
                   <button
@@ -3021,10 +3095,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.rightSidebarOpen ? '✓' : ''}
+                    </span>
                     <span>Show Right Local AI Panel</span>
-                    <span>{settings.rightSidebarOpen ? '✓' : ''}</span>
                   </button>
 
                   <button
@@ -3036,10 +3112,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.helpPanelVisible ? '✓' : ''}
+                    </span>
                     <span>Show Right Help &amp; Reference Panel</span>
-                    <span>{settings.helpPanelVisible ? '✓' : ''}</span>
                   </button>
 
                   <div className="my-1 border-t border-subtle" />
@@ -3060,10 +3138,12 @@ export const App: React.FC = () => {
                       }
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.showOutlineTab !== false ? '✓' : ''}
+                    </span>
                     <span>Show Outline in Sidebar</span>
-                    <span>{settings.showOutlineTab !== false ? '✓' : ''}</span>
                   </button>
 
                   <button
@@ -3082,10 +3162,12 @@ export const App: React.FC = () => {
                       }
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.showBacklinksTab !== false ? '✓' : ''}
+                    </span>
                     <span>Show Links in Sidebar</span>
-                    <span>{settings.showBacklinksTab !== false ? '✓' : ''}</span>
                   </button>
 
                   <div className="my-1 border-t border-subtle" />
@@ -3099,10 +3181,12 @@ export const App: React.FC = () => {
                       })
                       setShowViewMenu(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
                   >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0 text-accent font-bold">
+                      {settings.spellcheckEnabled !== false ? '✓' : ''}
+                    </span>
                     <span>Spellcheck (Red Squiggly Underlines)</span>
-                    <span>{settings.spellcheckEnabled !== false ? '✓' : ''}</span>
                   </button>
 
                   <div className="px-3 py-1.5 space-y-1">
@@ -3173,7 +3257,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Markdown Formatting Guide...</span>
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-muted shrink-0" />
+                      <span>Markdown Formatting Guide...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-muted">Syntax</kbd>
                   </button>
                   <button
@@ -3185,7 +3272,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between font-medium"
                   >
-                    <span>Dynamic Variables (&lt;% %&gt;) Guide...</span>
+                    <span className="flex items-center gap-2">
+                      <FileCode2 className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>Dynamic Variables (&lt;% %&gt;) Guide...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-accent">&lt;% %&gt;</kbd>
                   </button>
                   <button
@@ -3197,7 +3287,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between font-medium"
                   >
-                    <span>Local AI &amp; Workspace Q&amp;A Guide...</span>
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>Local AI &amp; Workspace Q&amp;A Guide...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-accent">RAG / AI</kbd>
                   </button>
                   <button
@@ -3209,7 +3302,10 @@ export const App: React.FC = () => {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
                   >
-                    <span>Smart Editing &amp; Shortcuts...</span>
+                    <span className="flex items-center gap-2">
+                      <Keyboard className="w-3.5 h-3.5 text-muted shrink-0" />
+                      <span>Smart Editing &amp; Shortcuts...</span>
+                    </span>
                     <kbd className="text-[10px] font-mono text-muted">Keys</kbd>
                   </button>
                 </div>
@@ -4074,6 +4170,7 @@ export const App: React.FC = () => {
                 aiEnabled={settings.ai.enabled}
                 showLineNumbers={Boolean(settings.showLineNumbers)}
                 wordWrap={settings.wordWrap !== false}
+                marginMode={settings.editorMarginMode || 'medium'}
                 spellcheckEnabled={settings.spellcheckEnabled !== false}
                 spellcheckLanguages={currentSpellLangs}
                 customDictionaryWords={settings.customDictionaryWords || []}
@@ -4317,6 +4414,7 @@ export const App: React.FC = () => {
                     aiEnabled={settings.ai.enabled}
                     showLineNumbers={Boolean(settings.showLineNumbers)}
                     wordWrap={settings.wordWrap !== false}
+                    marginMode={settings.editorMarginMode || 'medium'}
                     spellcheckEnabled={settings.spellcheckEnabled !== false}
                     spellcheckLanguages={currentSpellLangs}
                     customDictionaryWords={settings.customDictionaryWords || []}

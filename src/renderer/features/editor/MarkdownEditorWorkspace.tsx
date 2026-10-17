@@ -40,7 +40,7 @@ import {
   Languages,
   Smile
 } from '../../components/icons/untitled-icons'
-import type { EditMode } from '../../../shared/types'
+import type { EditMode, EditorMarginMode } from '../../../shared/types'
 import {
   renderMarkdownDocument,
   convertDelimitedTextToTable,
@@ -75,6 +75,36 @@ export type EditorDispatchedCommand =
   | 'open-mermaid-builder'
   | 'open-icon-picker'
   | MarkdownFormatCommand
+
+/**
+ * Computes horizontal page margins (`marginPx`) and content max-width (`maxWidthCss`)
+ * for Small, Medium, Wide, and dynamic Word Flow margin modes.
+ * In `word-flow` mode, horizontal margins scale dynamically with the live page/pane width
+ * so resizing the window or split pane automatically reflows the margins and text.
+ */
+export function computeEditorMarginConfig(
+  marginMode: EditorMarginMode,
+  containerWidthPx: number
+): { marginPx: number; maxWidthCss: string } {
+  if (marginMode === 'small') {
+    return { marginPx: 16, maxWidthCss: '100%' }
+  }
+  if (marginMode === 'wide') {
+    return { marginPx: 96, maxWidthCss: '68ch' }
+  }
+  if (marginMode === 'word-flow') {
+    const safeWidth = Math.max(320, Number.isFinite(containerWidthPx) ? containerWidthPx : 900)
+    if (safeWidth <= 480) {
+      return { marginPx: 16, maxWidthCss: '100%' }
+    }
+    const baseMargin = Math.round(safeWidth * 0.14)
+    const wideBonus = safeWidth > 960 ? Math.round((safeWidth - 960) * 0.22) : 0
+    const dynamicMargin = Math.max(16, Math.min(320, baseMargin + wideBonus))
+    return { marginPx: dynamicMargin, maxWidthCss: '100%' }
+  }
+  // Default: 'medium'
+  return { marginPx: 48, maxWidthCss: '82ch' }
+}
 
 // Per-tab selection and scroll offset cache so switching tabs restores exact cursor & scroll position
 const tabViewStateCache = new Map<
@@ -142,6 +172,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   aiEnabled: boolean
   showLineNumbers: boolean
   wordWrap: boolean
+  marginMode?: EditorMarginMode
   spellcheckEnabled?: boolean
   spellcheckLanguages?: string[]
   customDictionaryWords?: string[]
@@ -181,6 +212,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   aiEnabled,
   showLineNumbers,
   wordWrap,
+  marginMode = 'medium',
   spellcheckEnabled = true,
   spellcheckLanguages = ['en-US', 'sv-SE'],
   customDictionaryWords = [],
@@ -280,6 +312,46 @@ export const MarkdownEditorWorkspace: React.FC<{
   // Auto-scroll when drag-selecting text near top or bottom of editor scroll container
   const dragSelectScrollVelocityRef = useRef<number>(0)
   const lastDragMousePosRef = useRef<{ x: number; y: number } | null>(null)
+
+  // Live container width tracking so Word Flow dynamically recalculates margins & reflows on resize
+  const [editorPaneWidth, setEditorPaneWidth] = useState<number>(960)
+
+  useEffect(() => {
+    const updateMeasuredWidth = () => {
+      const targetEl = editorScrollWrapperRef.current || splitContainerRef.current
+      if (targetEl) {
+        const measured = Math.round(targetEl.getBoundingClientRect().width)
+        if (measured > 0) {
+          setEditorPaneWidth((prev) => (prev === measured ? prev : measured))
+        }
+      }
+    }
+    updateMeasuredWidth()
+
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            updateMeasuredWidth()
+          })
+        : null
+
+    if (observer) {
+      if (editorScrollWrapperRef.current) observer.observe(editorScrollWrapperRef.current)
+      if (splitContainerRef.current) observer.observe(splitContainerRef.current)
+    }
+
+    window.addEventListener('resize', updateMeasuredWidth)
+    return () => {
+      if (observer) observer.disconnect()
+      window.removeEventListener('resize', updateMeasuredWidth)
+    }
+  }, [editMode, splitPercent, isVisualAssetFile])
+
+  const marginConfig = computeEditorMarginConfig(marginMode, editorPaneWidth)
+
+  useEffect(() => {
+    viewRef.current?.requestMeasure()
+  }, [marginMode, marginConfig.marginPx, marginConfig.maxWidthCss, wordWrap])
 
   useEffect(() => {
     setShowRawSvgSource(false)
@@ -2331,7 +2403,15 @@ export const MarkdownEditorWorkspace: React.FC<{
         <div ref={splitContainerRef} className="flex-1 flex overflow-hidden relative editor-paper-surface">
           <div
             ref={editorScrollWrapperRef}
-            style={{ width: editMode === 'split' ? `${splitPercent}%` : '100%' }}
+            data-margin-mode={marginMode}
+            data-dynamic-margin-px={marginConfig.marginPx}
+            style={
+              {
+                width: editMode === 'split' ? `${splitPercent}%` : '100%',
+                '--editor-margin-x': `${marginConfig.marginPx}px`,
+                '--editor-max-width': marginConfig.maxWidthCss
+              } as React.CSSProperties
+            }
             className={`h-full flex flex-col overflow-y-auto overflow-x-auto editor-paper-surface ${
               !wordWrap ? 'cm-editor-infinite-wrap' : ''
             }`}
@@ -2348,6 +2428,14 @@ export const MarkdownEditorWorkspace: React.FC<{
             <div
               ref={editorContainerRef}
               data-testid="codemirror-editor-container"
+              data-margin-mode={marginMode}
+              data-dynamic-margin-px={marginConfig.marginPx}
+              style={
+                {
+                  '--editor-margin-x': `${marginConfig.marginPx}px`,
+                  '--editor-max-width': marginConfig.maxWidthCss
+                } as React.CSSProperties
+              }
               className="flex-grow flex-shrink-0 flex flex-col min-h-full min-w-full editor-paper-surface"
             />
           </div>
@@ -2370,8 +2458,14 @@ export const MarkdownEditorWorkspace: React.FC<{
             <div
               ref={previewContainerRef}
               data-testid="markdown-split-preview"
-              style={{ width: `${100 - splitPercent}%` }}
-              className="h-full overflow-y-auto p-8 editor-paper-surface"
+              data-margin-mode={marginMode}
+              data-dynamic-margin-px={marginConfig.marginPx}
+              style={{
+                width: `${100 - splitPercent}%`,
+                paddingLeft: `${marginConfig.marginPx}px`,
+                paddingRight: `${marginConfig.marginPx}px`
+              }}
+              className="h-full overflow-y-auto py-8 editor-paper-surface"
               onMouseUp={() => {
                 // Bidirectional selection: selecting text in the right preview selects matching text in left CodeMirror
                 const sel = window.getSelection()?.toString().trim()

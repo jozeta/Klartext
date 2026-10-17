@@ -61,16 +61,99 @@ export function stripTagHash(rawTag: string): string {
 }
 
 /**
- * Parses tag input written as `#tag1, #tag2`, `#tag1 #tag2`, or `#tag1 Tag2`
+ * Parses tag input written as `#tag1, #tag2`, `#tag1 #tag2`, `#tag1 Tag2`, or `#tag1#tag2`
  * and normalizes every tag to start with `#` (e.g. `['#tag1', '#tag2']`).
  */
 export function parseTagListInput(rawInput: string): string[] {
   if (!rawInput || !rawInput.trim()) return []
   const tokens = rawInput
-    .split(/[\s,]+/)
+    .split(/(?=#)|[\s,]+/)
     .map((t) => formatTagWithHash(t))
     .filter(Boolean)
-  return Array.from(new Set(tokens))
+  const deduped: string[] = []
+  for (const tok of tokens) {
+    if (!deduped.some((existing) => existing.toLowerCase() === tok.toLowerCase())) {
+      deduped.push(tok)
+    }
+  }
+  return deduped
+}
+
+/**
+ * Returns the active filter query (without leading `#`) when the user is actively typing
+ * an incomplete trailing tag token (e.g. `#sec` -> `sec`, `#tag1, #sec` -> `sec`).
+ * Returns `''` when the user is not actively typing or has finished a tag with a comma/space.
+ */
+export function extractActiveTagFilterQuery(
+  rawInput: string,
+  isActivelyTyping: boolean
+): string {
+  if (!isActivelyTyping || !rawInput) return ''
+  if (/[\s,]$/.test(rawInput)) return ''
+  const parts = rawInput.split(/(?=#)|[\s,]+/)
+  const lastToken = parts[parts.length - 1] || ''
+  return stripTagHash(lastToken).toLowerCase()
+}
+
+/**
+ * Completes a partially typed trailing tag (e.g. `#sec` -> `#security` or `#tag1, #sec` -> `#tag1, #security`)
+ * when `isActivelyTyping` is true and the input does not end with a separator; otherwise appends `selectedTag`
+ * to the existing tag list so multiple suggested tags can be clicked in sequence.
+ */
+export function completeOrAppendTagInInput(params: {
+  currentTags: string[]
+  rawInput: string
+  isActivelyTyping: boolean
+  selectedTag: string
+}): { tags: string[]; formattedInput: string } {
+  const targetTag = formatTagWithHash(params.selectedTag)
+  if (!targetTag) {
+    const fallback = params.currentTags.map(formatTagWithHash).filter(Boolean)
+    return { tags: fallback, formattedInput: fallback.join(', ') }
+  }
+
+  const hasIncompleteTrailingToken =
+    params.isActivelyTyping &&
+    params.rawInput.trim().length > 0 &&
+    !/[\s,]$/.test(params.rawInput)
+
+  if (hasIncompleteTrailingToken) {
+    const rawTokens = params.rawInput
+      .trim()
+      .split(/(?=#)|[\s,]+/)
+      .filter((t) => t.trim().length > 0)
+    const prefixTokens = rawTokens
+      .slice(0, -1)
+      .map((t) => formatTagWithHash(t))
+      .filter(Boolean)
+    const nextTags: string[] = []
+    for (const tok of [...prefixTokens, targetTag]) {
+      if (!nextTags.some((existing) => existing.toLowerCase() === tok.toLowerCase())) {
+        nextTags.push(tok)
+      }
+    }
+    return {
+      tags: nextTags,
+      formattedInput: nextTags.join(', ')
+    }
+  }
+
+  const baseSource =
+    params.currentTags.length > 0
+      ? params.currentTags.map((t) => formatTagWithHash(t)).filter(Boolean)
+      : parseTagListInput(params.rawInput)
+
+  const nextTags: string[] = []
+  for (const tok of [...baseSource, targetTag]) {
+    if (!nextTags.some((existing) => existing.toLowerCase() === tok.toLowerCase())) {
+      nextTags.push(tok)
+    }
+  }
+
+  return {
+    tags: nextTags,
+    formattedInput: nextTags.join(', ')
+  }
 }
 
 export function extractDocumentTags(frontmatter: Record<string, unknown> | null): string[] {

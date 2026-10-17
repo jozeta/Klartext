@@ -125,6 +125,9 @@ export type SavedTheme = z.infer<typeof SavedThemeSchema>
 export const WorkspaceSortOrderSchema = z.enum(['name-asc', 'name-desc', 'custom'])
 export type WorkspaceSortOrder = z.infer<typeof WorkspaceSortOrderSchema>
 
+export const EditorMarginModeSchema = z.enum(['small', 'medium', 'wide', 'word-flow'])
+export type EditorMarginMode = z.infer<typeof EditorMarginModeSchema>
+
 export const CustomFrontmatterFilterRuleSchema = z.object({
   key: z.string(),
   valuePattern: z.string()
@@ -180,6 +183,7 @@ export const AppSettingsSchema = z.object({
   customDictionaryWords: z.array(z.string()).default([]),
   showLineNumbers: z.boolean().default(false),
   wordWrap: z.boolean().default(true),
+  editorMarginMode: EditorMarginModeSchema.default('medium'),
   lightPaperInDarkMode: z.boolean().default(false),
   autosaveDelayMs: z.number().min(200).max(60000).default(1000),
   allowRawHtml: z.boolean().default(false),
@@ -229,15 +233,16 @@ export const AppSettingsSchema = z.object({
   frontmatterKnownTags: z
     .array(z.string())
     .default([
-      'meeting',
-      'notes',
-      'daily',
-      'rfc',
-      'security',
-      'architecture',
-      'incident',
-      'audit',
-      'todo'
+      '#meeting',
+      '#notes',
+      '#daily',
+      '#rfc',
+      '#security',
+      '#architecture',
+      '#incident',
+      '#audit',
+      '#todo',
+      '#roadmap'
     ]),
   globalFrontmatterProperties: z
     .array(

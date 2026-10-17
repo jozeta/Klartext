@@ -122,13 +122,32 @@ textarea::placeholder {
   color: var(--text-editor-effective) !important;
   font-family: var(--font-editor) !important;
   line-height: var(--editor-line-height) !important;
-  padding: 28px 32px 64px 32px;
+  padding: 28px var(--editor-margin-x, 48px) 64px var(--editor-margin-x, 48px) !important;
 }
 
 .cm-content {
-  max-width: var(--editor-max-width);
+  max-width: var(--editor-max-width, 82ch);
   margin: 0 auto;
   caret-color: var(--accent-primary) !important;
+}
+
+[data-margin-mode='small'] {
+  --editor-margin-x: 16px;
+  --editor-max-width: 100%;
+}
+
+[data-margin-mode='medium'] {
+  --editor-margin-x: 48px;
+  --editor-max-width: 82ch;
+}
+
+[data-margin-mode='wide'] {
+  --editor-margin-x: 96px;
+  --editor-max-width: 68ch;
+}
+
+[data-margin-mode='word-flow'] {
+  --editor-max-width: 100%;
 }
 
 .cm-editor-infinite-wrap .cm-editor {

@@ -18,6 +18,8 @@ import type {
   FrontmatterFieldType
 } from '../../../shared/types'
 import {
+  completeOrAppendTagInInput,
+  extractActiveTagFilterQuery,
   formatTagWithHash,
   parseTagListInput,
   stripTagHash
@@ -51,7 +53,8 @@ const DEFAULT_KNOWN_TAGS = [
   '#architecture',
   '#incident',
   '#audit',
-  '#todo'
+  '#todo',
+  '#roadmap'
 ]
 
 function pad2(n: number): string {
@@ -108,6 +111,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
   const [openTagsKey, setOpenTagsKey] = useState<string | null>(null)
   const [focusedTagKey, setFocusedTagKey] = useState<string | null>(null)
   const [tagInputDrafts, setTagInputDrafts] = useState<Record<string, string>>({})
+  const [typingTagKeys, setTypingTagKeys] = useState<Record<string, boolean>>({})
 
   const panelRef = useRef<HTMLElement | null>(null)
 
@@ -145,15 +149,16 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
     [settings.frontmatterStatusOptions]
   )
 
-  // Collect all previously entered tags from settings + open documents + current frontmatter (always formatted with leading #)
+  // Collect all previously entered tags from settings + defaults (always formatted with leading #)
   const allKnownTags = useMemo(() => {
     const initialList =
       Array.isArray(settings.frontmatterKnownTags) && settings.frontmatterKnownTags.length > 0
         ? settings.frontmatterKnownTags
         : DEFAULT_KNOWN_TAGS
-    const set = new Set<string>(
-      initialList.map((t) => formatTagWithHash(t)).filter(Boolean)
-    )
+    const set = new Set<string>([
+      ...DEFAULT_KNOWN_TAGS.map((t) => formatTagWithHash(t)).filter(Boolean),
+      ...initialList.map((t) => formatTagWithHash(t)).filter(Boolean)
+    ])
     if (frontmatter) {
       for (const [, val] of Object.entries(frontmatter)) {
         if (Array.isArray(val)) {
@@ -634,15 +639,15 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
 
     const formattedTagsStr = currentTags.join(', ')
     const isFocused = focusedTagKey === key
+    const isActivelyTyping = Boolean(typingTagKeys[key])
     const displayInputValue = isFocused
       ? tagInputDrafts[key] ?? formattedTagsStr
       : formattedTagsStr
 
     const isOpen = openTagsKey === key
 
-    // Filter known tags based on the last segment being typed
-    const segments = displayInputValue.split(/[\s,]+/)
-    const activeQuery = stripTagHash(segments[segments.length - 1] || '').toLowerCase()
+    // Only filter known tags when the user is actively typing an incomplete trailing tag
+    const activeQuery = extractActiveTagFilterQuery(displayInputValue, isActivelyTyping)
 
     const matchingSuggestions = allKnownTags.filter((t) =>
       activeQuery ? stripTagHash(t).toLowerCase().includes(activeQuery) : true
@@ -652,16 +657,22 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
       const normalized = formatTagWithHash(tag)
       if (!normalized) return
       rememberTag(normalized)
-      if (currentTags.some((t) => stripTagHash(t).toLowerCase() === stripTagHash(normalized).toLowerCase())) {
-        return
-      }
-      const nextList = [...currentTags, normalized]
-      setTagInputDrafts((prev) => ({ ...prev, [key]: nextList.join(', ') }))
+
+      const { tags: nextList, formattedInput } = completeOrAppendTagInInput({
+        currentTags,
+        rawInput: displayInputValue,
+        isActivelyTyping,
+        selectedTag: normalized
+      })
+
+      setTypingTagKeys((prev) => ({ ...prev, [key]: false }))
+      setTagInputDrafts((prev) => ({ ...prev, [key]: formattedInput }))
       onUpdateFrontmatterField(key, nextList)
     }
 
     const handleRemoveTag = (tagToRemove: string) => {
       const nextList = currentTags.filter((t) => t !== tagToRemove)
+      setTypingTagKeys((prev) => ({ ...prev, [key]: false }))
       setTagInputDrafts((prev) => ({ ...prev, [key]: nextList.join(', ') }))
       onUpdateFrontmatterField(key, nextList)
     }
@@ -698,6 +709,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             value={displayInputValue}
             onFocus={() => {
               setFocusedTagKey(key)
+              setTypingTagKeys((prev) => ({ ...prev, [key]: false }))
               setTagInputDrafts((prev) => ({ ...prev, [key]: formattedTagsStr }))
               setOpenTagsKey(key)
               setOpenCalendarKey(null)
@@ -705,6 +717,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             }}
             onChange={(e) => {
               const val = e.target.value
+              setTypingTagKeys((prev) => ({ ...prev, [key]: true }))
               setTagInputDrafts((prev) => ({ ...prev, [key]: val }))
               const parsed = parseTagListInput(val)
               onUpdateFrontmatterField(key, parsed)
@@ -712,6 +725,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             }}
             onBlur={() => {
               setFocusedTagKey((prev) => (prev === key ? null : prev))
+              setTypingTagKeys((prev) => ({ ...prev, [key]: false }))
               setTagInputDrafts((prev) => ({ ...prev, [key]: currentTags.join(', ') }))
               currentTags.forEach(rememberTag)
             }}
@@ -742,31 +756,43 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             className="mt-1 p-1.5 rounded-md bg-panel border border-subtle shadow-lg z-30 space-y-1 max-h-40 overflow-y-auto"
           >
             <div className="text-[10px] font-semibold uppercase text-muted px-1">
-              Previously Entered Tags
+              {activeQuery
+                ? `Matching Tags ("#${activeQuery}")`
+                : 'Previously Entered Tags'}
             </div>
             <div className="flex flex-wrap gap-1">
-              {matchingSuggestions.map((tag) => {
-                const bareTag = stripTagHash(tag)
-                const hashedTag = formatTagWithHash(tag)
-                const isSelected = currentTags.some(
-                  (t) => stripTagHash(t).toLowerCase() === bareTag.toLowerCase()
-                )
-                return (
-                  <button
-                    key={hashedTag}
-                    type="button"
-                    data-testid={`frontmatter-tag-suggestion-${key}-${bareTag}`}
-                    onClick={() => handleSelectSuggestedTag(hashedTag)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
-                      isSelected
-                        ? 'bg-accent text-white border-accent'
-                        : 'bg-app border-subtle text-primary hover:border-accent'
-                    }`}
-                  >
-                    <span>{hashedTag}</span>
-                  </button>
-                )
-              })}
+              {matchingSuggestions.length === 0 ? (
+                <div className="text-[11px] text-muted px-1 py-0.5 italic">
+                  No matching tags — press comma or space to keep #{activeQuery}
+                </div>
+              ) : (
+                matchingSuggestions.map((tag) => {
+                  const bareTag = stripTagHash(tag)
+                  const hashedTag = formatTagWithHash(tag)
+                  const isSelected = currentTags.some(
+                    (t) => stripTagHash(t).toLowerCase() === bareTag.toLowerCase()
+                  )
+                  return (
+                    <button
+                      key={hashedTag}
+                      type="button"
+                      data-testid={`frontmatter-tag-suggestion-${key}-${bareTag}`}
+                      onMouseDown={(e) => {
+                        // Prevent input blur before click completes so partial tags complete cleanly
+                        e.preventDefault()
+                      }}
+                      onClick={() => handleSelectSuggestedTag(hashedTag)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
+                        isSelected
+                          ? 'bg-accent text-white border-accent'
+                          : 'bg-app border-subtle text-primary hover:border-accent'
+                      }`}
+                    >
+                      <span>{hashedTag}</span>
+                    </button>
+                  )
+                })
+              )}
             </div>
           </div>
         )}
