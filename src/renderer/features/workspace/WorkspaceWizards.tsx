@@ -7,7 +7,9 @@ import type {
 } from '../../../shared/types'
 import {
   formatDynamicRuleSummary,
+  formatTagWithHash,
   matchesDynamicFilterRule,
+  parseTagListInput,
   type DynamicCandidateDocument
 } from '../../../shared/markdown/dynamic-workspace'
 import {
@@ -428,12 +430,11 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
   }, [candidateDocuments, rules])
 
   const handleAppendTagChip = (tag: string): void => {
-    const existing = rules.tagsPattern
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
-    if (existing.includes(tag)) return
-    const next = [...existing, tag].join(', ')
+    const normalized = formatTagWithHash(tag)
+    if (!normalized) return
+    const existing = parseTagListInput(rules.tagsPattern)
+    if (existing.some((t) => t.toLowerCase() === normalized.toLowerCase())) return
+    const next = [...existing, normalized].join(', ')
     setRules((prev) => ({ ...prev, tagsPattern: next }))
   }
 
@@ -484,7 +485,7 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
     setErrorMsg(null)
 
     const cleanedRules: DynamicFilterRule = {
-      tagsPattern: rules.tagsPattern.trim(),
+      tagsPattern: parseTagListInput(rules.tagsPattern).join(', '),
       titlePattern: rules.titlePattern.trim(),
       authorPattern: rules.authorPattern.trim(),
       statusPattern: rules.statusPattern.trim(),
@@ -765,29 +766,41 @@ export const DynamicWorkspaceWizardModal: React.FC<DynamicWorkspaceWizardModalPr
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-primary mb-1">
-                    Tags (comma-separated, supports <code className="font-mono text-accent">*</code>)
+                    Tags (<code className="font-mono text-accent">#tag1, #tag2</code> or{' '}
+                    <code className="font-mono text-accent">#tag1 Tag2</code>, supports{' '}
+                    <code className="font-mono text-accent">*</code>)
                   </label>
                   <input
                     type="text"
                     data-testid="dynamic-wizard-tags-input"
                     value={rules.tagsPattern}
                     onChange={(e) => setRules((prev) => ({ ...prev, tagsPattern: e.target.value }))}
-                    placeholder="e.g. sec*, *incident*, rfc"
+                    onBlur={() => {
+                      if (rules.tagsPattern.trim()) {
+                        setRules((prev) => ({
+                          ...prev,
+                          tagsPattern: parseTagListInput(prev.tagsPattern).join(', ')
+                        }))
+                      }
+                    }}
+                    placeholder="e.g. #sec*, #incident*, or #tag1 Tag2"
                     className="w-full px-2.5 py-1.5 rounded-md bg-app border border-subtle text-primary focus:outline-none focus:border-accent font-mono text-xs"
                   />
                   {knownTags.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {knownTags.slice(0, 7).map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => handleAppendTagChip(tag)}
-                          className="px-1.5 py-0.5 rounded bg-secondary border border-subtle hover:border-accent text-[10px] text-primary flex items-center gap-0.5"
-                        >
-                          <Tag className="w-2.5 h-2.5 text-accent" />
-                          {tag}
-                        </button>
-                      ))}
+                      {knownTags.slice(0, 7).map((tag) => {
+                        const hashed = formatTagWithHash(tag)
+                        return (
+                          <button
+                            key={hashed}
+                            type="button"
+                            onClick={() => handleAppendTagChip(hashed)}
+                            className="px-1.5 py-0.5 rounded bg-secondary border border-subtle hover:border-accent text-[10px] font-mono text-primary flex items-center gap-0.5"
+                          >
+                            {hashed}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

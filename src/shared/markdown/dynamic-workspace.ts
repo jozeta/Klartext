@@ -45,17 +45,48 @@ export function normalizeFrontmatterDate(rawDate: unknown): string | null {
   return null
 }
 
+export function formatTagWithHash(rawTag: string): string {
+  const cleaned = String(rawTag ?? '')
+    .trim()
+    .replace(/^#+/, '')
+    .trim()
+  return cleaned ? `#${cleaned}` : ''
+}
+
+export function stripTagHash(rawTag: string): string {
+  return String(rawTag ?? '')
+    .trim()
+    .replace(/^#+/, '')
+    .trim()
+}
+
+/**
+ * Parses tag input written as `#tag1, #tag2`, `#tag1 #tag2`, or `#tag1 Tag2`
+ * and normalizes every tag to start with `#` (e.g. `['#tag1', '#tag2']`).
+ */
+export function parseTagListInput(rawInput: string): string[] {
+  if (!rawInput || !rawInput.trim()) return []
+  const tokens = rawInput
+    .split(/[\s,]+/)
+    .map((t) => formatTagWithHash(t))
+    .filter(Boolean)
+  return Array.from(new Set(tokens))
+}
+
 export function extractDocumentTags(frontmatter: Record<string, unknown> | null): string[] {
   if (!frontmatter) return []
   const rawTags = frontmatter.tags ?? frontmatter.tag
   if (Array.isArray(rawTags)) {
-    return rawTags.map((t) => String(t).trim()).filter(Boolean)
+    const out: string[] = []
+    for (const item of rawTags) {
+      for (const parsed of parseTagListInput(String(item ?? ''))) {
+        if (!out.includes(parsed)) out.push(parsed)
+      }
+    }
+    return out
   }
   if (typeof rawTags === 'string') {
-    return rawTags
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
+    return parseTagListInput(rawTags)
   }
   return []
 }
@@ -90,17 +121,21 @@ export function matchesDynamicFilterRule(
   const { frontmatter } = extractFrontmatter(doc.content)
   const fm = frontmatter ?? {}
 
-  // 1. Tags filter (supports comma-separated wildcard patterns)
+  // 1. Tags filter (supports `#tag1, #tag2` or `#tag1 Tag2` and wildcard patterns)
   if (rules.tagsPattern && rules.tagsPattern.trim()) {
     const patterns = rules.tagsPattern
-      .split(',')
-      .map((p) => p.trim())
+      .split(/[\s,]+/)
+      .map((p) => stripTagHash(p))
       .filter(Boolean)
     if (patterns.length > 0) {
       const docTags = extractDocumentTags(fm)
       if (docTags.length === 0) return false
       const matchedTag = patterns.some((pattern) =>
-        docTags.some((tag) => matchWildcardPattern(tag, pattern))
+        docTags.some(
+          (tag) =>
+            matchWildcardPattern(stripTagHash(tag), pattern) ||
+            matchWildcardPattern(tag, `#${pattern}`)
+        )
       )
       if (!matchedTag) return false
     }

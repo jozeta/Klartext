@@ -703,11 +703,19 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
     expect(parsed.savedThemes.length).toBeGreaterThanOrEqual(6)
   })
 
-  it('filters documents in Dynamic Workspaces and Dynamic Folders using wildcards and all frontmatter properties', async () => {
+  it('filters documents in Dynamic Workspaces and Dynamic Folders using wildcards, #tag syntax (#tag1, #tag2 or #tag1 Tag2), and all frontmatter properties', async () => {
     const {
       matchesDynamicFilterRule,
-      matchWildcardPattern
+      matchWildcardPattern,
+      parseTagListInput,
+      formatTagWithHash
     } = await import('../../shared/markdown/dynamic-workspace')
+
+    expect(formatTagWithHash('tag1')).toBe('#tag1')
+    expect(formatTagWithHash('#tag1')).toBe('#tag1')
+    expect(parseTagListInput('#tag1, #tag2')).toEqual(['#tag1', '#tag2'])
+    expect(parseTagListInput('#tag1 Tag2')).toEqual(['#tag1', '#Tag2'])
+    expect(parseTagListInput('tag1, tag2')).toEqual(['#tag1', '#tag2'])
 
     expect(matchWildcardPattern('sec-incident-2026', 'sec-*')).toBe(true)
     expect(matchWildcardPattern('sec-incident-2026', '*2026')).toBe(true)
@@ -725,7 +733,7 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
           'date: 2026-10-15',
           'author: Alice Lindqvist',
           'status: In Progress',
-          'tags: [security, incident-p1, soc]',
+          'tags: ["#security", "#incident-p1", "#soc"]',
           'tlp: TLP:AMBER+STRICT',
           'severity: P1-Critical',
           '---',
@@ -744,7 +752,7 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
           'date: 2026-11-01',
           'author: Erik Sjöberg',
           'status: Approved',
-          'tags: [architecture, planning]',
+          'tags: ["#architecture", "#planning"]',
           'tlp: TLP:CLEAR',
           '---',
           '# Q4 Architecture Roadmap'
@@ -752,9 +760,9 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
       }
     ]
 
-    // Wildcard tag + date range + custom frontmatter property
+    // Wildcard tag (#tag1, #tag2 or #tag1 Tag2) + date range + custom frontmatter property
     const secRule = {
-      tagsPattern: 'inc*, soc',
+      tagsPattern: '#inc* soc',
       titlePattern: '*Breach*',
       authorPattern: 'Alice*',
       statusPattern: '*Progress*',

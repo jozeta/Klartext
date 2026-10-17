@@ -17,6 +17,11 @@ import type {
   CustomFrontmatterPropertyDef,
   FrontmatterFieldType
 } from '../../../shared/types'
+import {
+  formatTagWithHash,
+  parseTagListInput,
+  stripTagHash
+} from '../../../shared/markdown/dynamic-workspace'
 
 export interface FrontmatterPropertiesPanelProps {
   activeTabKey: string | null
@@ -38,15 +43,15 @@ const DEFAULT_STATUS_OPTIONS = [
   'Archived'
 ]
 const DEFAULT_KNOWN_TAGS = [
-  'meeting',
-  'notes',
-  'daily',
-  'rfc',
-  'security',
-  'architecture',
-  'incident',
-  'audit',
-  'todo'
+  '#meeting',
+  '#notes',
+  '#daily',
+  '#rfc',
+  '#security',
+  '#architecture',
+  '#incident',
+  '#audit',
+  '#todo'
 ]
 
 function pad2(n: number): string {
@@ -101,6 +106,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
   } | null>(null)
 
   const [openTagsKey, setOpenTagsKey] = useState<string | null>(null)
+  const [focusedTagKey, setFocusedTagKey] = useState<string | null>(null)
   const [tagInputDrafts, setTagInputDrafts] = useState<Record<string, string>>({})
 
   const panelRef = useRef<HTMLElement | null>(null)
@@ -139,18 +145,24 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
     [settings.frontmatterStatusOptions]
   )
 
-  // Collect all previously entered tags from settings + open documents + current frontmatter
+  // Collect all previously entered tags from settings + open documents + current frontmatter (always formatted with leading #)
   const allKnownTags = useMemo(() => {
-    const set = new Set<string>(
+    const initialList =
       Array.isArray(settings.frontmatterKnownTags) && settings.frontmatterKnownTags.length > 0
         ? settings.frontmatterKnownTags
         : DEFAULT_KNOWN_TAGS
+    const set = new Set<string>(
+      initialList.map((t) => formatTagWithHash(t)).filter(Boolean)
     )
     if (frontmatter) {
       for (const [, val] of Object.entries(frontmatter)) {
         if (Array.isArray(val)) {
           for (const item of val) {
-            if (typeof item === 'string' && item.trim()) set.add(item.trim())
+            if (typeof item === 'string' && item.trim()) {
+              for (const parsed of parseTagListInput(item)) {
+                set.add(parsed)
+              }
+            }
           }
         }
       }
@@ -164,7 +176,11 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             .split(',')
             .map((s) => s.replace(/['"]/g, '').trim())
             .filter(Boolean)
-            .forEach((t) => set.add(t))
+            .forEach((t) => {
+              for (const parsed of parseTagListInput(t)) {
+                set.add(parsed)
+              }
+            })
         }
       }
     }
@@ -234,7 +250,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
   }
 
   const rememberTag = (tag: string) => {
-    const clean = tag.trim()
+    const clean = formatTagWithHash(tag)
     if (!clean) return
     if (!allKnownTags.includes(clean)) {
       onUpdateSettings({
@@ -607,34 +623,46 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
 
   const renderTagsField = (key: string, rawVal: unknown, strVal: string) => {
     const currentTags: string[] = Array.isArray(rawVal)
-      ? rawVal.map((t) => String(t).trim()).filter(Boolean)
-      : strVal
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean)
+      ? Array.from(
+          new Set(
+            rawVal
+              .flatMap((t) => parseTagListInput(String(t ?? '')))
+              .filter(Boolean)
+          )
+        )
+      : parseTagListInput(strVal)
+
+    const formattedTagsStr = currentTags.join(', ')
+    const isFocused = focusedTagKey === key
+    const displayInputValue = isFocused
+      ? tagInputDrafts[key] ?? formattedTagsStr
+      : formattedTagsStr
 
     const isOpen = openTagsKey === key
-    const filterDraft = tagInputDrafts[key] ?? ''
 
     // Filter known tags based on the last segment being typed
-    const segments = strVal.split(',')
-    const activeQuery = (segments[segments.length - 1] || filterDraft).trim().toLowerCase()
+    const segments = displayInputValue.split(/[\s,]+/)
+    const activeQuery = stripTagHash(segments[segments.length - 1] || '').toLowerCase()
 
     const matchingSuggestions = allKnownTags.filter((t) =>
-      activeQuery ? t.toLowerCase().includes(activeQuery) : true
+      activeQuery ? stripTagHash(t).toLowerCase().includes(activeQuery) : true
     )
 
     const handleSelectSuggestedTag = (tag: string) => {
-      rememberTag(tag)
-      if (currentTags.includes(tag)) {
+      const normalized = formatTagWithHash(tag)
+      if (!normalized) return
+      rememberTag(normalized)
+      if (currentTags.some((t) => stripTagHash(t).toLowerCase() === stripTagHash(normalized).toLowerCase())) {
         return
       }
-      const nextList = [...currentTags, tag]
+      const nextList = [...currentTags, normalized]
+      setTagInputDrafts((prev) => ({ ...prev, [key]: nextList.join(', ') }))
       onUpdateFrontmatterField(key, nextList)
     }
 
     const handleRemoveTag = (tagToRemove: string) => {
       const nextList = currentTags.filter((t) => t !== tagToRemove)
+      setTagInputDrafts((prev) => ({ ...prev, [key]: nextList.join(', ') }))
       onUpdateFrontmatterField(key, nextList)
     }
 
@@ -645,14 +673,13 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             {currentTags.map((tag) => (
               <span
                 key={tag}
-                data-testid={`frontmatter-tag-chip-${key}-${tag}`}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent/15 text-accent text-[11px] font-medium"
+                data-testid={`frontmatter-tag-chip-${key}-${stripTagHash(tag)}`}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent/15 text-accent text-[11px] font-medium font-mono"
               >
-                <Tag className="w-2.5 h-2.5" />
-                <span>{tag}</span>
+                <span>{formatTagWithHash(tag)}</span>
                 <button
                   type="button"
-                  title={`Remove tag ${tag}`}
+                  title={`Remove tag ${formatTagWithHash(tag)}`}
                   onClick={() => handleRemoveTag(tag)}
                   className="hover:text-danger"
                 >
@@ -667,9 +694,11 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
           <input
             type="text"
             data-testid={`frontmatter-input-${key}`}
-            placeholder="Enter tags (comma-separated)..."
-            value={strVal}
+            placeholder="#tag1, #tag2 or #tag1 Tag2..."
+            value={displayInputValue}
             onFocus={() => {
+              setFocusedTagKey(key)
+              setTagInputDrafts((prev) => ({ ...prev, [key]: formattedTagsStr }))
               setOpenTagsKey(key)
               setOpenCalendarKey(null)
               setOpenDropdownKey(null)
@@ -677,17 +706,16 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             onChange={(e) => {
               const val = e.target.value
               setTagInputDrafts((prev) => ({ ...prev, [key]: val }))
-              const parsed = val
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
+              const parsed = parseTagListInput(val)
               onUpdateFrontmatterField(key, parsed)
               setOpenTagsKey(key)
             }}
             onBlur={() => {
+              setFocusedTagKey((prev) => (prev === key ? null : prev))
+              setTagInputDrafts((prev) => ({ ...prev, [key]: currentTags.join(', ') }))
               currentTags.forEach(rememberTag)
             }}
-            className="flex-1 min-w-0 px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 px-2 py-1.5 rounded bg-panel border border-subtle text-primary font-mono focus:outline-none focus:border-accent"
           />
           <button
             type="button"
@@ -718,21 +746,24 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             </div>
             <div className="flex flex-wrap gap-1">
               {matchingSuggestions.map((tag) => {
-                const isSelected = currentTags.includes(tag)
+                const bareTag = stripTagHash(tag)
+                const hashedTag = formatTagWithHash(tag)
+                const isSelected = currentTags.some(
+                  (t) => stripTagHash(t).toLowerCase() === bareTag.toLowerCase()
+                )
                 return (
                   <button
-                    key={tag}
+                    key={hashedTag}
                     type="button"
-                    data-testid={`frontmatter-tag-suggestion-${key}-${tag}`}
-                    onClick={() => handleSelectSuggestedTag(tag)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border transition-colors ${
+                    data-testid={`frontmatter-tag-suggestion-${key}-${bareTag}`}
+                    onClick={() => handleSelectSuggestedTag(hashedTag)}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
                       isSelected
                         ? 'bg-accent text-white border-accent'
                         : 'bg-app border-subtle text-primary hover:border-accent'
                     }`}
                   >
-                    <Tag className="w-2.5 h-2.5" />
-                    <span>{tag}</span>
+                    <span>{hashedTag}</span>
                   </button>
                 )
               })}
