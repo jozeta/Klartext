@@ -598,6 +598,22 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('ai-diff-accept-btn').click()
       await expect(page.getByTestId('ai-diff-review-card')).toHaveCount(0)
 
+      // Verify AI Custom Instruction Dialog Box from Right AI Panel
+      await expect(page.getByTestId('ai-action-custom-dialog-btn')).toBeVisible()
+      await page.getByTestId('ai-action-custom-dialog-btn').click()
+      await expect(page.getByTestId('ai-custom-instruction-modal')).toBeVisible()
+      await expect(page.getByTestId('ai-custom-dialog-selected-text')).toBeVisible()
+      await page
+        .getByTestId('ai-custom-dialog-input')
+        .fill('Rewrite this text clearly in Swedish')
+      await page.getByTestId('ai-custom-dialog-submit-btn').click()
+      await expect(page.getByTestId('ai-custom-dialog-result-box')).toBeVisible()
+      await expect(page.getByTestId('ai-custom-dialog-result-text')).toContainText(
+        'användargränssnitt'
+      )
+      await page.getByTestId('ai-custom-dialog-accept-btn').click()
+      await expect(page.getByTestId('ai-custom-instruction-modal')).toHaveCount(0)
+
       // Scenario 16 & 17: Export to standalone HTML & PDF via File Menu + View Menu (Theme, White Paper, Word Wrap, Frontmatter Window)
       await page.getByTestId('file-menu-btn').click()
       await page.getByTestId('export-html-btn').click()

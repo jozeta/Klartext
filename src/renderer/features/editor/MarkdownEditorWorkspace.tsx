@@ -960,6 +960,7 @@ export const MarkdownEditorWorkspace: React.FC<{
             })
             if (!sel.empty) {
               const selectedStr = update.state.sliceDoc(sel.from, sel.to)
+              ;(window as any).__klartextSelectedText = selectedStr
               if (floatingToolbarEnabled) {
                 const fromCoords = update.view.coordsAtPos(sel.from)
                 const toCoords = update.view.coordsAtPos(sel.to) || fromCoords
@@ -985,6 +986,9 @@ export const MarkdownEditorWorkspace: React.FC<{
                 highlightSelectionInPreview(previewContainerRef.current, selectedStr)
               }
             } else {
+              if (update.view.hasFocus) {
+                ;(window as any).__klartextSelectedText = ''
+              }
               setSelectionCoords(null)
               if (editMode === 'split' && previewContainerRef.current) {
                 clearPreviewHighlights(previewContainerRef.current)
@@ -1851,11 +1855,11 @@ export const MarkdownEditorWorkspace: React.FC<{
               : 'opacity-0 pointer-events-none'
           }`}
         >
-          {/* Row 1: Inline Text Styles, Headings, Collapsible & Blockquote (+ AI Improve Text & AI Fix Grammar when enabled) */}
+          {/* Row 1: Inline Text Styles, Headings, Collapsible & Blockquote (+ AI Improve Text, AI Fix Grammar & AI Custom Instruction when enabled) */}
           <div
             data-testid="floating-toolbar-row-1"
             style={{
-              gridTemplateColumns: `repeat(${aiEnabled ? 15 : 13}, minmax(26px, 1fr))`
+              gridTemplateColumns: `repeat(${aiEnabled ? 16 : 13}, minmax(26px, 1fr))`
             }}
             className="w-full grid gap-0.5 items-center"
           >
@@ -2048,6 +2052,22 @@ export const MarkdownEditorWorkspace: React.FC<{
                   className="p-1 rounded bg-secondary text-accent hover:bg-accent hover:text-white font-medium flex items-center justify-center"
                 >
                   <Wand2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  data-tooltip="Ask AI / Custom Instruction..."
+                  aria-label="Ask AI / Custom Instruction"
+                  data-testid="floating-ai-custom-btn"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    onTriggerAIQuickAction(
+                      'open-custom-dialog',
+                      (activeFloatingCoords || fadingOutCoords)!.selectedText
+                    )
+                  }}
+                  className="p-1 rounded bg-accent/15 text-accent border border-accent/40 hover:bg-accent hover:text-white font-bold text-[9px] tracking-tighter flex items-center justify-center"
+                >
+                  AI…
                 </button>
               </>
             )}

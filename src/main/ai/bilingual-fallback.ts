@@ -360,6 +360,84 @@ export function generateBuiltInBilingualFallback(params: {
     return `## ${promptText}\n\nThis section outlines ${promptText.toLowerCase()} with clear structure, actionable steps, and verification criteria.`
   }
 
+  // Handle custom instruction intents when action === 'custom'
+  if (params.action === 'custom' && params.prompt.trim()) {
+    const instr = params.prompt.trim().toLowerCase()
+    if (
+      instr.includes('engelska') ||
+      instr.includes('to english') ||
+      instr.includes('into english') ||
+      instr.includes('sv->en') ||
+      instr.includes('sv -> en')
+    ) {
+      return `${frontmatterBlock}${translateSwToEnOffline(body || rawInput)}`.trim()
+    }
+    if (
+      instr.includes('svenska') ||
+      instr.includes('to swedish') ||
+      instr.includes('into swedish') ||
+      instr.includes('en->sv') ||
+      instr.includes('en -> sv')
+    ) {
+      return `${frontmatterBlock}${translateEnToSvOffline(body || rawInput)}`.trim()
+    }
+    if (
+      instr.includes('summarize') ||
+      instr.includes('summary') ||
+      instr.includes('sammanfatt') ||
+      instr.includes('tl;dr')
+    ) {
+      const sentences = sourceBody
+        .split(/(?<=[.!?])\s+|\n+/)
+        .map((s) => s.replace(/^#+\s*/, '').trim())
+        .filter((s) => s.length > 0 && !s.startsWith('```'))
+        .slice(0, 4)
+      const bullets =
+        sentences.length > 0
+          ? sentences.map((s) => `- ${s.replace(/^[-*+]\s*/, '')}`).join('\n')
+          : isSwedish
+            ? '- Sammanfattning av de viktigaste punkterna i texten.'
+            : '- Concise summary of the key points in the text.'
+      return `${frontmatterBlock}${bullets}`.trim()
+    }
+    if (
+      instr.includes('bullet') ||
+      instr.includes('punktlista') ||
+      instr.includes('punkter') ||
+      instr.includes('action item') ||
+      instr.includes('åtgärd') ||
+      (instr.includes('list') && !instr.includes('number'))
+    ) {
+      const items = sourceBody
+        .split(/\r?\n|(?<=[.!?])\s+/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+      const listMd = items
+        .map((l) => (l.startsWith('-') || l.startsWith('#') ? l : `- ${l}`))
+        .join('\n')
+      return `${frontmatterBlock}${listMd}`.trim()
+    }
+    if (
+      instr.includes('number') ||
+      instr.includes('numrerad') ||
+      instr.includes('steps') ||
+      instr.includes('steg')
+    ) {
+      const items = sourceBody
+        .split(/\r?\n|(?<=[.!?])\s+/)
+        .map((l) => l.replace(/^[-*+\d.]+\s*/, '').trim())
+        .filter(Boolean)
+      const numberedMd = items.map((l, idx) => `${idx + 1}. ${l}`).join('\n')
+      return `${frontmatterBlock}${numberedMd}`.trim()
+    }
+    if (instr.includes('uppercase') || instr.includes('versaler') || instr.includes('all caps')) {
+      return `${frontmatterBlock}${(body || rawInput).toUpperCase()}`.trim()
+    }
+    if (instr.includes('lowercase') || instr.includes('gemener')) {
+      return `${frontmatterBlock}${(body || rawInput).toLowerCase()}`.trim()
+    }
+  }
+
   // Default: 'improve', 'grammar', 'tone', 'custom', or 'draft' with existing text
   if (isSwedish) {
     const rules =

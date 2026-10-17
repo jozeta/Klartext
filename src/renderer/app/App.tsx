@@ -59,7 +59,10 @@ import {
   SPELL_LANGUAGE_LABELS,
   type SupportedSpellLanguage
 } from '../features/editor/spellcheck-extension'
-import { LocalAIPanel } from '../features/ai/LocalAIPanel'
+import {
+  LocalAIPanel,
+  AICustomInstructionDialogModal
+} from '../features/ai/LocalAIPanel'
 import { TemplatesPanel } from '../features/templates/TemplatesPanel'
 import { FrontmatterPropertiesPanel } from '../features/frontmatter/FrontmatterPropertiesPanel'
 import { HelpModal, type HelpModalTab } from '../components/help/HelpModal'
@@ -241,6 +244,10 @@ export const App: React.FC = () => {
     isStreaming: boolean
     requestId: string
     error?: string
+  } | null>(null)
+  const [aiInstructionDialog, setAiInstructionDialog] = useState<{
+    open: boolean
+    selectedText: string
   } | null>(null)
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1467,6 +1474,21 @@ export const App: React.FC = () => {
     await openDocument(targetRootId, res.movedFileRelativePath)
   }
 
+  const openAICustomInstructionDialog = (explicitSelectedText?: string) => {
+    const domSel = window.getSelection()?.toString()?.trim() || ''
+    const cmSel = String((window as any).__klartextSelectedText || '').trim()
+    const initialSelectedText =
+      (explicitSelectedText && explicitSelectedText.trim()) ||
+      domSel ||
+      cmSel ||
+      activeTab?.content ||
+      ''
+    setAiInstructionDialog({
+      open: true,
+      selectedText: initialSelectedText
+    })
+  }
+
   const handleTriggerAIAction = async (
     action: string,
     promptText: string,
@@ -1478,10 +1500,15 @@ export const App: React.FC = () => {
       await handleUpdateSettings({ rightSidebarOpen: true })
     }
     const requestId = `ai-${Date.now()}`
+    const domOrCmSel =
+      window.getSelection()?.toString()?.trim() ||
+      String((window as any).__klartextSelectedText || '').trim()
     const originalText =
       selectedSnippet && selectedSnippet.trim().length > 0
         ? selectedSnippet
-        : activeTab.content
+        : domOrCmSel.length > 0
+          ? domOrCmSel
+          : activeTab.content
     setPendingAIDiff({
       originalText,
       proposedText: '',
@@ -4071,11 +4098,15 @@ export const App: React.FC = () => {
                     relativePath: drawingRelPath
                   })
                 }
-                onTriggerAIQuickAction={(action, arg) =>
-                  action === 'draft'
-                    ? handleTriggerAIAction(action, arg)
-                    : handleTriggerAIAction(action, '', undefined, arg)
-                }
+                onTriggerAIQuickAction={(action, arg) => {
+                  if (action === 'open-custom-dialog') {
+                    openAICustomInstructionDialog(arg)
+                  } else if (action === 'draft') {
+                    handleTriggerAIAction(action, arg)
+                  } else {
+                    handleTriggerAIAction(action, '', undefined, arg)
+                  }
+                }}
                 onResolveConflictHunk={(hunkIndex, resolution) =>
                   handleResolveConflict(
                     primaryActiveTab.rootId,
@@ -4310,11 +4341,15 @@ export const App: React.FC = () => {
                         relativePath: drawingRelPath
                       })
                     }
-                    onTriggerAIQuickAction={(action, arg) =>
-                      action === 'draft'
-                        ? handleTriggerAIAction(action, arg)
-                        : handleTriggerAIAction(action, '', undefined, arg)
-                    }
+                    onTriggerAIQuickAction={(action, arg) => {
+                      if (action === 'open-custom-dialog') {
+                        openAICustomInstructionDialog(arg)
+                      } else if (action === 'draft') {
+                        handleTriggerAIAction(action, arg)
+                      } else {
+                        handleTriggerAIAction(action, '', undefined, arg)
+                      }
+                    }}
                     onResolveConflictHunk={(hunkIndex, resolution) =>
                       handleResolveConflict(
                         secondaryActiveTab.rootId,
@@ -4502,6 +4537,7 @@ export const App: React.FC = () => {
                         onRejectDiff={() => setPendingAIDiff(null)}
                         onOpenHelpAI={() => openRightHelpPanel('ai')}
                         onOpenCitation={(rootId, relPath) => openDocument(rootId, relPath)}
+                        onOpenCustomInstructionDialog={() => openAICustomInstructionDialog()}
                       />
                     )}
 
@@ -4972,6 +5008,44 @@ export const App: React.FC = () => {
             handleUpdateSettings({ dynamicWorkspaces: nextList })
             setDynamicWizardState({ open: false })
           }}
+        />
+      )}
+
+      {aiInstructionDialog?.open && (
+        <AICustomInstructionDialogModal
+          initialSelectedText={aiInstructionDialog.selectedText}
+          activeFilePath={activeTab?.relativePath || 'Untitled.md'}
+          pendingDiff={pendingAIDiff}
+          onSubmitInstruction={(instruction, targetText) => {
+            handleTriggerAIAction('custom', instruction, undefined, targetText)
+          }}
+          onCancelStream={(requestId) => window.klartext.cancelAIStream(requestId)}
+          onAcceptResult={(proposedText, targetText) => {
+            if (
+              activeTab &&
+              targetText &&
+              targetText !== activeTab.content &&
+              activeTab.content.includes(targetText)
+            ) {
+              handleEditorContentChange(activeTab.content.replace(targetText, proposedText))
+            } else {
+              handleEditorContentChange(proposedText)
+            }
+            setPendingAIDiff(null)
+            setAiInstructionDialog(null)
+          }}
+          onInsertBelowResult={(proposedText, targetText) => {
+            if (activeTab && targetText && activeTab.content.includes(targetText)) {
+              handleEditorContentChange(
+                activeTab.content.replace(targetText, `${targetText}\n\n${proposedText}`)
+              )
+            } else if (activeTab) {
+              handleEditorContentChange(`${activeTab.content}\n\n${proposedText}`)
+            }
+            setPendingAIDiff(null)
+            setAiInstructionDialog(null)
+          }}
+          onClose={() => setAiInstructionDialog(null)}
         />
       )}
 

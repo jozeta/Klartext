@@ -39,6 +39,7 @@ export const LocalAIPanel: React.FC<{
   onRejectDiff: () => void
   onOpenHelpAI?: () => void
   onOpenCitation?: (rootId: string, relativePath: string) => void
+  onOpenCustomInstructionDialog?: () => void
 }> = ({
   settings,
   roots,
@@ -52,7 +53,8 @@ export const LocalAIPanel: React.FC<{
   onAcceptDiff,
   onRejectDiff,
   onOpenHelpAI,
-  onOpenCitation
+  onOpenCitation,
+  onOpenCustomInstructionDialog
 }) => {
   const [hardwareAdvice, setHardwareAdvice] = useState<HardwareTierAdvice | null>(null)
   const [connectionState, setConnectionState] = useState<{
@@ -270,6 +272,19 @@ export const LocalAIPanel: React.FC<{
       {/* Bilingual Quick Actions & Custom Prompt */}
       <div className="p-2.5 rounded bg-panel border border-subtle space-y-2">
         <div className="font-semibold text-primary">Create, Edit &amp; Rewrite (English &amp; Svenska)</div>
+        <button
+          type="button"
+          data-testid="ai-action-custom-dialog-btn"
+          onMouseDown={(e) => {
+            // Prevent losing editor text selection before opening the dialog
+            e.preventDefault()
+          }}
+          onClick={() => onOpenCustomInstructionDialog?.()}
+          className="w-full px-2.5 py-1.5 rounded bg-accent text-white font-semibold hover:opacity-95 transition-opacity flex items-center justify-center gap-1.5 shadow-sm"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Ask AI / Custom Instruction...</span>
+        </button>
         <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
@@ -597,3 +612,275 @@ export const LocalAIPanel: React.FC<{
     </aside>
   )
 }
+
+const QUICK_INSTRUCTION_CHIPS: Array<{ id: string; label: string; prompt: string }> = [
+  {
+    id: 'summarize',
+    label: 'Summarize into bullet points',
+    prompt: 'Summarize this text into concise bullet points'
+  },
+  {
+    id: 'improve',
+    label: 'Improve clarity & flow',
+    prompt: 'Improve clarity, structure, and flow while keeping the original language'
+  },
+  {
+    id: 'formal',
+    label: 'Formal tone',
+    prompt: 'Rewrite in a formal, executive tone'
+  },
+  {
+    id: 'concise',
+    label: 'Make shorter & concise',
+    prompt: 'Make this text shorter and more concise'
+  },
+  {
+    id: 'action-items',
+    label: 'Extract action items',
+    prompt: 'Extract actionable tasks as a Markdown bullet list'
+  },
+  {
+    id: 'translate-en',
+    label: 'Translate to English',
+    prompt: 'Translate this text into idiomatic English'
+  },
+  {
+    id: 'translate-sv',
+    label: 'Översätt till svenska',
+    prompt: 'Översätt texten till idiomatisk svenska utan särskrivningar'
+  }
+]
+
+export const AICustomInstructionDialogModal: React.FC<{
+  initialSelectedText: string
+  activeFilePath: string
+  pendingDiff: {
+    originalText: string
+    proposedText: string
+    isStreaming: boolean
+    requestId: string
+    error?: string
+  } | null
+  onSubmitInstruction: (instruction: string, targetText: string) => void
+  onCancelStream: (requestId: string) => void
+  onAcceptResult: (proposedText: string, targetText: string) => void
+  onInsertBelowResult: (proposedText: string, targetText: string) => void
+  onClose: () => void
+}> = ({
+  initialSelectedText,
+  activeFilePath,
+  pendingDiff,
+  onSubmitInstruction,
+  onCancelStream,
+  onAcceptResult,
+  onInsertBelowResult,
+  onClose
+}) => {
+  const [instruction, setInstruction] = useState('')
+  const [targetText, setTargetText] = useState(initialSelectedText)
+  const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [copiedResult, setCopiedResult] = useState(false)
+
+  useEffect(() => {
+    setTargetText(initialSelectedText)
+  }, [initialSelectedText])
+
+  const handleSubmit = () => {
+    const trimmed = instruction.trim()
+    if (!trimmed) return
+    setHasSubmitted(true)
+    onSubmitInstruction(trimmed, targetText)
+  }
+
+  return (
+    <div
+      data-testid="ai-custom-instruction-modal"
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[1px] flex items-center justify-center p-4 select-none"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl rounded-xl bg-panel border border-subtle shadow-2xl overflow-hidden flex flex-col max-h-[88vh] text-xs"
+      >
+        {/* Modal Header */}
+        <div className="px-4 py-3 bg-secondary/50 border-b border-subtle flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-accent/15 text-accent">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-semibold text-sm text-primary">
+                AI Custom Instruction
+              </div>
+              <div className="text-[11px] text-secondary">
+                Tell the AI what to do with your selected text ({activeFilePath || 'Active Document'})
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="ai-custom-dialog-close-btn"
+            onClick={onClose}
+            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-4 overflow-y-auto space-y-3.5 select-text">
+          {/* Selected Text Preview / Editable Target */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="font-semibold text-primary text-[11px] uppercase tracking-wider">
+                Selected Text
+              </label>
+              <span className="text-[10px] font-mono text-muted">
+                {targetText.length} chars
+              </span>
+            </div>
+            <textarea
+              data-testid="ai-custom-dialog-selected-text"
+              value={targetText}
+              onChange={(e) => setTargetText(e.target.value)}
+              rows={3}
+              placeholder="Paste or select text from the document..."
+              className="w-full px-3 py-2 rounded-lg bg-app border border-subtle text-primary font-mono text-[11px] leading-relaxed focus:outline-none focus:border-accent resize-y"
+            />
+          </div>
+
+          {/* User Instruction Input */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-primary text-[11px] uppercase tracking-wider block">
+              What should the AI do with this text?
+            </label>
+            <div className="flex flex-wrap gap-1 pb-0.5">
+              {QUICK_INSTRUCTION_CHIPS.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  data-testid={`ai-custom-chip-${chip.id}`}
+                  onClick={() => setInstruction(chip.prompt)}
+                  className="px-2 py-0.5 rounded-full bg-secondary hover:border-accent border border-subtle text-[10px] text-primary transition-colors"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 items-start">
+              <textarea
+                autoFocus
+                data-testid="ai-custom-dialog-input"
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
+                    e.preventDefault()
+                    handleSubmit()
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault()
+                    onClose()
+                  }
+                }}
+                rows={2}
+                placeholder="Write your instructions here (e.g. 'Summarize into 3 bullet points', 'Rewrite in formal Swedish', 'Convert into a checklist')..."
+                className="flex-1 px-3 py-2 rounded-lg bg-app border border-subtle text-primary text-xs leading-relaxed focus:outline-none focus:border-accent resize-none"
+              />
+              <button
+                type="button"
+                data-testid="ai-custom-dialog-submit-btn"
+                disabled={!instruction.trim() || Boolean(pendingDiff?.isStreaming)}
+                onClick={handleSubmit}
+                className="px-3.5 py-2 rounded-lg bg-accent text-white font-semibold hover:opacity-95 disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-sm"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{pendingDiff?.isStreaming ? 'Running...' : 'Run AI'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* AI Result Box inside Dialog */}
+          {hasSubmitted && pendingDiff && (
+            <div
+              data-testid="ai-custom-dialog-result-box"
+              className="p-3 rounded-lg bg-app border-2 border-accent space-y-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-accent flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {pendingDiff.isStreaming
+                      ? 'AI is generating result...'
+                      : 'AI Result'}
+                  </span>
+                </span>
+                {pendingDiff.isStreaming && (
+                  <button
+                    type="button"
+                    onClick={() => onCancelStream(pendingDiff.requestId)}
+                    className="px-2 py-0.5 rounded bg-danger text-white text-[10px] flex items-center gap-1"
+                  >
+                    <Square className="w-2.5 h-2.5" />
+                    <span>Stop</span>
+                  </button>
+                )}
+              </div>
+
+              {pendingDiff.error && !pendingDiff.proposedText && (
+                <div className="text-danger text-[11px] font-mono">{pendingDiff.error}</div>
+              )}
+
+              <div
+                data-testid="ai-custom-dialog-result-text"
+                className="p-3 rounded-md bg-panel border border-subtle text-primary font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-56 overflow-y-auto"
+              >
+                {pendingDiff.proposedText ||
+                  (pendingDiff.isStreaming ? 'Generating response…' : '')}
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  data-testid="ai-custom-dialog-copy-btn"
+                  disabled={pendingDiff.isStreaming || !pendingDiff.proposedText.trim()}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(pendingDiff.proposedText)
+                    setCopiedResult(true)
+                    setTimeout(() => setCopiedResult(false), 1500)
+                  }}
+                  className="px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent flex items-center gap-1 disabled:opacity-50"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>{copiedResult ? 'Copied!' : 'Copy Result'}</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="ai-custom-dialog-insert-below-btn"
+                    disabled={pendingDiff.isStreaming || !pendingDiff.proposedText.trim()}
+                    onClick={() => onInsertBelowResult(pendingDiff.proposedText, targetText)}
+                    className="px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent font-medium disabled:opacity-50"
+                  >
+                    Insert Below Selection
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="ai-custom-dialog-accept-btn"
+                    disabled={pendingDiff.isStreaming || !pendingDiff.proposedText.trim()}
+                    onClick={() => onAcceptResult(pendingDiff.proposedText, targetText)}
+                    className="px-3 py-1 rounded bg-accent text-white font-semibold hover:opacity-95 flex items-center gap-1 disabled:opacity-50 shadow-sm"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Replace Selected Text</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
