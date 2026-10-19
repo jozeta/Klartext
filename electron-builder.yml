@@ -26,7 +26,7 @@ nsis:
   createDesktopShortcut: always
 mac:
   category: public.app-category.productivity
-  identity: "-"
+  identity: "johan zetterstrom (6W6TD6P8G3)"
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist

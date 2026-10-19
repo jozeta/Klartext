@@ -16,7 +16,8 @@
     "test:unit": "vitest run src/tests/unit src/tests/security",
     "test:integration": "vitest run src/tests/integration",
     "test:e2e": "playwright test",
-    "package": "rm -rf dist && electron-vite build && electron-builder --dir && (DEV_ID=$(security find-identity -v -p codesigning | awk -F'\"' '/Developer ID Application/{print $2; exit}') && [ -n \"$DEV_ID\" ] && codesign --force --deep --options runtime --entitlements build/entitlements.mac.plist --sign \"$DEV_ID\" dist/mac-arm64/Klartext.app || codesign --force --deep --sign - dist/mac-arm64/Klartext.app)"
+    "package": "rm -rf dist && electron-vite build && electron-builder --dir",
+    "release:mac": "bash scripts/release.sh"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.18.0",
