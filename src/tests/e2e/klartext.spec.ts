@@ -219,9 +219,57 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await expect(
         page.getByTestId('top-titlebar').getByTestId('document-tab-bar')
       ).toHaveCount(0)
+
+      // Verify Settings -> Frontmatter Tab: Default properties, Creation Date with <% creation_date %>, add & remove default properties
+      await page.getByTestId('settings-tab-frontmatter').click()
+      await expect(page.getByTestId('settings-frontmatter-panel')).toBeVisible()
+      await expect(page.getByTestId('settings-fm-prop-label-date')).toContainText('Creation Date')
+      await expect(page.getByTestId('settings-fm-default-input-date')).toHaveValue(
+        '<% creation_date %>'
+      )
+      await expect(page.getByTestId('settings-fm-default-input-title')).toHaveValue('<% title %>')
+      // Add a new default property with a dynamic variable and another temporary property to remove
+      await page.getByTestId('settings-fm-new-key-input').fill('category')
+      await page.getByTestId('settings-fm-new-default-input').fill('<% folder_name %>')
+      await page.getByTestId('settings-fm-add-btn').click()
+      await expect(page.getByTestId('settings-fm-prop-row-category')).toBeVisible()
+      await page.getByTestId('settings-fm-new-key-input').fill('temp_prop')
+      await page.getByTestId('settings-fm-new-default-input').fill('temporary')
+      await page.getByTestId('settings-fm-add-btn').click()
+      await expect(page.getByTestId('settings-fm-prop-row-temp_prop')).toBeVisible()
+      await page.getByTestId('settings-fm-remove-btn-temp_prop').click()
+      await expect(page.getByTestId('settings-fm-prop-row-temp_prop')).toHaveCount(0)
+
+      await page.getByTestId('settings-tab-general').click()
       await page.getByTestId('manifest-filepath-input').fill(manifestFile)
       await page.getByTestId('save-manifest-btn').click()
       await expect.poll(() => fs.existsSync(manifestFile)).toBe(true)
+
+      // Verify creating a new file populates frontmatter with evaluated default properties (including Creation Date)
+      // and renaming the file while headline is still # Untitled updates the headline to the new file name (without extension)
+      await page.getByTestId('tree-file-root-starter-Welcome.md').click()
+      await page.getByTestId('new-file-btn-root-starter').click()
+      await expect(page.getByTestId('inline-rename-input-root-starter')).toBeVisible()
+      await page
+        .getByTestId('inline-rename-input-root-starter')
+        .fill('Architecture-Overview.md')
+      await page.getByTestId('inline-rename-input-root-starter').press('Enter')
+      await expect
+        .poll(() =>
+          fs.existsSync(
+            path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md')
+          )
+        )
+        .toBe(true)
+      const renamedContent = fs.readFileSync(
+        path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md'),
+        'utf-8'
+      )
+      expect(renamedContent).toContain('# Architecture-Overview')
+      expect(renamedContent).not.toContain('# Architecture-Overview.md')
+      expect(renamedContent).not.toContain('# Untitled')
+      expect(renamedContent).toMatch(/date:\s*"?\d{4}-\d{2}-\d{2}"?/)
+      expect(renamedContent).toContain('category: Starter Notes')
 
       // Scenario 2: Create, edit, save, close, and reopen Markdown files across multiple roots via Quick Switcher (in left sidebar bottom controls)
       await expect(page.getByTestId('left-sidebar-bottom-controls')).toBeVisible()
@@ -378,30 +426,40 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       expect(movedRes.migratedAssets).toContain('assets/images/beta-chart.png')
       expect(fs.existsSync(path.join(rootCDir, 'assets/images/beta-chart.png'))).toBe(true)
 
-      // Scenario 8 & 9: Mermaid diagram live SVG rendering, Mermaid Live Studio (19 diagram types including Packet TCP), & graceful diagnostic on invalid syntax
+      // Scenario 8 & 9: Mermaid diagram live SVG rendering, Visio-style Visual Diagram Studio (17 diagram types, Packet & C4 removed), & graceful diagnostic on invalid syntax
       await page.getByTestId(`doc-tab-root-starter-Welcome.md`).click()
       await expect(page.getByTestId('mermaid-widget').first()).toBeVisible()
       await page.getByTestId('mermaid-open-visual-builder').first().click()
       await expect(page.getByTestId('visual-mermaid-builder-modal')).toBeVisible()
       await expect(page.getByTestId('mermaid-preset-gallery')).toBeVisible()
+      await expect(page.getByTestId('mermaid-preset-packet')).toHaveCount(0)
+      await expect(page.getByTestId('mermaid-preset-c4')).toHaveCount(0)
       await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('Multi-Root Workspace')
 
-      // Switch to Sequence, Kanban, Quadrant, and Packet (TCP) presets and verify their graphical drag-and-drop GUI builders
+      // Verify Visio-style shape stencil buttons with SVG icons, arrow style buttons, and 2D canvas pan & zoom
+      await expect(page.getByTestId('mermaid-add-rect')).toBeVisible()
+      await expect(page.getByTestId('mermaid-add-subroutine')).toBeVisible()
+      await expect(page.getByTestId('mermaid-add-hexagon')).toBeVisible()
+      await expect(page.getByTestId('mermaid-arrow-solid')).toBeVisible()
+      await expect(page.getByTestId('mermaid-arrow-dashed')).toBeVisible()
+      await expect(page.getByTestId('mermaid-arrow-thick')).toBeVisible()
+      await expect(page.getByTestId('mermaid-arrow-bi')).toBeVisible()
+      await expect(page.getByTestId('mermaid-split-divider-horizontal')).toBeVisible()
+
+      await page.getByTestId('mermaid-canvas-zoom-in').click()
+      await expect(page.getByTestId('mermaid-canvas-zoom-level')).toContainText('115%')
+      await page.getByTestId('mermaid-canvas-zoom-reset').click()
+      await expect(page.getByTestId('mermaid-canvas-zoom-level')).toContainText('100%')
+
+      // Switch to Sequence, Kanban, and Quadrant presets and verify their graphical drag-and-drop GUI builders
       await page.getByTestId('mermaid-preset-sequence').click()
       await expect(page.getByTestId('mermaid-visual-sequence-builder')).toBeVisible()
       await page.getByTestId('mermaid-preset-kanban').click()
       await expect(page.getByTestId('mermaid-visual-kanban-builder')).toBeVisible()
       await page.getByTestId('mermaid-preset-quadrant').click()
       await expect(page.getByTestId('mermaid-visual-quadrant-builder')).toBeVisible()
-      await page.getByTestId('mermaid-preset-packet').click()
-      await expect(page.getByTestId('mermaid-visual-packet-builder')).toBeVisible()
-      await expect(page.getByTestId('mermaid-packet-builder-bar')).toBeVisible()
-      await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('title: "TCP Packet"')
-      await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('0-15: "Source Port"')
-      await page.getByTestId('mermaid-packet-add-field-btn').click()
-      await expect(page.getByTestId('mermaid-builder-generated-code')).toContainText('256-271: "Custom Header Field"')
 
-      // Verify Zoom & Grid controls in Live Preview
+      // Verify Zoom & Grid controls in Live Output Preview
       await page.getByTestId('mermaid-zoom-in-btn').click()
       await expect(page.getByTestId('mermaid-zoom-level')).toContainText('115%')
       await page.getByTestId('mermaid-zoom-reset-btn').click()
@@ -470,6 +528,25 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
           }) + '\n'
         )
         res.end(JSON.stringify({ message: { content: '' }, done: true }) + '\n')
+        return
+      }
+      if (req.url === '/test-article') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Klartext Architecture Spec</title>
+              <meta name="description" content="Official reference guide for Klartext architecture." />
+            </head>
+            <body>
+              <article>
+                <h1>Klartext Architecture Spec</h1>
+                <p>This article explains <strong>multi-root</strong> workspaces and <a href="https://example.com">specs</a>.</p>
+              </article>
+            </body>
+          </html>
+        `)
         return
       }
       res.writeHead(404)
@@ -587,14 +664,35 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('toggle-hardware-advisor-btn').click()
       await expect(page.getByTestId('hardware-advisor-body')).toBeVisible()
 
-      // Expand Local AI Setup & Connection, test connection, and verify Multi-Root Workspace Q&A inside it
+      // Expand Local AI Setup & Connection, verify floating menu AI buttons are greyed out when no AI model is configured/connected, then test connection
       await page.getByTestId('toggle-local-ai-setup-btn').click()
       await expect(page.getByTestId('local-ai-connection-body')).toBeVisible()
       await expect(page.getByTestId('ai-rag-section')).toBeVisible()
 
+      // Select "None (No AI model configured)" and select text in editor -> verify all 5 AI buttons in floating menu are greyed out (disabled)
+      await page.getByTestId('ai-model-select').selectOption('')
+      await page.locator('.cm-content').first().click()
+      await page.keyboard.press('Meta+a')
+      await expect(page.getByTestId('floating-selection-toolbar')).toBeVisible()
+      await expect(page.getByTestId('floating-ai-improve')).toBeDisabled()
+      await expect(page.getByTestId('floating-ai-grammar')).toBeDisabled()
+      await expect(page.getByTestId('floating-ai-custom-btn')).toBeDisabled()
+      await expect(page.getByTestId('floating-ai-translate-en-sv')).toBeDisabled()
+      await expect(page.getByTestId('floating-ai-translate-sv-en')).toBeDisabled()
+
+      // Connect to Ollama server and select model -> verify AI buttons in floating menu become enabled
       await page.getByTestId('ai-endpoint-input').fill(`http://127.0.0.1:${ollamaPort}`)
       await page.getByTestId('ai-test-connection-btn').click()
       await expect(page.getByTestId('ai-connection-badge')).toContainText('Connected')
+      await page.getByTestId('ai-model-select').selectOption('gemma4:12b')
+      await page.locator('.cm-content').first().click()
+      await page.keyboard.press('Meta+a')
+      await expect(page.getByTestId('floating-selection-toolbar')).toBeVisible()
+      await expect(page.getByTestId('floating-ai-improve')).toBeEnabled()
+      await expect(page.getByTestId('floating-ai-grammar')).toBeEnabled()
+      await expect(page.getByTestId('floating-ai-custom-btn')).toBeEnabled()
+      await expect(page.getByTestId('floating-ai-translate-en-sv')).toBeEnabled()
+      await expect(page.getByTestId('floating-ai-translate-sv-en')).toBeEnabled()
 
       // Verify Multi-Root Workspace Q&A button works and returns answer + citations
       await page.getByTestId('ai-rag-question-input').fill('Vad står det i dokumenten?')
@@ -822,8 +920,10 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.locator('[data-testid^="close-secondary-tab-"]').first().click()
       await expect(page.getByTestId('editor-pane-secondary')).toHaveCount(0)
 
-      // Verify Frontmatter Properties: Calendar Date Picker, Tags Dropdown, Editable Status Dropdown, and Global Typed Custom Properties
+      // Verify Frontmatter Properties: Creation Date label & auto-populated value, Calendar Date Picker, Tags Dropdown, Editable Status Dropdown, and Global Typed Custom Properties
       await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
+      await expect(page.getByTestId('frontmatter-label-date')).toContainText('Creation Date')
+      await expect(page.getByTestId('frontmatter-input-date')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/)
       // 1. Date field calendar picker
       await page.getByTestId('frontmatter-date-picker-btn-date').click()
       await expect(page.getByTestId('frontmatter-calendar-popover-date')).toBeVisible()
@@ -899,6 +999,128 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await expect(page.getByTestId('global-tasks-panel')).toBeVisible()
       await page.getByTestId('right-panel-tab-frontmatter').click()
       await expect(page.getByTestId('right-frontmatter-window')).toBeVisible()
+
+      // Verify 4.2 Web Clipper / Import from URL to Markdown
+      await page.getByTestId('file-menu-btn').click()
+      await expect(page.getByTestId('file-menu-web-clipper')).toBeVisible()
+      await page.getByTestId('file-menu-web-clipper').click()
+      await expect(page.getByTestId('web-clipper-modal')).toBeVisible()
+      await page
+        .getByTestId('web-clipper-url-input')
+        .fill(`http://127.0.0.1:${ollamaPort}/test-article`)
+      await page.getByTestId('web-clipper-fetch-btn').click()
+      await expect(page.getByTestId('web-clipper-preview-textarea')).toHaveValue(
+        /Klartext Architecture Spec/
+      )
+      await page.getByTestId('web-clipper-insert-btn').click()
+      await expect(page.getByTestId('web-clipper-modal')).toHaveCount(0)
+
+      // Verify 4.3 Export to DOCX, Slide Deck Presentation Mode, and Copy as Slack / Jira / GFM Markdown
+      await page.getByTestId('file-menu-btn').click()
+      await expect(page.getByTestId('export-docx-btn')).toBeVisible()
+      await page.getByTestId('export-docx-btn').click()
+      await expect(page.getByTestId('export-status-banner')).toContainText('Exported DOCX')
+
+      await page.getByTestId('edit-menu-btn').click()
+      await expect(page.getByTestId('copy-slack-md-btn')).toBeVisible()
+      await expect(page.getByTestId('copy-jira-md-btn')).toBeVisible()
+      await expect(page.getByTestId('copy-gfm-md-btn')).toBeVisible()
+      await page.getByTestId('copy-slack-md-btn').click()
+
+      // Create RichFeaturesDoc.md with rich blocks: Footnotes (3.3), Image with metadata (3.4), Bookmark Card (4.1), and Slides (4.3)
+      await page.evaluate(
+        async ({ rId, b64 }) => {
+          const savedImg = await window.klartext.saveAsset({
+            rootId: rId,
+            documentRelativePath: 'RichFeaturesDoc.md',
+            fileName: 'hero-diagram.png',
+            mimeType: 'image/png',
+            base64Data: b64,
+            category: 'images'
+          })
+          const richDoc = [
+            '# Slide One Title',
+            '',
+            'Paragraph with a footnote reference[^1] for inline preview.',
+            '',
+            `![System Architecture Diagram|360|center](${savedImg.relativeAssetPath})`,
+            '',
+            ':::bookmark https://klartext.app/docs',
+            'title: Klartext Documentation',
+            'description: Official guide for multi-root Markdown editing.',
+            'domain: klartext.app',
+            ':::',
+            '',
+            '---',
+            '',
+            '## Slide Two Title',
+            '',
+            '- Key milestone item',
+            'Note: Mention the Q4 roadmap metrics here.',
+            '',
+            '[^1]: Initial footnote definition text.'
+          ].join('\n')
+          await window.klartext.createDocument(rId, 'RichFeaturesDoc.md', richDoc)
+        },
+        { rId: repo1Id, b64: VALID_PNG_BASE64 }
+      )
+      await page.getByTestId('sidebar-tab-explorer').click()
+      await page.getByTestId(`tree-file-${repo1Id}-RichFeaturesDoc.md`).click()
+      await page.getByTestId('sidebar-tab-git').click()
+
+      // Verify 4.1 Bookmark Card widget renders in Inline Rich mode
+      await expect(page.getByTestId('bookmark-card-widget').first()).toBeVisible()
+      await expect(page.getByTestId('bookmark-card-widget').first()).toContainText(
+        'Klartext Documentation'
+      )
+
+      // Verify 3.4 Image Resize Handles, Alignment, Caption & Lightbox Zoom
+      await expect(page.getByTestId('inline-resizable-image').first()).toBeVisible()
+      await expect(page.getByTestId('image-caption-label').first()).toContainText(
+        'System Architecture Diagram'
+      )
+      await page.getByTestId('inline-resizable-image').first().locator('img').click()
+      await page.getByTestId('image-lightbox-zoom-btn').first().click()
+      await expect(page.getByTestId('image-lightbox-modal')).toBeVisible()
+      await page.getByTestId('image-lightbox-close-btn').click()
+      await expect(page.getByTestId('image-lightbox-modal')).toHaveCount(0)
+
+      // Verify 3.3 Footnote Hover Previews & Inline Footnote Editor
+      await expect(page.getByTestId('footnote-ref-1').first()).toBeVisible()
+      await page.getByTestId('footnote-ref-1').first().click()
+      await expect(page.getByTestId('footnote-hover-popover')).toBeVisible()
+      await expect(page.getByTestId('footnote-inline-editor-input')).toHaveValue(
+        'Initial footnote definition text.'
+      )
+      await page
+        .getByTestId('footnote-inline-editor-input')
+        .fill('Updated footnote definition from popover!')
+      await page.getByTestId('footnote-inline-save-btn').click()
+      await expect(page.getByTestId('footnote-hover-popover')).toHaveCount(0)
+
+      // Verify 1.2 Block Drag-and-Drop Handle (⋮⋮) & Turn Into menu
+      await page.locator('.cm-line').first().hover()
+      await expect(page.getByTestId('block-drag-handle')).toBeVisible()
+      await page.getByTestId('block-drag-handle').click()
+      await expect(page.getByTestId('block-turn-into-menu')).toBeVisible()
+      await page.getByTestId('block-turn-into-h2').click()
+      await expect(page.getByTestId('block-turn-into-menu')).toHaveCount(0)
+
+      // Verify 4.3 Slide Deck Presentation Mode (Keyboard navigation, Speaker Notes, Laser Pointer)
+      await page.getByTestId('file-menu-btn').click()
+      await expect(page.getByTestId('file-menu-slide-deck')).toBeVisible()
+      await page.getByTestId('file-menu-slide-deck').click()
+      await expect(page.getByTestId('slide-deck-modal')).toBeVisible()
+      await expect(page.getByTestId('slide-counter')).toContainText('Slide 1 / 2')
+      await page.getByTestId('slide-next-btn').click()
+      await expect(page.getByTestId('slide-counter')).toContainText('Slide 2 / 2')
+      await page.getByTestId('slide-speaker-notes-btn').click()
+      await expect(page.getByTestId('slide-speaker-notes-panel')).toContainText(
+        'Mention the Q4 roadmap metrics here.'
+      )
+      await page.getByTestId('slide-laser-pointer-btn').click()
+      await page.getByTestId('slide-close-btn').click()
+      await expect(page.getByTestId('slide-deck-modal')).toHaveCount(0)
 
       // Verify all settings, panel visibility, sidebar tab, workspace order, saved themes, and open tabs are persisted
       const persistedSettings = await page.evaluate(() => window.klartext.getSettings())

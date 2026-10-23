@@ -42,12 +42,6 @@ export const DIAGRAM_PALETTE_ITEMS: Record<string, PaletteItemDef[]> = {
     { id: 'mm-topic', label: '+ Sub-Topic (Level 2)', badge: '🔹', defaultPayload: 'level-2' },
     { id: 'mm-leaf', label: '+ Detail Leaf (Level 3)', badge: '•', defaultPayload: 'level-3' }
   ],
-  packet: [
-    { id: 'pkt-16', label: '+ 16-bit Field', badge: '16b', defaultPayload: '16' },
-    { id: 'pkt-32', label: '+ 32-bit Word', badge: '32b', defaultPayload: '32' },
-    { id: 'pkt-8', label: '+ 8-bit Byte', badge: '8b', defaultPayload: '8' },
-    { id: 'pkt-1', label: '+ 1-bit Flag', badge: '1b', defaultPayload: '1' }
-  ],
   quadrant: [
     { id: 'quad-point', label: '+ Strategic Point', badge: '🎯', defaultPayload: 'point' }
   ],
@@ -77,12 +71,6 @@ export const DIAGRAM_PALETTE_ITEMS: Record<string, PaletteItemDef[]> = {
     { id: 'git-branch', label: '+ New Branch', badge: '⑂', defaultPayload: 'branch' },
     { id: 'git-checkout', label: '+ Checkout', badge: '↪', defaultPayload: 'checkout' },
     { id: 'git-merge', label: '+ Merge Branch', badge: '⑃', defaultPayload: 'merge' }
-  ],
-  c4: [
-    { id: 'c4-person', label: '+ Person / Actor', badge: '👤', defaultPayload: 'Person' },
-    { id: 'c4-system', label: '+ Internal System', badge: '🏢', defaultPayload: 'System' },
-    { id: 'c4-ext', label: '+ External System', badge: '☁️', defaultPayload: 'System_Ext' },
-    { id: 'c4-rel', label: '+ Relationship (Rel)', badge: '⇄', defaultPayload: 'Rel' }
   ],
   architecture: [
     { id: 'arch-group', label: '+ Cloud Group', badge: '☁️', defaultPayload: 'group' },
@@ -1878,114 +1866,6 @@ export const StructuredMermaidVisualBuilder: React.FC<{
               </button>
             </div>
           ))}
-        </div>
-      </div>
-    )
-  }
-
-  /* ------------------------------------------------------------------------
-   * RENDER 3: PACKET BIT-GRID DRAG-AND-DROP VISUAL BUILDER
-   * ------------------------------------------------------------------------ */
-  if (diagramType === 'packet') {
-    const { title, fields } = parsePacketCode(code)
-    let runningBit = 0
-    return (
-      <div
-        data-testid="mermaid-visual-packet-builder"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDropZoneFromPalette}
-        className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded space-y-3 min-h-0"
-      >
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold uppercase text-[11px] text-muted">
-              Packet Header Title:
-            </span>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => onChangeCode(buildPacketCode(e.target.value, fields))}
-              className="px-2 py-1 rounded bg-app border border-subtle text-primary font-medium"
-            />
-          </div>
-          <span className="text-[11px] text-muted">
-            Drag bit-fields to reorder • Bit offsets auto-align to 32-bit rows
-          </span>
-        </div>
-
-        <div className="grid grid-cols-12 gap-2">
-          {fields.map((f, idx) => {
-            const start = runningBit
-            const end = runningBit + Math.max(1, f.bits) - 1
-            runningBit = end + 1
-            const colSpan =
-              f.bits >= 32 ? 'col-span-12' : f.bits >= 16 ? 'col-span-6' : f.bits >= 8 ? 'col-span-4' : 'col-span-3'
-            return (
-              <div
-                key={f.id}
-                draggable
-                onDragStart={() => setDragIndex(idx)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.stopPropagation()
-                  if (dragIndex === null || dragIndex === idx) return
-                  const next = [...fields]
-                  const [moved] = next.splice(dragIndex, 1)
-                  next.splice(idx, 0, moved)
-                  setDragIndex(null)
-                  onChangeCode(buildPacketCode(title, next))
-                }}
-                className={`${colSpan} p-2 rounded bg-app border border-subtle hover:border-accent flex flex-col gap-1 cursor-grab active:cursor-grabbing`}
-              >
-                <div className="flex items-center justify-between text-[10px] font-mono text-accent">
-                  <span>
-                    ⋮⋮ Bits {start === end ? start : `${start}–${end}`} ({f.bits}b)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = fields.filter((_, i) => i !== idx)
-                      onChangeCode(buildPacketCode(title, next))
-                    }}
-                    className="text-danger hover:opacity-80"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={f.label}
-                    onChange={(e) => {
-                      const next = fields.map((item, i) =>
-                        i === idx ? { ...item, label: e.target.value } : item
-                      )
-                      onChangeCode(buildPacketCode(title, next))
-                    }}
-                    className="flex-1 min-w-0 px-1.5 py-0.5 rounded bg-panel border border-subtle text-xs text-primary"
-                  />
-                  <select
-                    value={String(f.bits)}
-                    onChange={(e) => {
-                      const next = fields.map((item, i) =>
-                        i === idx ? { ...item, bits: parseInt(e.target.value, 10) || 16 } : item
-                      )
-                      onChangeCode(buildPacketCode(title, next))
-                    }}
-                    className="px-1 py-0.5 rounded bg-panel border border-subtle text-[11px] text-primary font-mono"
-                  >
-                    <option value="1">1b</option>
-                    <option value="4">4b</option>
-                    <option value="6">6b</option>
-                    <option value="8">8b</option>
-                    <option value="16">16b</option>
-                    <option value="32">32b</option>
-                    <option value="64">64b</option>
-                  </select>
-                </div>
-              </div>
-            )
-          })}
         </div>
       </div>
     )

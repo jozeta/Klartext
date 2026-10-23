@@ -76,6 +76,11 @@ import {
   type SupportedSpellLanguage
 } from './spellcheck-extension'
 import { MermaidDiagramWidget, VisualMermaidBuilderModal } from '../diagrams/DiagramWidgets'
+import {
+  convertMarkdownToSlack,
+  convertMarkdownToJira,
+  convertMarkdownToGfm
+} from '../../../shared/markdown/export-formats'
 
 export type EditorDispatchedCommand =
   | 'undo'
@@ -85,6 +90,9 @@ export type EditorDispatchedCommand =
   | 'paste'
   | 'select-all'
   | 'copy-rich-html'
+  | 'copy-slack-md'
+  | 'copy-jira-md'
+  | 'copy-gfm-md'
   | 'toggle-inline-ai'
   | 'ai-improve'
   | 'open-mermaid-builder'
@@ -184,6 +192,13 @@ export const SLASH_COMMAND_ITEMS: SlashCommandItem[] = [
     description: 'Insert a thematic break line (---)',
     keywords: ['hr', 'divider', 'line', 'separator'],
     badge: '—'
+  },
+  {
+    id: 'bookmark-card',
+    label: 'Web Bookmark Card',
+    description: 'Insert a rich Notion-style Web Bookmark Card',
+    keywords: ['bookmark', 'card', 'url', 'link', 'web'],
+    badge: '🔖'
   },
   {
     id: 'ai-custom',
@@ -288,6 +303,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   floatingToolbarEnabled: boolean
   formattingToolbarVisible?: boolean
   aiEnabled: boolean
+  aiModelConfigured?: boolean
   showLineNumbers: boolean
   wordWrap: boolean
   marginMode?: EditorMarginMode
@@ -330,6 +346,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   floatingToolbarEnabled,
   formattingToolbarVisible = false,
   aiEnabled,
+  aiModelConfigured = false,
   showLineNumbers,
   wordWrap,
   marginMode = 'medium',
@@ -353,6 +370,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   onChangeSpellcheckLanguage,
   onAddWordToDictionary
 }) => {
+  const isAiReady = Boolean(aiEnabled && aiModelConfigured)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const editorScrollWrapperRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -421,6 +439,46 @@ export const MarkdownEditorWorkspace: React.FC<{
     left: number
   } | null>(null)
   const hoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 1.2 Block Drag-and-Drop Handles (⋮⋮) & Turn Into menu state
+  const [hoveredBlockLine, setHoveredBlockLine] = useState<{
+    lineNumber: number
+    top: number
+    left: number
+  } | null>(null)
+  const [blockTurnIntoMenu, setBlockTurnIntoMenu] = useState<{
+    lineNumber: number
+    top: number
+    left: number
+  } | null>(null)
+  const draggingBlockLineRef = useRef<number | null>(null)
+  const [dropTargetBlockLine, setDropTargetBlockLine] = useState<number | null>(null)
+
+  // 3.3 Footnote Hover Previews & Inline Footnote Editor state
+  const [footnotePopover, setFootnotePopover] = useState<{
+    footnoteId: string
+    definitionText: string
+    definitionLineNumber: number | null
+    top: number
+    left: number
+  } | null>(null)
+  const footnoteHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 3.4 Image Full-Screen Lightbox Zoom Modal state
+  const [lightboxImage, setLightboxImage] = useState<{
+    src: string
+    caption: string
+  } | null>(null)
+
+  // 4.1 Smart URL Paste & Bookmark Card conversion banner state
+  const [smartPastedUrlBanner, setSmartPastedUrlBanner] = useState<{
+    url: string
+    title: string
+    description: string
+    domain: string
+    linkFrom: number
+    linkTo: number
+  } | null>(null)
 
   // 4.3 In-Document Find & Replace Bar (`Cmd+F`) state
   const [showInDocFindBar, setShowInDocFindBar] = useState(false)
@@ -609,6 +667,11 @@ export const MarkdownEditorWorkspace: React.FC<{
         snippet = '---\n'
         cursorOffsetInSnippet = snippet.length
         break
+      case 'bookmark-card':
+        snippet =
+          ':::bookmark\nurl: https://example.com\ntitle: Example Website\ndescription: A clean web bookmark card preview.\ndomain: example.com\n:::'
+        cursorOffsetInSnippet = snippet.length
+        break
       default:
         snippet = ''
     }
@@ -621,6 +684,206 @@ export const MarkdownEditorWorkspace: React.FC<{
   }
   const executeSlashCommandRef = useRef(executeSlashCommand)
   executeSlashCommandRef.current = executeSlashCommand
+
+  // 1.2 Block Drag-and-Drop Handle (`⋮⋮`) & "Turn Into" block converter
+  const stripBlockPrefix = (rawLine: string): string => {
+    return rawLine
+      .replace(/^\s*#{1,6}\s+/, '')
+      .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')
+      .replace(/^\s*[-*+]\s+/, '')
+      .replace(/^\s*\d+\.\s+/, '')
+      .replace(/^\s*>\s*\[![A-Z]+\]\s*/, '')
+      .replace(/^\s*>\s?/, '')
+      .trim()
+  }
+
+  const handleBlockTurnInto = (
+    lineNumber: number,
+    targetType:
+      | 'paragraph'
+      | 'h1'
+      | 'h2'
+      | 'h3'
+      | 'bullet'
+      | 'checklist'
+      | 'callout'
+      | 'toggle'
+      | 'code'
+  ) => {
+    const view = viewRef.current
+    if (!view) return
+    const safeLine = Math.max(1, Math.min(lineNumber, view.state.doc.lines))
+    const line = view.state.doc.line(safeLine)
+    const coreText = stripBlockPrefix(line.text) || 'Section text'
+
+    let replacement = coreText
+    switch (targetType) {
+      case 'paragraph':
+        replacement = coreText
+        break
+      case 'h1':
+        replacement = `# ${coreText}`
+        break
+      case 'h2':
+        replacement = `## ${coreText}`
+        break
+      case 'h3':
+        replacement = `### ${coreText}`
+        break
+      case 'bullet':
+        replacement = `- ${coreText}`
+        break
+      case 'checklist':
+        replacement = `- [ ] ${coreText}`
+        break
+      case 'callout':
+        replacement = `> [!NOTE] ${coreText}\n> Additional callout details`
+        break
+      case 'toggle':
+        replacement = `<details>\n<summary>${coreText}</summary>\n\nHidden toggle content\n</details>`
+        break
+      case 'code':
+        replacement = `\`\`\`typescript\n${coreText}\n\`\`\``
+        break
+    }
+
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: replacement },
+      selection: { anchor: line.from + replacement.length }
+    })
+    setBlockTurnIntoMenu(null)
+    view.focus()
+  }
+
+  const handleReorderBlockLines = (sourceLineNumber: number, targetLineNumber: number) => {
+    const view = viewRef.current
+    if (!view) return
+    const totalLines = view.state.doc.lines
+    const src = Math.max(1, Math.min(sourceLineNumber, totalLines))
+    const tgt = Math.max(1, Math.min(targetLineNumber, totalLines))
+    if (src === tgt) return
+
+    const lines = view.state.doc.toString().split('\n')
+    const [movedLine] = lines.splice(src - 1, 1)
+    lines.splice(tgt - 1, 0, movedLine)
+    const nextDoc = lines.join('\n')
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: nextDoc }
+    })
+    const newLineObj = view.state.doc.line(Math.max(1, Math.min(tgt, view.state.doc.lines)))
+    view.dispatch({
+      selection: { anchor: newLineObj.from }
+    })
+    setBlockTurnIntoMenu(null)
+    view.focus()
+  }
+
+  const handleBlockAction = (
+    lineNumber: number,
+    action: 'move-up' | 'move-down' | 'duplicate' | 'delete'
+  ) => {
+    const view = viewRef.current
+    if (!view) return
+    const totalLines = view.state.doc.lines
+    const safeLine = Math.max(1, Math.min(lineNumber, totalLines))
+    const line = view.state.doc.line(safeLine)
+
+    if (action === 'move-up' && safeLine > 1) {
+      handleReorderBlockLines(safeLine, safeLine - 1)
+      return
+    }
+    if (action === 'move-down' && safeLine < totalLines) {
+      handleReorderBlockLines(safeLine, safeLine + 1)
+      return
+    }
+    if (action === 'duplicate') {
+      const insertText = `\n${line.text}`
+      view.dispatch({
+        changes: { from: line.to, to: line.to, insert: insertText },
+        selection: { anchor: line.to + insertText.length }
+      })
+      setBlockTurnIntoMenu(null)
+      view.focus()
+      return
+    }
+    if (action === 'delete') {
+      const from = line.from > 0 ? line.from - 1 : line.from
+      const to = line.from === 0 && line.to < view.state.doc.length ? line.to + 1 : line.to
+      view.dispatch({
+        changes: { from, to, insert: '' }
+      })
+      setBlockTurnIntoMenu(null)
+      view.focus()
+    }
+  }
+
+  // 3.3 Footnote Hover Previews & Inline Footnote Editor helpers
+  const openFootnotePopover = (footnoteId: string, anchorRect: DOMRect) => {
+    if (footnoteHideTimerRef.current) {
+      clearTimeout(footnoteHideTimerRef.current)
+      footnoteHideTimerRef.current = null
+    }
+    const docText = viewRef.current?.state.doc.toString() ?? latestContentRef.current
+    const lines = docText.split('\n')
+    const escapedId = footnoteId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const defRegex = new RegExp(`^\\[\\^${escapedId}\\]:\\s*(.*)$`)
+    let foundLineNumber: number | null = null
+    let foundText = ''
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(defRegex)
+      if (m) {
+        foundLineNumber = i + 1
+        foundText = m[1].trim()
+        break
+      }
+    }
+
+    const top =
+      anchorRect.bottom + 180 < window.innerHeight
+        ? anchorRect.bottom + 6
+        : Math.max(12, anchorRect.top - 170)
+    const left = Math.max(12, Math.min(window.innerWidth - 360, anchorRect.left))
+
+    setFootnotePopover({
+      footnoteId,
+      definitionText: foundText,
+      definitionLineNumber: foundLineNumber,
+      top,
+      left
+    })
+  }
+
+  const handleSaveFootnoteInlineEdit = () => {
+    if (!footnotePopover) return
+    const view = viewRef.current
+    if (!view) return
+    const { footnoteId, definitionText } = footnotePopover
+    const docText = view.state.doc.toString()
+    const escapedId = footnoteId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const defRegex = new RegExp(`^\\[\\^${escapedId}\\]:\\s*(.*)$`, 'm')
+    const match = defRegex.exec(docText)
+    const newDefLine = `[^${footnoteId}]: ${definitionText.trim()}`
+
+    if (match && typeof match.index === 'number') {
+      view.dispatch({
+        changes: {
+          from: match.index,
+          to: match.index + match[0].length,
+          insert: newDefLine
+        }
+      })
+    } else {
+      const suffix = `${docText.endsWith('\n') ? '\n' : '\n\n'}${newDefLine}\n`
+      view.dispatch({
+        changes: {
+          from: docText.length,
+          to: docText.length,
+          insert: suffix
+        }
+      })
+    }
+    setFootnotePopover(null)
+  }
 
   // 2.2 Interactive Table manipulation handler
   const handleManipulateTable = (action: TableManipulationAction) => {
@@ -810,6 +1073,30 @@ export const MarkdownEditorWorkspace: React.FC<{
       if (renderedRef.current) {
         navigator.clipboard?.writeText(renderedRef.current.html).catch(() => {})
       }
+    } else if (command === 'copy-slack-md') {
+      const sel =
+        view && view.state.selection.main.from < view.state.selection.main.to
+          ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+          : latestContentRef.current
+      const slackMd = convertMarkdownToSlack(sel)
+      ;(window as any).__klartextCopiedExportText = slackMd
+      navigator.clipboard?.writeText(slackMd).catch(() => {})
+    } else if (command === 'copy-jira-md') {
+      const sel =
+        view && view.state.selection.main.from < view.state.selection.main.to
+          ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+          : latestContentRef.current
+      const jiraMd = convertMarkdownToJira(sel)
+      ;(window as any).__klartextCopiedExportText = jiraMd
+      navigator.clipboard?.writeText(jiraMd).catch(() => {})
+    } else if (command === 'copy-gfm-md') {
+      const sel =
+        view && view.state.selection.main.from < view.state.selection.main.to
+          ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+          : latestContentRef.current
+      const gfmMd = convertMarkdownToGfm(sel)
+      ;(window as any).__klartextCopiedExportText = gfmMd
+      navigator.clipboard?.writeText(gfmMd).catch(() => {})
     } else if (command === 'toggle-inline-ai') {
       setShowInlineAIPrompt((v) => !v)
     } else if (command === 'ai-improve') {
@@ -1507,6 +1794,9 @@ export const MarkdownEditorWorkspace: React.FC<{
               blockFrom,
               blockTo
             })
+          },
+          onOpenImageLightbox: ({ src, caption }) => {
+            setLightboxImage({ src, caption })
           }
         }),
         EditorView.updateListener.of((update) => {
@@ -1519,6 +1809,26 @@ export const MarkdownEditorWorkspace: React.FC<{
           if (update.selectionSet || update.docChanged) {
             const sel = update.state.selection.main
             const docStr = update.state.doc.toString()
+
+            // 1.2 Keep block drag handle (`⋮⋮`) aligned with the active cursor block
+            try {
+              const activeLine = update.state.doc.lineAt(sel.head)
+              const coords = update.view.coordsAtPos(activeLine.from)
+              const containerRect = splitContainerRef.current?.getBoundingClientRect()
+              if (coords && containerRect) {
+                setHoveredBlockLine({
+                  lineNumber: activeLine.number,
+                  top: Math.max(4, coords.top - containerRect.top),
+                  left: Math.max(6, coords.left - containerRect.left - 28)
+                })
+              } else {
+                setHoveredBlockLine((prev) =>
+                  prev ?? { lineNumber: activeLine.number, top: 18, left: 12 }
+                )
+              }
+            } catch {
+              // Ignore layout measure errors during rapid updates
+            }
 
             // 2.2 Detect if cursor is inside a Markdown GFM table
             const detectedTable = detectMarkdownTableAtPosition(docStr, sel.head)
@@ -1652,6 +1962,87 @@ export const MarkdownEditorWorkspace: React.FC<{
               return true
             }
 
+            // 4.1 Smart standalone URL paste -> auto-format [Page Title](url) & offer Notion-style Bookmark Card
+            if (
+              range.from === range.to &&
+              textData &&
+              /^https?:\/\/[^\s)]+$/i.test(textData.trim())
+            ) {
+              event.preventDefault()
+              const rawUrl = textData.trim()
+              let fallbackDomain = 'website'
+              try {
+                fallbackDomain = new URL(rawUrl).hostname.replace(/^www\./, '')
+              } catch {
+                fallbackDomain = 'website'
+              }
+              const initialTitle = fallbackDomain
+              const initialMdLink = `[${initialTitle}](${rawUrl})`
+              const insertPos = range.from
+              view.dispatch({
+                changes: { from: insertPos, to: insertPos, insert: initialMdLink },
+                selection: { anchor: insertPos + initialMdLink.length }
+              })
+              setSmartPastedUrlBanner({
+                url: rawUrl,
+                title: initialTitle,
+                description: `Web page from ${fallbackDomain}`,
+                domain: fallbackDomain,
+                linkFrom: insertPos,
+                linkTo: insertPos + initialMdLink.length
+              })
+
+              window.klartext
+                ?.fetchUrlMetadata?.({ url: rawUrl })
+                .then((meta) => {
+                  if (!meta || !viewRef.current) return
+                  const resolvedTitle = (meta.title || initialTitle).trim()
+                  const resolvedDesc = (
+                    meta.description || `Web page from ${meta.domain || fallbackDomain}`
+                  ).trim()
+                  const resolvedDomain = (meta.domain || fallbackDomain).trim()
+                  const currentSlice = viewRef.current.state.sliceDoc(
+                    insertPos,
+                    Math.min(
+                      viewRef.current.state.doc.length,
+                      insertPos + initialMdLink.length
+                    )
+                  )
+                  if (currentSlice === initialMdLink) {
+                    const updatedLink = `[${resolvedTitle}](${rawUrl})`
+                    viewRef.current.dispatch({
+                      changes: {
+                        from: insertPos,
+                        to: insertPos + initialMdLink.length,
+                        insert: updatedLink
+                      },
+                      selection: { anchor: insertPos + updatedLink.length }
+                    })
+                    setSmartPastedUrlBanner({
+                      url: rawUrl,
+                      title: resolvedTitle,
+                      description: resolvedDesc,
+                      domain: resolvedDomain,
+                      linkFrom: insertPos,
+                      linkTo: insertPos + updatedLink.length
+                    })
+                  } else {
+                    setSmartPastedUrlBanner((prev) =>
+                      prev && prev.url === rawUrl
+                        ? {
+                            ...prev,
+                            title: resolvedTitle,
+                            description: resolvedDesc,
+                            domain: resolvedDomain
+                          }
+                        : prev
+                    )
+                  }
+                })
+                .catch(() => {})
+              return true
+            }
+
             // Smart TSV/CSV spreadsheet paste into GFM table when multiple tabs are detected
             if (textData && textData.includes('\t') && textData.includes('\n')) {
               event.preventDefault()
@@ -1714,6 +2105,7 @@ export const MarkdownEditorWorkspace: React.FC<{
       parent: editorContainerRef.current
     })
     viewRef.current = view
+    setHoveredBlockLine({ lineNumber: 1, top: 18, left: 12 })
 
     // Restore cached scroll offset for this tab if available
     if (cachedTabState && cachedTabState.scrollTop > 0 && editorScrollWrapperRef.current) {
@@ -2855,11 +3247,11 @@ export const MarkdownEditorWorkspace: React.FC<{
               : 'opacity-0 pointer-events-none'
           }`}
         >
-          {/* Row 1: Inline Text Styles, Headings, Collapsible & Blockquote (+ AI Improve Text, AI Fix Grammar & AI Custom Instruction when enabled) */}
+          {/* Row 1: Inline Text Styles, Headings, Collapsible & Blockquote (+ AI Improve Text, AI Fix Grammar & AI Custom Instruction) */}
           <div
             data-testid="floating-toolbar-row-1"
             style={{
-              gridTemplateColumns: `repeat(${aiEnabled ? 16 : 13}, minmax(26px, 1fr))`
+              gridTemplateColumns: 'repeat(16, minmax(26px, 1fr))'
             }}
             className="w-full grid gap-0.5 items-center"
           >
@@ -3019,65 +3411,90 @@ export const MarkdownEditorWorkspace: React.FC<{
             >
               <ChevronRightSquare className="w-3.5 h-3.5" />
             </button>
-            {aiEnabled && (
-              <>
-                <button
-                  type="button"
-                  data-tooltip="AI Improve Text"
-                  aria-label="AI Improve Text"
-                  data-testid="floating-ai-improve"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    onTriggerAIQuickAction(
-                      'improve',
-                      (activeFloatingCoords || fadingOutCoords)!.selectedText
-                    )
-                  }}
-                  className="p-1 rounded bg-accent text-white font-medium flex items-center justify-center"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  data-tooltip="AI Fix Grammar"
-                  aria-label="AI Fix Grammar"
-                  data-testid="floating-ai-grammar"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    onTriggerAIQuickAction(
-                      'grammar',
-                      (activeFloatingCoords || fadingOutCoords)!.selectedText
-                    )
-                  }}
-                  className="p-1 rounded bg-secondary text-accent hover:bg-accent hover:text-white font-medium flex items-center justify-center"
-                >
-                  <Wand2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  data-tooltip="Ask AI / Custom Instruction..."
-                  aria-label="Ask AI / Custom Instruction"
-                  data-testid="floating-ai-custom-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    onTriggerAIQuickAction(
-                      'open-custom-dialog',
-                      (activeFloatingCoords || fadingOutCoords)!.selectedText
-                    )
-                  }}
-                  className="p-1 rounded bg-accent/15 text-accent border border-accent/40 hover:bg-accent hover:text-white font-bold text-[9px] tracking-tighter flex items-center justify-center"
-                >
-                  AI…
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              disabled={!isAiReady}
+              aria-disabled={!isAiReady}
+              data-tooltip={
+                isAiReady ? 'AI Improve Text' : 'AI Improve Text (No AI model configured)'
+              }
+              aria-label="AI Improve Text"
+              data-testid="floating-ai-improve"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                if (!isAiReady) return
+                onTriggerAIQuickAction(
+                  'improve',
+                  (activeFloatingCoords || fadingOutCoords)!.selectedText
+                )
+              }}
+              className={`p-1 rounded flex items-center justify-center ${
+                isAiReady
+                  ? 'bg-accent text-white font-medium'
+                  : 'bg-secondary/50 text-muted opacity-40 cursor-not-allowed'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={!isAiReady}
+              aria-disabled={!isAiReady}
+              data-tooltip={
+                isAiReady ? 'AI Fix Grammar' : 'AI Fix Grammar (No AI model configured)'
+              }
+              aria-label="AI Fix Grammar"
+              data-testid="floating-ai-grammar"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                if (!isAiReady) return
+                onTriggerAIQuickAction(
+                  'grammar',
+                  (activeFloatingCoords || fadingOutCoords)!.selectedText
+                )
+              }}
+              className={`p-1 rounded flex items-center justify-center ${
+                isAiReady
+                  ? 'bg-secondary text-accent hover:bg-accent hover:text-white font-medium'
+                  : 'bg-secondary/50 text-muted opacity-40 cursor-not-allowed'
+              }`}
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={!isAiReady}
+              aria-disabled={!isAiReady}
+              data-tooltip={
+                isAiReady
+                  ? 'Ask AI / Custom Instruction...'
+                  : 'Ask AI / Custom Instruction (No AI model configured)'
+              }
+              aria-label="Ask AI / Custom Instruction"
+              data-testid="floating-ai-custom-btn"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                if (!isAiReady) return
+                onTriggerAIQuickAction(
+                  'open-custom-dialog',
+                  (activeFloatingCoords || fadingOutCoords)!.selectedText
+                )
+              }}
+              className={`p-1 rounded font-bold text-[9px] tracking-tighter flex items-center justify-center ${
+                isAiReady
+                  ? 'bg-accent/15 text-accent border border-accent/40 hover:bg-accent hover:text-white'
+                  : 'bg-secondary/50 text-muted border border-subtle/40 opacity-40 cursor-not-allowed'
+              }`}
+            >
+              AI…
+            </button>
           </div>
 
-          {/* Row 2: Callouts, Lists, Tables, Blocks, Links, Media, Icons, Diagrams & Clear (+ AI Translate EN->SV & SV->EN when enabled) */}
+          {/* Row 2: Callouts, Lists, Tables, Blocks, Links, Media, Icons, Diagrams & Clear (+ AI Translate EN->SV & SV->EN) */}
           <div
             data-testid="floating-toolbar-row-2"
             style={{
-              gridTemplateColumns: `repeat(${aiEnabled ? 15 : 13}, minmax(26px, 1fr))`,
+              gridTemplateColumns: 'repeat(15, minmax(26px, 1fr))',
               borderColor: 'color-mix(in srgb, var(--border-subtle) 15%, transparent)'
             }}
             className="w-full grid gap-0.5 items-center border-t border-subtle/15 pt-1"
@@ -3240,42 +3657,197 @@ export const MarkdownEditorWorkspace: React.FC<{
             >
               <Workflow className="w-3.5 h-3.5" />
             </button>
-            {aiEnabled && (
-              <>
+            <button
+              type="button"
+              disabled={!isAiReady}
+              aria-disabled={!isAiReady}
+              data-tooltip={
+                isAiReady
+                  ? 'AI Translate EN -> SV'
+                  : 'AI Translate EN -> SV (No AI model configured)'
+              }
+              aria-label="AI Translate EN -> SV"
+              data-testid="floating-ai-translate-en-sv"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                if (!isAiReady) return
+                onTriggerAIQuickAction(
+                  'translate-en-sv',
+                  (activeFloatingCoords || fadingOutCoords)!.selectedText
+                )
+              }}
+              className={`p-1 rounded flex items-center justify-center text-[9px] font-bold tracking-tighter ${
+                isAiReady
+                  ? 'bg-secondary text-primary hover:border-accent'
+                  : 'bg-secondary/50 text-muted opacity-40 cursor-not-allowed'
+              }`}
+            >
+              EN→SV
+            </button>
+            <button
+              type="button"
+              disabled={!isAiReady}
+              aria-disabled={!isAiReady}
+              data-tooltip={
+                isAiReady
+                  ? 'AI Translate SV -> EN'
+                  : 'AI Translate SV -> EN (No AI model configured)'
+              }
+              aria-label="AI Translate SV -> EN"
+              data-testid="floating-ai-translate-sv-en"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                if (!isAiReady) return
+                onTriggerAIQuickAction(
+                  'translate-sv-en',
+                  (activeFloatingCoords || fadingOutCoords)!.selectedText
+                )
+              }}
+              className={`p-1 rounded flex items-center justify-center text-[9px] font-bold tracking-tighter ${
+                isAiReady
+                  ? 'bg-secondary text-primary hover:border-accent'
+                  : 'bg-secondary/50 text-muted opacity-40 cursor-not-allowed'
+              }`}
+            >
+              SV→EN
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4.1 Smart URL Paste & Bookmark Card Conversion Banner */}
+      {smartPastedUrlBanner && !isVisualAssetFile && (
+        <div
+          data-testid="smart-url-paste-banner"
+          className="px-4 py-1.5 bg-secondary/95 border-b border-subtle flex items-center justify-between gap-3 text-xs z-30"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-accent font-semibold">🔗 Smart URL Paste:</span>
+            <span className="font-medium text-primary truncate">
+              [{smartPastedUrlBanner.title}]({smartPastedUrlBanner.url})
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              data-testid="convert-to-bookmark-card-btn"
+              onClick={() => {
+                const view = viewRef.current
+                if (view) {
+                  const cardSnippet = `:::bookmark\nurl: ${smartPastedUrlBanner.url}\ntitle: ${smartPastedUrlBanner.title}\ndescription: ${smartPastedUrlBanner.description}\ndomain: ${smartPastedUrlBanner.domain}\n:::`
+                  const docText = view.state.doc.toString()
+                  const expectedLink = `[${smartPastedUrlBanner.title}](${smartPastedUrlBanner.url})`
+                  const idx = docText.indexOf(expectedLink)
+                  const from = idx !== -1 ? idx : Math.min(smartPastedUrlBanner.linkFrom, docText.length)
+                  const to =
+                    idx !== -1
+                      ? idx + expectedLink.length
+                      : Math.min(smartPastedUrlBanner.linkTo, docText.length)
+                  view.dispatch({
+                    changes: { from, to, insert: cardSnippet },
+                    selection: { anchor: from + cardSnippet.length }
+                  })
+                  view.focus()
+                }
+                setSmartPastedUrlBanner(null)
+              }}
+              className="px-2.5 py-0.5 rounded bg-accent text-white font-semibold hover:opacity-90"
+            >
+              Convert to Bookmark Card
+            </button>
+            <button
+              type="button"
+              data-testid="dismiss-smart-url-banner-btn"
+              onClick={() => setSmartPastedUrlBanner(null)}
+              className="p-1 rounded hover:bg-panel text-muted hover:text-primary"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3.3 Footnote Hover Preview & Inline Footnote Editor Popover */}
+      {footnotePopover && (
+        <div
+          data-testid="footnote-hover-popover"
+          style={{
+            position: 'fixed',
+            top: `${footnotePopover.top}px`,
+            left: `${footnotePopover.left}px`
+          }}
+          onMouseEnter={() => {
+            if (footnoteHideTimerRef.current) {
+              clearTimeout(footnoteHideTimerRef.current)
+              footnoteHideTimerRef.current = null
+            }
+          }}
+          onMouseLeave={() => {
+            setFootnotePopover(null)
+          }}
+          className="z-50 w-80 rounded-lg bg-panel border border-subtle shadow-2xl p-3 text-xs flex flex-col gap-2"
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-subtle pb-1.5">
+            <span className="font-semibold text-primary font-mono">
+              Footnote [^{footnotePopover.footnoteId}]
+            </span>
+            <div className="flex items-center gap-1">
+              {footnotePopover.definitionLineNumber !== null && (
                 <button
                   type="button"
-                  data-tooltip="AI Translate EN -> SV"
-                  aria-label="AI Translate EN -> SV"
-                  data-testid="floating-ai-translate-en-sv"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    onTriggerAIQuickAction(
-                      'translate-en-sv',
-                      (activeFloatingCoords || fadingOutCoords)!.selectedText
-                    )
+                  data-testid="footnote-jump-btn"
+                  onClick={() => {
+                    const targetLine = footnotePopover.definitionLineNumber
+                    setFootnotePopover(null)
+                    if (targetLine) jumpToLine(targetLine)
                   }}
-                  className="p-1 rounded bg-secondary text-primary hover:border-accent flex items-center justify-center text-[9px] font-bold tracking-tighter"
+                  className="px-2 py-0.5 rounded bg-secondary border border-subtle text-primary hover:border-accent text-[10px]"
                 >
-                  EN→SV
+                  Jump to L{footnotePopover.definitionLineNumber}
                 </button>
-                <button
-                  type="button"
-                  data-tooltip="AI Translate SV -> EN"
-                  aria-label="AI Translate SV -> EN"
-                  data-testid="floating-ai-translate-sv-en"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    onTriggerAIQuickAction(
-                      'translate-sv-en',
-                      (activeFloatingCoords || fadingOutCoords)!.selectedText
-                    )
-                  }}
-                  className="p-1 rounded bg-secondary text-primary hover:border-accent flex items-center justify-center text-[9px] font-bold tracking-tighter"
-                >
-                  SV→EN
-                </button>
-              </>
-            )}
+              )}
+              <button
+                type="button"
+                onClick={() => setFootnotePopover(null)}
+                className="p-0.5 rounded text-muted hover:text-primary"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+              Inline Footnote Definition
+            </label>
+            <textarea
+              rows={2}
+              data-testid="footnote-inline-editor-input"
+              value={footnotePopover.definitionText}
+              placeholder={`Enter definition for [^${footnotePopover.footnoteId}]...`}
+              onChange={(e) =>
+                setFootnotePopover((prev) =>
+                  prev ? { ...prev, definitionText: e.target.value } : null
+                )
+              }
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault()
+                  handleSaveFootnoteInlineEdit()
+                }
+              }}
+              className="w-full px-2 py-1.5 rounded bg-app border border-subtle text-primary text-xs resize-none"
+            />
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                data-testid="footnote-inline-save-btn"
+                onClick={handleSaveFootnoteInlineEdit}
+                className="px-2.5 py-1 rounded bg-accent text-white font-semibold text-[11px]"
+              >
+                Save Footnote
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3330,6 +3902,59 @@ export const MarkdownEditorWorkspace: React.FC<{
       ) : (
         <div
           ref={splitContainerRef}
+          onMouseMove={(e) => {
+            const view = viewRef.current
+            const container = splitContainerRef.current
+            if (!view || !container) return
+            const target = e.target as HTMLElement
+            if (
+              target.closest('[data-testid="block-drag-handle"]') ||
+              target.closest('[data-testid="block-turn-into-menu"]')
+            ) {
+              return
+            }
+            const pos = view.posAtCoords({ x: e.clientX, y: e.clientY })
+            if (pos !== null) {
+              const line = view.state.doc.lineAt(pos)
+              const coords = view.coordsAtPos(line.from)
+              const rect = container.getBoundingClientRect()
+              if (coords) {
+                const nextTop = Math.max(4, Math.round(coords.top - rect.top))
+                const nextLeft = Math.max(6, Math.round(coords.left - rect.left - 28))
+                setHoveredBlockLine((prev) =>
+                  prev && prev.lineNumber === line.number && Math.abs(prev.top - nextTop) < 3
+                    ? prev
+                    : { lineNumber: line.number, top: nextTop, left: nextLeft }
+                )
+              }
+            }
+          }}
+          onDragOver={(e) => {
+            if (draggingBlockLineRef.current !== null && viewRef.current) {
+              e.preventDefault()
+              const pos = viewRef.current.posAtCoords({ x: e.clientX, y: e.clientY })
+              if (pos !== null) {
+                const line = viewRef.current.state.doc.lineAt(pos)
+                setDropTargetBlockLine(line.number)
+              }
+            }
+          }}
+          onDrop={(e) => {
+            if (draggingBlockLineRef.current !== null && viewRef.current) {
+              e.preventDefault()
+              const srcLine = draggingBlockLineRef.current
+              draggingBlockLineRef.current = null
+              const pos = viewRef.current.posAtCoords({ x: e.clientX, y: e.clientY })
+              const tgtLine =
+                pos !== null
+                  ? viewRef.current.state.doc.lineAt(pos).number
+                  : dropTargetBlockLine
+              setDropTargetBlockLine(null)
+              if (tgtLine && tgtLine !== srcLine) {
+                handleReorderBlockLines(srcLine, tgtLine)
+              }
+            }
+          }}
           onMouseOver={(e) => {
             const target = e.target as HTMLElement
             const wikiEl = target.closest('[data-wikilink]') as HTMLElement | null
@@ -3342,6 +3967,23 @@ export const MarkdownEditorWorkspace: React.FC<{
                 )
               }
             }
+            const fnEl = target.closest('[data-footnote-id]') as HTMLElement | null
+            if (fnEl) {
+              const fnId = fnEl.getAttribute('data-footnote-id')
+              if (fnId) {
+                openFootnotePopover(fnId, fnEl.getBoundingClientRect())
+              }
+            }
+          }}
+          onClick={(e) => {
+            const target = e.target as HTMLElement
+            const fnEl = target.closest('[data-footnote-id]') as HTMLElement | null
+            if (fnEl) {
+              const fnId = fnEl.getAttribute('data-footnote-id')
+              if (fnId) {
+                openFootnotePopover(fnId, fnEl.getBoundingClientRect())
+              }
+            }
           }}
           onMouseOut={(e) => {
             const target = e.target as HTMLElement
@@ -3352,9 +3994,201 @@ export const MarkdownEditorWorkspace: React.FC<{
                 setWikiHoverPreview(null)
               }, 220)
             }
+            const fnEl = target.closest('[data-footnote-id]')
+            if (fnEl) {
+              if (footnoteHideTimerRef.current) clearTimeout(footnoteHideTimerRef.current)
+              footnoteHideTimerRef.current = setTimeout(() => {
+                setFootnotePopover(null)
+              }, 280)
+            }
           }}
           className="flex-1 flex overflow-hidden relative editor-paper-surface"
         >
+          {/* 1.2 Notion-Style Block Drag-and-Drop Grip Handle (`⋮⋮`) & "Turn Into" Menu */}
+          {hoveredBlockLine && !isVisualAssetFile && (
+            <button
+              type="button"
+              draggable
+              data-testid="block-drag-handle"
+              data-block-line={hoveredBlockLine.lineNumber}
+              title={`Drag to reorder block L${hoveredBlockLine.lineNumber} or click to Turn Into...`}
+              style={{
+                position: 'absolute',
+                top: `${hoveredBlockLine.top}px`,
+                left: `${hoveredBlockLine.left}px`
+              }}
+              onDragStart={(e) => {
+                draggingBlockLineRef.current = hoveredBlockLine.lineNumber
+                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.setData('text/plain', String(hoveredBlockLine.lineNumber))
+              }}
+              onDragEnd={() => {
+                draggingBlockLineRef.current = null
+                setDropTargetBlockLine(null)
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setBlockTurnIntoMenu((prev) =>
+                  prev && prev.lineNumber === hoveredBlockLine.lineNumber
+                    ? null
+                    : {
+                        lineNumber: hoveredBlockLine.lineNumber,
+                        top: hoveredBlockLine.top + 22,
+                        left: Math.max(8, hoveredBlockLine.left)
+                      }
+                )
+              }}
+              className="z-30 w-5 h-6 rounded flex items-center justify-center text-muted hover:text-primary hover:bg-secondary/90 border border-transparent hover:border-subtle cursor-grab active:cursor-grabbing select-none font-mono text-xs transition-colors"
+            >
+              ⋮⋮
+            </button>
+          )}
+
+          {blockTurnIntoMenu && (
+            <div
+              data-testid="block-turn-into-menu"
+              style={{
+                position: 'absolute',
+                top: `${Math.min(blockTurnIntoMenu.top, 420)}px`,
+                left: `${Math.max(12, blockTurnIntoMenu.left)}px`
+              }}
+              className="z-40 w-56 rounded-lg bg-panel border border-subtle shadow-2xl py-1.5 text-xs flex flex-col"
+            >
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted border-b border-subtle flex items-center justify-between">
+                <span>Turn Block Into (L{blockTurnIntoMenu.lineNumber})</span>
+                <button
+                  type="button"
+                  onClick={() => setBlockTurnIntoMenu(null)}
+                  className="text-muted hover:text-primary"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              <button
+                type="button"
+                data-testid="block-turn-into-paragraph"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'paragraph')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Text / Paragraph</span>
+                <span className="font-mono text-[10px] text-muted">¶</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-h1"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'h1')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Heading 1</span>
+                <span className="font-mono text-[10px] text-accent">H1</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-h2"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'h2')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Heading 2</span>
+                <span className="font-mono text-[10px] text-accent">H2</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-h3"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'h3')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Heading 3</span>
+                <span className="font-mono text-[10px] text-accent">H3</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-bullet"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'bullet')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Bulleted List</span>
+                <span className="font-mono text-[10px] text-muted">•</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-checklist"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'checklist')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Task Checklist</span>
+                <span className="font-mono text-[10px] text-muted">☑</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-callout"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'callout')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Callout Block</span>
+                <span className="font-mono text-[10px] text-accent">!NOTE</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-toggle"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'toggle')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Toggle List</span>
+                <span className="font-mono text-[10px] text-muted">▸</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-turn-into-code"
+                onClick={() => handleBlockTurnInto(blockTurnIntoMenu.lineNumber, 'code')}
+                className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Code Block</span>
+                <span className="font-mono text-[10px] text-muted">&lt;/&gt;</span>
+              </button>
+
+              <div className="my-1 border-t border-subtle" />
+              <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                Block Actions
+              </div>
+              <button
+                type="button"
+                data-testid="block-action-move-up"
+                onClick={() => handleBlockAction(blockTurnIntoMenu.lineNumber, 'move-up')}
+                className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Move Block Up</span>
+                <span className="font-mono text-[10px] text-muted">↑</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-action-move-down"
+                onClick={() => handleBlockAction(blockTurnIntoMenu.lineNumber, 'move-down')}
+                className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Move Block Down</span>
+                <span className="font-mono text-[10px] text-muted">↓</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-action-duplicate"
+                onClick={() => handleBlockAction(blockTurnIntoMenu.lineNumber, 'duplicate')}
+                className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+              >
+                <span>Duplicate Block</span>
+                <span className="font-mono text-[10px] text-muted">⧉</span>
+              </button>
+              <button
+                type="button"
+                data-testid="block-action-delete"
+                onClick={() => handleBlockAction(blockTurnIntoMenu.lineNumber, 'delete')}
+                className="w-full text-left px-3 py-1 hover:bg-secondary text-danger flex items-center justify-between"
+              >
+                <span>Delete Block</span>
+                <span className="font-mono text-[10px]">⌫</span>
+              </button>
+            </div>
+          )}
+
           <div
             ref={editorScrollWrapperRef}
             data-margin-mode={marginMode}
@@ -3483,6 +4317,44 @@ export const MarkdownEditorWorkspace: React.FC<{
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 3.4 Full-Screen Image Lightbox Zoom Modal */}
+      {lightboxImage && (
+        <div
+          data-testid="image-lightbox-modal"
+          onClick={() => setLightboxImage(null)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-8"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-5xl max-h-[85vh] flex flex-col items-center gap-3 bg-panel border border-subtle rounded-xl p-4 shadow-2xl"
+          >
+            <div className="w-full flex items-center justify-between gap-4 border-b border-subtle pb-2 text-xs">
+              <span className="font-semibold text-primary truncate">
+                {lightboxImage.caption || 'Image Lightbox Preview'}
+              </span>
+              <button
+                type="button"
+                data-testid="image-lightbox-close-btn"
+                onClick={() => setLightboxImage(null)}
+                className="px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+              >
+                Close (Esc)
+              </button>
+            </div>
+            <img
+              src={lightboxImage.src}
+              alt={lightboxImage.caption}
+              className="max-w-full max-h-[72vh] object-contain rounded"
+            />
+            {lightboxImage.caption && (
+              <div className="text-xs text-muted italic text-center">
+                {lightboxImage.caption}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

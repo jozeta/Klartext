@@ -59,12 +59,12 @@ export const DailyNotesCalendarPanel: React.FC<DailyNotesCalendarPanelProps> = (
     'December'
   ]
 
-  // Index documents by date (filename YYYY-MM-DD or frontmatter date)
+  // Index documents by date (filename YYYY-MM-DD or frontmatter date / creation_date)
   const docsByDate = new Map<string, DynamicCandidateDocument[]>()
   for (const doc of dynamicCandidateDocuments) {
     const fileMatch = doc.name.match(/(\d{4}-\d{2}-\d{2})/)
     const { frontmatter } = extractFrontmatter(doc.content)
-    const fmDate = normalizeFrontmatterDate(frontmatter?.date)
+    const fmDate = normalizeFrontmatterDate(frontmatter?.date ?? frontmatter?.creation_date)
     const dateKeys = new Set<string>()
     if (fileMatch) dateKeys.add(fileMatch[1])
     if (fmDate) dateKeys.add(fmDate)
@@ -327,7 +327,7 @@ export const GlobalTasksRightPanel: React.FC<GlobalTasksRightPanelProps> = ({
                     data-testid={`global-task-toggle-${task.rootId}-${task.relativePath}-${task.lineNumber}`}
                     checked={task.checked}
                     onChange={() => onToggleGlobalTask(task)}
-                    className="mt-0.5 rounded border-subtle accent-[var(--color-accent)] cursor-pointer"
+                    className="mt-0.5 rounded border-subtle accent-accent cursor-pointer"
                   />
                   <span
                     onClick={() =>

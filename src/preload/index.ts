@@ -279,8 +279,30 @@ export const klartextApi = {
     title?: string
     inlineAssets?: boolean
     targetFilePath?: string
-  }): Promise<{ outputPath: string; sizeBytes: number }> =>
+  }): Promise<{ outputPath: string; sizeBytes: number; canceled?: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.EXPORT_PDF, params),
+  exportDocx: (params: {
+    rootId: string
+    relativePath: string
+    markdown: string
+    title?: string
+    targetFilePath?: string
+  }): Promise<{ outputPath: string; sizeBytes: number; canceled?: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EXPORT_DOCX, params),
+  fetchUrlMetadata: (params: {
+    url: string
+  }): Promise<{ url: string; title: string; description: string; domain: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEB_FETCH_METADATA, params),
+  clipWebUrl: (params: {
+    url: string
+  }): Promise<{
+    url: string
+    title: string
+    description: string
+    domain: string
+    markdown: string
+    bodyMarkdown: string
+  }> => ipcRenderer.invoke(IPC_CHANNELS.WEB_CLIP_URL, params),
 
   // Window & External Links
   minimizeWindow: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MINIMIZE),

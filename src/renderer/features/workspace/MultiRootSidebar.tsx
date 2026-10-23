@@ -1433,7 +1433,7 @@ export const MultiRootSidebar: React.FC<{
                 data-testid="workspace-folders-on-top-checkbox"
                 checked={foldersOnTop}
                 onChange={(e) => setFoldersOnTop(e.target.checked)}
-                className="rounded border-subtle accent-[var(--color-accent)] cursor-pointer"
+                className="rounded border-subtle accent-accent cursor-pointer"
               />
               <span>Folders on top</span>
             </label>

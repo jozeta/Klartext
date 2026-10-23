@@ -15,8 +15,14 @@ import {
 import type {
   AppSettings,
   CustomFrontmatterPropertyDef,
+  DefaultFrontmatterPropertyDef,
   FrontmatterFieldType
 } from '../../../shared/types'
+import { DEFAULT_FRONTMATTER_PROPERTIES } from '../../../shared/schemas'
+import {
+  evaluateTemplateVariables,
+  type TemplateEvaluationContext
+} from '../../../shared/templates/template-engine'
 import {
   completeOrAppendTagInInput,
   extractActiveTagFilterQuery,
@@ -30,12 +36,12 @@ export interface FrontmatterPropertiesPanelProps {
   frontmatter: Record<string, unknown> | null
   allDocumentContents: string[]
   settings: AppSettings
+  evaluationContext?: TemplateEvaluationContext
   onUpdateSettings: (partial: Partial<AppSettings>) => void
   onUpdateFrontmatterField: (key: string, value: unknown) => void
   onClose: () => void
 }
 
-const DEFAULT_FRONTMATTER_KEYS = ['title', 'author', 'date', 'tags', 'status']
 const DEFAULT_STATUS_OPTIONS = [
   'Draft',
   'In Progress',
@@ -85,6 +91,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
   frontmatter,
   allDocumentContents,
   settings,
+  evaluationContext,
   onUpdateSettings,
   onUpdateFrontmatterField,
   onClose
@@ -129,6 +136,14 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
     window.addEventListener('mousedown', handleDocMouseDown)
     return () => window.removeEventListener('mousedown', handleDocMouseDown)
   }, [])
+
+  const defaultProperties = useMemo<DefaultFrontmatterPropertyDef[]>(
+    () =>
+      Array.isArray(settings.defaultFrontmatterProperties)
+        ? settings.defaultFrontmatterProperties
+        : DEFAULT_FRONTMATTER_PROPERTIES,
+    [settings.defaultFrontmatterProperties]
+  )
 
   const globalProperties = useMemo(
     () => settings.globalFrontmatterProperties || [],
@@ -187,6 +202,18 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               }
             })
         }
+        const blockTags = m[1].match(/tags:\s*\r?\n((?:\s*-\s*[^\r\n]+\r?\n?)+)/)
+        if (blockTags && blockTags[1]) {
+          const items = blockTags[1]
+            .split(/\r?\n/)
+            .map((line) => line.replace(/^\s*-\s*/, '').replace(/^['"]|['"]$/g, '').trim())
+            .filter(Boolean)
+          items.forEach((t) => {
+            for (const parsed of parseTagListInput(t)) {
+              set.add(parsed)
+            }
+          })
+        }
       }
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b))
@@ -195,7 +222,12 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
   // Merge default keys + global custom properties + current document frontmatter keys
   const allKeys = useMemo(() => {
     const existingKeys = frontmatter ? Object.keys(frontmatter) : []
-    const merged = [...DEFAULT_FRONTMATTER_KEYS]
+    const merged: string[] = []
+    for (const dp of defaultProperties) {
+      if (dp.key && !merged.includes(dp.key)) {
+        merged.push(dp.key)
+      }
+    }
     for (const gp of globalProperties) {
       if (gp.key && !merged.includes(gp.key)) {
         merged.push(gp.key)
@@ -207,18 +239,44 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
       }
     }
     return merged
-  }, [frontmatter, globalProperties])
+  }, [frontmatter, defaultProperties, globalProperties])
 
-  // Resolve field definition (type & dropdown options) for any property key
+  // Resolve field definition (type, label, defaultValue & dropdown options) for any property key
   const getPropertyDefinition = (key: string): CustomFrontmatterPropertyDef => {
-    if (key === 'date') {
-      return { key: 'date', type: 'date', options: [] }
+    const defaultMatch = defaultProperties.find((d) => d.key === key)
+    if (defaultMatch) {
+      const resolvedLabel =
+        key === 'date' || key === 'creation_date'
+          ? 'Creation Date'
+          : defaultMatch.label || defaultMatch.key
+      const resolvedOptions =
+        key === 'status'
+          ? statusOptions
+          : Array.isArray(defaultMatch.options) && defaultMatch.options.length > 0
+            ? defaultMatch.options
+            : []
+      return {
+        key: defaultMatch.key,
+        label: resolvedLabel,
+        defaultValue: defaultMatch.defaultValue,
+        type: key === 'date' || key === 'creation_date' ? 'date' : defaultMatch.type,
+        options: resolvedOptions
+      }
+    }
+    if (key === 'date' || key === 'creation_date') {
+      return {
+        key,
+        label: 'Creation Date',
+        defaultValue: '<% creation_date %>',
+        type: 'date',
+        options: []
+      }
     }
     if (key === 'status') {
-      return { key: 'status', type: 'dropdown', options: statusOptions }
+      return { key: 'status', label: 'Status', type: 'dropdown', options: statusOptions }
     }
     if (key === 'tags') {
-      return { key: 'tags', type: 'tags', options: [] }
+      return { key: 'tags', label: 'Tags', type: 'tags', options: [] }
     }
     const scopedKey = activeTabKey ? `${activeTabKey}::${key}` : key
     const localScoped = localPropertyTypes[scopedKey]
@@ -227,12 +285,20 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
     if (globalMatch) return globalMatch
     const localUnscoped = localPropertyTypes[key]
     if (localUnscoped) return localUnscoped
-    return { key, type: 'text', options: [] }
+    return { key, label: key, type: 'text', options: [] }
   }
 
   const updateDropdownOptionsForKey = (key: string, nextOptions: string[]) => {
     if (key === 'status') {
       onUpdateSettings({ frontmatterStatusOptions: nextOptions })
+      return
+    }
+    const defaultIdx = defaultProperties.findIndex((d) => d.key === key)
+    if (defaultIdx >= 0) {
+      const nextDefaults = defaultProperties.map((d, i) =>
+        i === defaultIdx ? { ...d, options: nextOptions } : d
+      )
+      onUpdateSettings({ defaultFrontmatterProperties: nextDefaults })
       return
     }
     const globalIdx = globalProperties.findIndex((g) => g.key === key)
@@ -435,7 +501,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               setOpenTagsKey(null)
             }}
             onChange={(e) => onUpdateFrontmatterField(key, e.target.value)}
-            className="flex-1 min-w-0 px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
           />
           <button
             type="button"
@@ -446,7 +512,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               setOpenCalendarKey(null)
               setOpenTagsKey(null)
             }}
-            className={`px-2 py-1.5 rounded border transition-colors shrink-0 ${
+            className={`w-8 h-8 rounded border flex items-center justify-center transition-colors shrink-0 ${
               isOpen
                 ? 'bg-accent text-white border-accent'
                 : 'bg-panel border-subtle text-muted hover:text-primary hover:border-accent'
@@ -608,14 +674,14 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                     handleAddOption()
                   }
                 }}
-                className="flex-1 min-w-0 px-2 py-1 rounded bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent"
+                className="flex-1 min-w-0 h-7 px-2 rounded bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent"
               />
               <button
                 type="button"
                 title="Add new option"
                 data-testid={`frontmatter-option-add-btn-${key}`}
                 onClick={handleAddOption}
-                className="px-2 py-1 rounded bg-accent text-white hover:opacity-90 shrink-0 flex items-center justify-center"
+                className="w-7 h-7 rounded bg-accent text-white hover:opacity-90 shrink-0 flex items-center justify-center"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -729,7 +795,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               setTagInputDrafts((prev) => ({ ...prev, [key]: currentTags.join(', ') }))
               currentTags.forEach(rememberTag)
             }}
-            className="flex-1 min-w-0 px-2 py-1.5 rounded bg-panel border border-subtle text-primary font-mono focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary font-mono focus:outline-none focus:border-accent"
           />
           <button
             type="button"
@@ -740,7 +806,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               setOpenCalendarKey(null)
               setOpenDropdownKey(null)
             }}
-            className={`px-2 py-1.5 rounded border transition-colors shrink-0 ${
+            className={`w-8 h-8 rounded border flex items-center justify-center transition-colors shrink-0 ${
               isOpen
                 ? 'bg-accent text-white border-accent'
                 : 'bg-panel border-subtle text-muted hover:text-primary hover:border-accent'
@@ -878,21 +944,34 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
         )}
 
         {allKeys.map((key) => {
+          const propDef = getPropertyDefinition(key)
           const rawVal = frontmatter?.[key]
-          const strVal = Array.isArray(rawVal)
+          let strVal = Array.isArray(rawVal)
             ? rawVal.join(', ')
             : rawVal !== undefined && rawVal !== null
               ? String(rawVal)
               : ''
-          const propDef = getPropertyDefinition(key)
+          if (
+            (key === 'date' || key === 'creation_date') &&
+            (rawVal === undefined || rawVal === null || strVal === '')
+          ) {
+            const exprToEval = propDef.defaultValue || '<% creation_date %>'
+            strVal = evaluateTemplateVariables(exprToEval, evaluationContext || {}).output.trim()
+          } else if (strVal.includes('<%') && strVal.includes('%>')) {
+            strVal = evaluateTemplateVariables(strVal, evaluationContext || {}).output.trim()
+          }
           const isGlobalCustom = globalProperties.some((g) => g.key === key)
-          const isBuiltIn = DEFAULT_FRONTMATTER_KEYS.includes(key)
+          const isBuiltIn = defaultProperties.some((d) => d.key === key)
+          const displayLabel =
+            key === 'date' || key === 'creation_date'
+              ? 'Creation Date'
+              : (propDef.label && propDef.label !== key ? propDef.label : key.replace(/_/g, ' '))
 
           return (
             <div key={key} className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-1 text-[11px] font-medium text-muted capitalize">
-                  <span>{key}</span>
+                  <span data-testid={`frontmatter-label-${key}`}>{displayLabel}</span>
                   {isGlobalCustom && (
                     <span
                       title="Global Custom Property (shown on all pages)"
@@ -938,14 +1017,14 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                       placeholder="YYYY-MM-DD"
                       value={strVal}
                       onChange={(e) => onUpdateFrontmatterField(key, e.target.value)}
-                      className="flex-1 min-w-0 px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                      className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
                     />
                     <button
                       type="button"
                       title="Open Calendar Date Picker"
                       data-testid={`frontmatter-date-picker-btn-${key}`}
                       onClick={() => handleOpenCalendarForKey(key, strVal)}
-                      className={`px-2 py-1.5 rounded border transition-colors shrink-0 ${
+                      className={`w-8 h-8 rounded border flex items-center justify-center transition-colors shrink-0 ${
                         openCalendarKey === key
                           ? 'bg-accent text-white border-accent'
                           : 'bg-panel border-subtle text-muted hover:text-primary hover:border-accent'
@@ -961,13 +1040,13 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               ) : propDef.type === 'tags' ? (
                 renderTagsField(key, rawVal, strVal)
               ) : propDef.type === 'checkbox' ? (
-                <label className="inline-flex items-center gap-2 px-2 py-1.5 rounded bg-panel border border-subtle cursor-pointer w-full">
+                <label className="inline-flex items-center gap-2 h-8 px-2.5 rounded bg-panel border border-subtle cursor-pointer w-full">
                   <input
                     type="checkbox"
                     data-testid={`frontmatter-input-${key}`}
                     checked={rawVal === true || strVal.toLowerCase() === 'true'}
                     onChange={(e) => onUpdateFrontmatterField(key, e.target.checked)}
-                    className="rounded border-subtle text-accent focus:ring-accent"
+                    className="rounded border-subtle accent-accent"
                   />
                   <span className="text-xs text-primary">
                     {rawVal === true || strVal.toLowerCase() === 'true' ? 'Enabled (true)' : 'Disabled (false)'}
@@ -983,7 +1062,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                     const num = e.target.value === '' ? '' : Number(e.target.value)
                     onUpdateFrontmatterField(key, Number.isNaN(num) ? e.target.value : num)
                   }}
-                  className="w-full px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                  className="w-full h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
                 />
               ) : (
                 <input
@@ -992,7 +1071,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                   placeholder={`Enter ${key}...`}
                   value={strVal}
                   onChange={(e) => onUpdateFrontmatterField(key, e.target.value)}
-                  className="w-full px-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                  className="w-full h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
                 />
               )}
             </div>
@@ -1005,7 +1084,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
             Add Custom Property
           </label>
 
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
             <input
               type="text"
               data-testid="frontmatter-custom-key-input"
@@ -1018,14 +1097,14 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                   handleAddCustomProperty()
                 }
               }}
-              className="flex-1 min-w-0 px-2 py-1 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+              className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
             />
             <button
               type="button"
               title="Add Custom Property"
               data-testid="frontmatter-custom-add-btn"
               onClick={handleAddCustomProperty}
-              className="px-2.5 py-1 rounded bg-accent text-white hover:opacity-90 shrink-0"
+              className="w-8 h-8 rounded bg-accent text-white hover:opacity-90 flex items-center justify-center shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -1037,7 +1116,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               data-testid="frontmatter-custom-type-select"
               value={customType}
               onChange={(e) => setCustomType(e.target.value as FrontmatterFieldType)}
-              className="flex-1 min-w-0 px-2 py-1 rounded bg-panel border border-subtle text-primary text-[11px] focus:outline-none focus:border-accent"
+              className="flex-1 min-w-0 h-8 px-2 rounded bg-panel border border-subtle text-primary text-[11px] focus:outline-none focus:border-accent"
             >
               <option value="text">Text</option>
               <option value="date">Date (Calendar Picker)</option>
@@ -1054,7 +1133,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               data-testid="frontmatter-custom-global-checkbox"
               checked={customIsGlobal}
               onChange={(e) => setCustomIsGlobal(e.target.checked)}
-              className="rounded border-subtle text-accent focus:ring-accent"
+              className="rounded border-subtle accent-accent"
             />
             <Globe className="w-3 h-3 text-accent shrink-0" />
             <span>Global custom property (add to all frontmatter pages)</span>

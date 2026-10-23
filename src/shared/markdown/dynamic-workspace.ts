@@ -254,11 +254,11 @@ export function matchesDynamicFilterRule(
     }
   }
 
-  // 5. Date range filter (inclusive YYYY-MM-DD against frontmatter.date)
+  // 5. Date range filter (inclusive YYYY-MM-DD against frontmatter.date / creation_date)
   const dateFrom = rules.dateFrom?.trim() || ''
   const dateTo = rules.dateTo?.trim() || ''
   if (dateFrom || dateTo) {
-    const docDate = normalizeFrontmatterDate(fm.date)
+    const docDate = normalizeFrontmatterDate(fm.date ?? fm.creation_date ?? fm.created_at)
     if (!docDate) return false
     if (dateFrom && docDate < dateFrom) return false
     if (dateTo && docDate > dateTo) return false

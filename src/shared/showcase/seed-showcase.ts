@@ -441,6 +441,355 @@ Switch to the **Git** icon in the bottom-left sidebar control bar to view indepe
 `
     },
     {
+      relativePath: '01-Feature-Test-Typography-and-Formatting.md',
+      content: `---
+title: Feature Test 1 — Typography, Callouts, Tables & Inline Syntax
+author: Klartext QA Suite
+Creation Date: 2026-10-23
+status: Verified
+category: QA Test Suite
+tags:
+  - test-suite
+  - formatting
+  - typography
+  - tables
+  - callouts
+---
+
+# Feature Test 1 — Typography, Callouts, Tables & Inline Syntax
+
+Use this page to test and verify every inline formatting style, block element, callout, table, footnote, bookmark card, and collapsible section in **Inline Rich Mode**, **Split View**, and **Raw Source Mode**.
+
+[[_TOC_]]
+
+---
+
+## 1. Headings Hierarchy (H1 – H6)
+
+# Heading 1 — Document Section
+## Heading 2 — Major Subsystem
+### Heading 3 — Component Specification
+#### Heading 4 — Implementation Detail
+##### Heading 5 — Edge-Case Note
+###### Heading 6 — Micro-Label
+
+---
+
+## 2. Inline Text Formatting Matrix
+
+Test every inline style both in paragraphs and inside GFM table cells:
+
+- **Bold (Asterisks):** **Bold statement with double asterisks**
+- **Bold (Underscores):** __Bold statement with double underscores__
+- **Italic (Asterisks):** *Italicized text with single asterisks*
+- **Italic (Underscores):** _Italicized text with single underscores_
+- **Bold & Italic Combined:** ***Triple-asterisk bold italic*** and ___triple-underscore bold italic___ and **_bold with nested italic_**
+- **Strikethrough:** ~~Deprecated or struck-out text~~
+- **Highlight:** ==Important highlighted phrase==
+- **Underline:** <u>Underlined key terminology</u>
+- **Superscript & Subscript:** $x$<sup>2</sup> + $y$<sup>2</sup> and H<sub>2</sub>O / CO<sub>2</sub>
+- **Inline Code:** \`const status = "ready"\` and double-backtick \`\`code with \`backticks\` inside\`\`
+- **Keyboard Shortcut Keys:** Press <kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> or <kbd>⌘B</kbd>
+- **Spoiler Text:** >!Hover over this spoiler badge to reveal the secret text!<
+- **Escaped Markdown Tokens:** \\*\\*This text has escaped asterisks and will not be bold\\*\\*
+- **Footnotes (Hover or Click):** Inline footnote reference one[^1] and second technical citation[^2].
+
+### Inline Formatting Inside a GFM Table
+
+| Style | Syntax | Example | Rendered Output |
+| :--- | :--- | :---: | ---: |
+| Bold | \`** **\` or \`__ __\` | \`**Bold text**\` | **Bold text** |
+| Italic | \`* *\` or \`_ _\` | \`*Italic text*\` | _Italic text_ |
+| Bold & Italic | \`*** ***\` | \`***Bold and italic***\` | ***Bold and italic*** |
+| Strikethrough | \`~~ ~~\` | \`~~Striked out text~~\` | ~~Striked out text~~ |
+| Highlight | \`== ==\` | \`==Highlighted text==\` | ==Highlighted text== |
+| Underline | \`<u> </u>\` | \`<u>Underlined</u>\` | <u>Underlined</u> |
+| Escaped Pipe | \`\\|\` | \`A \\| B\` | Cell A \| Cell B |
+
+---
+
+## 3. Lists, Task Checklists & Definition Lists
+
+### Unordered & Nested Bullet Lists
+- Primary bullet item one
+  - Nested bullet item 1.1
+    - Deeply nested bullet item 1.1.1
+- Primary bullet item two
+
+### Ordered & Nested Numbered Lists
+1. First ordered step
+   1. Sub-step 1.1
+   2. Sub-step 1.2
+2. Second ordered step
+3. Third ordered step
+
+### Interactive Task Checklists
+- [x] Verify **Bold**, *Italic*, ***Bold-Italic***, ~~Strikethrough~~, ==Highlight==, and <u>Underline</u>
+- [x] Verify Superscript <sup>2</sup>, Subscript <sub>i</sub>, <kbd>⌘K</kbd>, and >!Spoiler!<
+- [ ] Click this checkbox in Inline Rich Mode to toggle its state
+- [ ] Hover the \`⋮⋮\` block handle on the left of any line to drag-reorder or **Turn Into** another block type
+
+### Definition Lists
+Local-First Architecture
+: All Markdown notes, images, and vector diagrams live directly on your local disk.
+: Zero mandatory cloud dependencies or telemetry.
+
+Multi-Root Workspace
+: Mount multiple independent folders and Git repositories side-by-side.
+
+---
+
+## 4. Blockquotes & Callout Blocks (All Variants)
+
+> "Simplicity is about subtracting the obvious and adding the meaningful."
+> — John Maeda
+
+> [!NOTE] Architectural Note
+> Standard informational callout block with custom title.
+
+> [!TIP] Productivity Tip
+> Type \`/\` at the start of any line to open the **Slash Command Menu**, or select text to open the **Floating Formatting Toolbar**.
+
+> [!IMPORTANT] Crucial Requirement
+> Every mounted workspace root isolates its own \`assets/\` directory for portable image and diagram links.
+
+> [!WARNING] Attention Required
+> Modifying files externally automatically refreshes clean buffers via the file watcher.
+
+> [!CAUTION] Destructive Action Warning
+> Resolving Git merge conflicts overwrites conflict markers once accepted.
+
+> [!FAQ]- Foldable / Obsidian-Compatible Callout
+> Klartext also supports Obsidian callout identifiers like \`[!info]\`, \`[!faq]-\`, \`[!success]\`, and \`[!bug]\`.
+
+---
+
+## 5. Collapsible Details (\`<details>\`)
+
+<details>
+<summary>Click to expand implementation benchmarks & latency targets</summary>
+
+- Cold startup target: < 1.2 seconds
+- Keystroke-to-preview latency: < 16 ms (60 fps)
+- Atomic write safety: temp file + fsync + rename
+</details>
+
+---
+
+## 6. Notion-Style Web Bookmark Card (\`:::bookmark\`)
+
+:::bookmark
+title: Markdown Guide — Basic & Extended Syntax Reference
+url: https://www.markdownguide.org/extended-syntax/
+domain: markdownguide.org
+description: Comprehensive reference for GitHub-Flavored Markdown tables, footnotes, task lists, and extended formatting.
+:::
+
+---
+
+[^1]: First footnote definition — hover over \`[^1]\` in the text above to preview or edit this footnote inline without scrolling!
+[^2]: Second footnote definition — supports jumping directly between the reference marker and the bottom definition line.
+`
+    },
+    {
+      relativePath: '02-Feature-Test-Diagrams-Math-and-Slides.md',
+      content: `---
+title: Feature Test 2 — Diagrams, KaTeX Math, Code, Images & Slide Deck
+author: Klartext QA Suite
+Creation Date: 2026-10-23
+status: Verified
+category: QA Test Suite
+tags:
+  - test-suite
+  - mermaid
+  - katex
+  - images
+  - excalidraw
+  - slides
+---
+
+# Feature Test 2 — Diagrams, KaTeX Math, Code, Images & Slide Deck
+
+Use this page to test **Mermaid Diagrams** (with the Visual Drag-and-Drop Builder), **KaTeX Math**, **Syntax-Highlighted Code Blocks**, **Resizable & Alignable Images**, **Excalidraw Vector Drawings**, and **Slide Deck Presentation Mode** (**View → Start Slide Presentation**).
+
+Note: Welcome to Slide 1 of the Klartext Presentation Mode test deck! Use the Left/Right arrow keys to navigate slides, press N to toggle speaker notes, and press L for the laser pointer.
+
+---
+
+## 1. Interactive Mermaid Diagrams (Click "Visual Builder" to Edit Graphically)
+
+### 1.1 Flowchart (\`flowchart LR\`)
+
+\`\`\`mermaid
+flowchart LR
+  Editor["Markdown Editor"] --> Parser["Unified AST Pipeline"]
+  Parser --> Live["Inline Rich Decorations"]
+  Parser --> Preview["Split HTML Preview"]
+  Live --> Export["PDF / DOCX / Slides"]
+\`\`\`
+
+### 1.2 Sequence Diagram (\`sequenceDiagram\`)
+
+\`\`\`mermaid
+sequenceDiagram
+  participant User
+  participant Editor as CodeMirror 6
+  participant Main as Electron Main
+  participant Disk as Atomic File System
+  User->>Editor: Format Selection (⌘B)
+  Editor->>Main: saveDocument()
+  Main->>Disk: Write .tmp + Rename
+  Disk-->>Editor: Saved Confirmation
+\`\`\`
+
+### 1.3 State Diagram (\`stateDiagram-v2\`)
+
+\`\`\`mermaid
+stateDiagram-v2
+  [*] --> Editing
+  Editing --> Formatting: Select Text / Slash Cmd
+  Formatting --> Editing: Apply Syntax
+  Editing --> Presenting: Start Slide Deck
+  Presenting --> Editing: Exit Presentation
+\`\`\`
+
+### 1.4 Class Diagram (\`classDiagram\`)
+
+\`\`\`mermaid
+classDiagram
+  class WorkspaceRoot {
+    +String id
+    +String name
+    +String path
+    +listFiles()
+  }
+  class DocumentBuffer {
+    +String relativePath
+    +Boolean dirty
+    +renderMarkdown()
+  }
+  WorkspaceRoot "1" --> "*" DocumentBuffer : manages
+\`\`\`
+
+### 1.5 Entity-Relationship Diagram (\`erDiagram\`)
+
+\`\`\`mermaid
+erDiagram
+  WORKSPACE ||--o{ ROOT_FOLDER : mounts
+  ROOT_FOLDER ||--o{ MARKDOWN_NOTE : stores
+  ROOT_FOLDER ||--o{ ASSET_FILE : isolates
+\`\`\`
+
+### 1.6 Gantt Roadmap (\`gantt\`)
+
+\`\`\`mermaid
+gantt
+  title Klartext Release Milestones
+  dateFormat YYYY-MM-DD
+  section Core Editor
+    Inline Rich Decorations :done, m1, 2026-10-01, 7d
+    Visual Diagram Builder  :active, m2, 2026-10-08, 7d
+  section Visual & Export
+    Infinite Canvas & Slides :m3, 2026-10-15, 7d
+\`\`\`
+
+### 1.7 Pie Chart (\`pie\`)
+
+\`\`\`mermaid
+pie title Documentation Content Mix
+  "Markdown Prose" : 45
+  "Mermaid & Excalidraw" : 25
+  "Code & KaTeX Math" : 20
+  "Tables & Callouts" : 10
+\`\`\`
+
+### 1.8 Mindmap (\`mindmap\`)
+
+\`\`\`mermaid
+mindmap
+  root((Klartext))
+    Editor
+      Inline Rich
+      Split View
+      Raw Source
+    Visuals
+      Mermaid Builder
+      Excalidraw SVG
+      Infinite Canvas
+    Export
+      PDF & HTML
+      Word DOCX
+      Slide Deck
+\`\`\`
+
+Note: Speaker notes for Slide 2 — Every Mermaid diagram above can be edited visually using the drag-and-drop Visual Builder button.
+
+---
+
+## 2. KaTeX Scientific & Mathematical Notation
+
+Inline math expressions render seamlessly alongside text: Euler's identity $e^{i\\pi} + 1 = 0$, mass-energy equivalence $E = mc^2$, and determinant $\\det(A - \\lambda I) = 0$.
+
+### Multi-Line Display Equations (\`$$ ... $$\`)
+
+$$
+\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right)V
+$$
+
+$$
+\\begin{vmatrix}
+a & b \\\\
+c & d
+\\end{vmatrix} = ad - bc, \\qquad
+\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}
+$$
+
+Note: Speaker notes for Slide 3 — KaTeX renders both inline and block LaTeX equations with zero external network requests.
+
+---
+
+## 3. Syntax-Highlighted Code Blocks & Nested Fences
+
+\`\`\`typescript
+export function calculateReadingTime(markdown: string): { words: number; minutes: number } {
+  const words = markdown.trim().split(/\\s+/).filter(Boolean).length
+  return {
+    words,
+    minutes: Math.max(1, Math.ceil(words / 200))
+  }
+}
+\`\`\`
+
+\`\`\`\`md
+Here is a 4-backtick outer Markdown fence demonstrating how raw triple-backtick blocks are documented without breaking the outer fence:
+
+\`\`\`javascript
+console.log("Nested code block inside 4-backtick fence!");
+\`\`\`
+\`\`\`\`
+
+---
+
+## 4. Resizable & Alignable Images + Excalidraw Vector Studio
+
+Click the image below in **Inline Rich Mode** to test:
+1. **Blue Selection Border & Deselection** when clicking outside or typing
+2. **Corner Drag Resize Handles** & preset width buttons (\`25%\`, \`50%\`, \`75%\`, \`100%\`)
+3. **Left / Center / Right Alignment** & inline caption editing
+4. **Full-Screen Lightbox Zoom** (double-click the image or click the Zoom button)
+
+![Technical Nordic Workspace Preview|width=480|align=center](assets/images/nordic-workspace-preview.svg)
+
+### Embedded Interactive \`.excalidraw.svg\` Vector Drawing
+
+Click **Edit in Excalidraw Studio** on the card below to sketch freehand diagrams and save directly back into \`assets/drawings/architecture.excalidraw.svg\`:
+
+![System Architecture Drawing](assets/drawings/architecture.excalidraw.svg)
+
+Note: Speaker notes for the final slide — Images support live corner resizing, alignment, captions, and lightbox zoom.
+`
+    },
+    {
       relativePath: 'assets/drawings/architecture.excalidraw.svg',
       content: excalidrawSvg
     },

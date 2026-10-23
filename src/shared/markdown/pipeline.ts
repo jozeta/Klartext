@@ -222,6 +222,58 @@ function transformInlineExtendedSyntax(line: string): string {
     .join('')
 }
 
+export interface ImageAltMetadata {
+  caption: string
+  width?: number
+  align?: 'left' | 'center' | 'right'
+}
+
+export function parseImageAltMetadata(rawAlt: string): ImageAltMetadata {
+  const parts = rawAlt.split('|').map((s) => s.trim())
+  const captionParts: string[] = []
+  let width: number | undefined
+  let align: 'left' | 'center' | 'right' | undefined
+
+  for (const part of parts) {
+    const wMatch =
+      part.match(/^(?:width|w)\s*=\s*(\d+)(?:px)?$/i) ||
+      part.match(/^(\d{2,4})(?:x\d{2,4})?(?:px)?$/i)
+    if (wMatch) {
+      const n = Number(wMatch[1])
+      if (n >= 40 && n <= 2400) {
+        width = n
+        continue
+      }
+    }
+    const aMatch = part.match(/^(?:align|a)\s*=\s*(left|center|right)$/i) || part.match(/^(left|center|right)$/i)
+    if (aMatch) {
+      align = aMatch[1].toLowerCase() as 'left' | 'center' | 'right'
+      continue
+    }
+    captionParts.push(part)
+  }
+
+  return {
+    caption: captionParts.join(' | ').trim(),
+    width,
+    align
+  }
+}
+
+export function formatImageAltMetadata(meta: ImageAltMetadata): string {
+  const parts: string[] = []
+  if (meta.caption.trim()) {
+    parts.push(meta.caption.trim())
+  }
+  if (meta.width && meta.width >= 40) {
+    parts.push(`width=${Math.round(meta.width)}`)
+  }
+  if (meta.align && meta.align !== 'left') {
+    parts.push(`align=${meta.align}`)
+  }
+  return parts.join('|')
+}
+
 function preprocessExtensions(
   markdown: string,
   rootId: string,
@@ -235,12 +287,12 @@ function preprocessExtensions(
   const outLines: string[] = []
 
   let i = 0
-  let inOtherCodeFence = false
+  let activeFenceTicks = 0
   while (i < lines.length) {
     const line = lines[i]
 
-    // Detect Mermaid code fence
-    if (!inOtherCodeFence && /^\s*```mermaid\s*$/i.test(line)) {
+    // Detect Mermaid code fence (only when not inside an outer 4+ backtick fence)
+    if (activeFenceTicks === 0 && /^\s*```mermaid\s*$/i.test(line)) {
       const startLine = i + 1
       i++
       const codeLines: string[] = []
@@ -258,15 +310,58 @@ function preprocessExtensions(
       continue
     }
 
-    // Track non-mermaid fenced code blocks so we don't transform syntax inside code blocks
-    if (/^\s*```/.test(line)) {
-      inOtherCodeFence = !inOtherCodeFence
+    // Detect Notion-style Bookmark Card block: :::bookmark [url] ... :::
+    const bookmarkHeaderMatch =
+      activeFenceTicks === 0
+        ? line.match(/^\s*:::bookmark(?:\s+(https?:\/\/\S+))?\s*$/i)
+        : null
+    if (bookmarkHeaderMatch) {
+      i++
+      const props: Record<string, string> = {}
+      if (bookmarkHeaderMatch[1]) {
+        props.url = bookmarkHeaderMatch[1].trim()
+      }
+      while (i < lines.length && !/^\s*:::\s*$/.test(lines[i])) {
+        const kv = lines[i].match(/^([a-zA-Z0-9_-]+):\s*(.*)$/)
+        if (kv) {
+          props[kv[1].trim().toLowerCase()] = kv[2].trim()
+        }
+        i++
+      }
+      i++ // skip closing :::
+      const rawUrl = props.url && isSafeUrl(props.url) ? props.url : '#'
+      let domain = props.domain || ''
+      if (!domain && rawUrl.startsWith('http')) {
+        try {
+          domain = new URL(rawUrl).hostname.replace(/^www\./, '')
+        } catch {
+          domain = ''
+        }
+      }
+      const title = (props.title || domain || rawUrl).replace(/[<>&"]/g, '')
+      const desc = (props.description || '').replace(/[<>&"]/g, '')
+      const safeDomain = domain.replace(/[<>&"]/g, '')
+      outLines.push(
+        `<div class="klartext-bookmark-card"><div class="klartext-bookmark-title"><a href="${rawUrl}" target="_blank" rel="noopener noreferrer">${title}</a></div>${desc ? `<div class="klartext-bookmark-desc">${desc}</div>` : ''}<div class="klartext-bookmark-domain">${safeDomain || rawUrl}</div></div>`
+      )
+      continue
+    }
+
+    // Track non-mermaid fenced code blocks (supporting 3, 4, or more backticks) so we don't transform syntax inside code blocks
+    const fenceLineMatch = line.match(/^\s*(`{3,})([\w-]*)\s*$/)
+    if (fenceLineMatch) {
+      const ticks = fenceLineMatch[1].length
+      if (activeFenceTicks === 0) {
+        activeFenceTicks = ticks
+      } else if (ticks >= activeFenceTicks && !fenceLineMatch[2]) {
+        activeFenceTicks = 0
+      }
       outLines.push(line)
       i++
       continue
     }
 
-    if (inOtherCodeFence) {
+    if (activeFenceTicks > 0) {
       outLines.push(line)
       i++
       continue
@@ -293,11 +388,11 @@ function preprocessExtensions(
       continue
     }
 
-    // Detect Callout blocks: > [!NOTE] Title
-    const calloutMatch = line.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i)
+    // Detect Callout blocks: > [!NOTE] Title or > [!faq]- Title
+    const calloutMatch = line.match(/^>\s*\[!([a-zA-Z0-9_-]+)\]([+-])?\s*(.*)$/i)
     if (calloutMatch) {
       const kind = calloutMatch[1].toUpperCase()
-      const title = calloutMatch[2].trim() || kind
+      const title = calloutMatch[3].trim() || kind
       const bodyLines: string[] = []
       i++
       while (i < lines.length && /^>\s?(.*)$/.test(lines[i])) {
@@ -334,13 +429,19 @@ function preprocessExtensions(
       continue
     }
 
-    // Transform [[WikiLink|Alias]] inline outside code fences
-    const wikiReplaced = line.replace(/\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g, (_m, target, alias) => {
-      const cleanTarget = String(target).trim()
-      const label = alias ? String(alias).trim() : cleanTarget
-      const isCrossRoot = cleanTarget.includes(':')
-      return `<a href="#wikilink:${encodeURIComponent(cleanTarget)}" class="klartext-wikilink ${isCrossRoot ? 'klartext-wikilink-crossroot' : ''}" data-wikilink="${encodeURIComponent(cleanTarget)}">${label}</a>`
-    })
+    // Transform [[WikiLink|Alias]] inline outside code spans
+    const wikiReplaced = line
+      .split(/(`+[^`]*`+)/g)
+      .map((seg, segIdx) => {
+        if (segIdx % 2 === 1) return seg
+        return seg.replace(/(?<!!)\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g, (_m, target, alias) => {
+          const cleanTarget = String(target).trim()
+          const label = alias ? String(alias).trim() : cleanTarget
+          const isCrossRoot = cleanTarget.includes(':')
+          return `<a href="#wikilink:${encodeURIComponent(cleanTarget)}" class="klartext-wikilink ${isCrossRoot ? 'klartext-wikilink-crossroot' : ''}" data-wikilink="${encodeURIComponent(cleanTarget)}">${label}</a>`
+        })
+      })
+      .join('')
 
     // Rewrite relative image paths to klartext-asset://<rootId>/<path>
     const assetReplaced = wikiReplaced.replace(
@@ -503,6 +604,24 @@ export async function renderMarkdownDocument(
       return `<pre class="klartext-codeblock"><code class="language-${lang || 'text'}">${highlighted}</code></pre>`
     }
   )
+
+  // Apply image resize/alignment/caption metadata (e.g. ![Caption|width=420|align=center](url)) in rendered HTML
+  html = html.replace(/<img\s+([^>]*?)>/gi, (fullImg, attrs: string) => {
+    const altMatch = attrs.match(/\balt="([^"]*)"/i)
+    if (!altMatch) return fullImg
+    const rawAlt = altMatch[1]
+    if (!rawAlt.includes('|')) return fullImg
+    const meta = parseImageAltMetadata(rawAlt)
+    if (!meta.width && !meta.align) return fullImg
+    const updatedAttrs = attrs.replace(
+      /\balt="[^"]*"/i,
+      `alt="${meta.caption.replace(/"/g, '&quot;')}"`
+    )
+    const widthAttr = meta.width ? ` width="${meta.width}"` : ''
+    const alignClass = meta.align ? ` klartext-img-align-${meta.align}` : ''
+    return `<img ${updatedAttrs}${widthAttr} class="klartext-preview-img${alignClass}">`
+  })
+
 
   const plainWords = body
     .replace(/```[\s\S]*?```/g, ' ')

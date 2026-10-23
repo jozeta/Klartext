@@ -1,5 +1,6 @@
 export interface TemplateEvaluationContext {
   now?: Date
+  creationDate?: string
   fileTitle?: string
   fileName?: string
   filePath?: string
@@ -61,6 +62,12 @@ export const TEMPLATE_VARIABLES_DOCS: TemplateVariableDocItem[] = [
     token: '<% date %>',
     category: 'Date & Time',
     description: 'Current date in ISO format (YYYY-MM-DD)',
+    exampleOutput: '2026-10-17'
+  },
+  {
+    token: '<% creation_date %>',
+    category: 'Date & Time',
+    description: 'Document creation date in ISO format (YYYY-MM-DD)',
     exampleOutput: '2026-10-17'
   },
   {
@@ -1332,6 +1339,16 @@ export function evaluateTemplateVariables(
     }
 
     // Standard Date & Time tokens
+    if (
+      lower === 'creation_date' ||
+      lower === 'creationdate' ||
+      lower === 'created_date' ||
+      lower === 'created' ||
+      lower === 'tp.file.creation_date' ||
+      lower === 'tp.file.creation_date()'
+    ) {
+      return context.creationDate || formatIsoDate(now)
+    }
     if (lower === 'date' || lower === 'today' || lower === 'tp.date.now' || lower === 'tp.date.now()') {
       return formatIsoDate(now)
     }

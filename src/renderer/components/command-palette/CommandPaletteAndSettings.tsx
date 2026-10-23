@@ -16,7 +16,15 @@ import {
 } from '../icons/untitled-icons'
 import { searchUntitledIcons } from '../icons/untitled-icons'
 import { PRESET_HIGHLIGHT_COLORS } from '../../../shared/constants'
-import type { AppSettings, SavedTheme, WorkspaceRoot } from '../../../shared/types'
+import { DEFAULT_FRONTMATTER_PROPERTIES } from '../../../shared/schemas'
+import { evaluateTemplateVariables } from '../../../shared/templates/template-engine'
+import type {
+  AppSettings,
+  DefaultFrontmatterPropertyDef,
+  FrontmatterFieldType,
+  SavedTheme,
+  WorkspaceRoot
+} from '../../../shared/types'
 import {
   SPELL_LANGUAGE_LABELS,
   type SupportedSpellLanguage
@@ -348,7 +356,56 @@ export const SettingsModal: React.FC<{
     })
   }
 
-  const [settingsTab, setSettingsTab] = useState<'general' | 'visual'>('general')
+  const [settingsTab, setSettingsTab] = useState<'general' | 'visual' | 'frontmatter'>('general')
+  const [newFmKey, setNewFmKey] = useState('')
+  const [newFmLabel, setNewFmLabel] = useState('')
+  const [newFmType, setNewFmType] = useState<FrontmatterFieldType>('text')
+  const [newFmDefaultValue, setNewFmDefaultValue] = useState('')
+  const [focusedFmPropKey, setFocusedFmPropKey] = useState<string | null>(null)
+
+  const defaultFrontmatterProps: DefaultFrontmatterPropertyDef[] = Array.isArray(
+    settings.defaultFrontmatterProperties
+  )
+    ? settings.defaultFrontmatterProperties
+    : DEFAULT_FRONTMATTER_PROPERTIES
+
+  const handleUpdateDefaultFmProp = (
+    key: string,
+    patch: Partial<DefaultFrontmatterPropertyDef>
+  ) => {
+    const next = defaultFrontmatterProps.map((p) => (p.key === key ? { ...p, ...patch } : p))
+    onUpdateSettings({ defaultFrontmatterProperties: next })
+  }
+
+  const handleRemoveDefaultFmProp = (key: string) => {
+    const next = defaultFrontmatterProps.filter((p) => p.key !== key)
+    onUpdateSettings({ defaultFrontmatterProperties: next })
+  }
+
+  const handleAddDefaultFmProp = () => {
+    const cleanRaw = newFmKey.trim()
+    if (!cleanRaw) return
+    const cleanKey = cleanRaw.toLowerCase().replace(/\s+/g, '_')
+    const label = newFmLabel.trim() || cleanRaw
+    const options = newFmType === 'dropdown' ? ['Option 1', 'Option 2', 'Option 3'] : []
+    const existingIdx = defaultFrontmatterProps.findIndex((p) => p.key === cleanKey)
+    const newEntry: DefaultFrontmatterPropertyDef = {
+      key: cleanKey,
+      label,
+      type: newFmType,
+      defaultValue: newFmDefaultValue,
+      options: existingIdx >= 0 ? defaultFrontmatterProps[existingIdx].options : options
+    }
+    const next =
+      existingIdx >= 0
+        ? defaultFrontmatterProps.map((p, idx) => (idx === existingIdx ? newEntry : p))
+        : [...defaultFrontmatterProps, newEntry]
+    onUpdateSettings({ defaultFrontmatterProperties: next })
+    setNewFmKey('')
+    setNewFmLabel('')
+    setNewFmDefaultValue('')
+    setNewFmType('text')
+  }
 
   const savedThemes = settings.savedThemes || []
   const activeSavedThemeId = settings.activeSavedThemeId || ''
@@ -580,6 +637,18 @@ export const SettingsModal: React.FC<{
                 }`}
               >
                 Themes &amp; Visual
+              </button>
+              <button
+                type="button"
+                data-testid="settings-tab-frontmatter"
+                onClick={() => setSettingsTab('frontmatter')}
+                className={`px-2.5 py-1 rounded font-medium transition-colors ${
+                  settingsTab === 'frontmatter'
+                    ? 'bg-panel text-accent shadow-sm'
+                    : 'text-muted hover:text-primary'
+                }`}
+              >
+                Frontmatter
               </button>
             </div>
           </div>
@@ -1370,6 +1439,301 @@ export const SettingsModal: React.FC<{
                 </div>
               </div>
             </>
+          ) : settingsTab === 'frontmatter' ? (
+            <div className="space-y-4" data-testid="settings-frontmatter-panel">
+              {/* Top Info & Dynamic Variable Insertion Bar */}
+              <div className="p-3.5 rounded-lg bg-app border border-subtle space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-primary uppercase tracking-wider text-[11px]">
+                      Default Frontmatter Properties &amp; Dynamic Variables
+                    </div>
+                    <div className="text-[11px] text-muted leading-relaxed">
+                      Configure the default YAML properties and values automatically evaluated whenever you create a new Markdown document. Supports all{' '}
+                      <code className="px-1 py-0.5 rounded bg-panel border border-subtle text-accent font-mono text-[10px]">
+                        &lt;% ... %&gt;
+                      </code>{' '}
+                      dynamic variables.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="settings-fm-reset-defaults-btn"
+                    onClick={() =>
+                      onUpdateSettings({
+                        defaultFrontmatterProperties: DEFAULT_FRONTMATTER_PROPERTIES
+                      })
+                    }
+                    className="h-8 px-3 rounded-md bg-panel border border-subtle text-[11px] font-medium text-muted hover:text-primary hover:border-accent shrink-0 flex items-center justify-center transition-colors"
+                  >
+                    Reset Defaults
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-subtle/60 flex flex-wrap items-center gap-1.5 text-[10px]">
+                  <span className="text-muted font-semibold uppercase tracking-wider mr-1">
+                    Insert Variable
+                    {focusedFmPropKey && defaultFrontmatterProps.some((p) => p.key === focusedFmPropKey)
+                      ? ` → ${focusedFmPropKey}:`
+                      : ' → New Property:'}
+                  </span>
+                  {[
+                    '<% creation_date %>',
+                    '<% date %>',
+                    '<% datetime %>',
+                    '<% time %>',
+                    '<% title %>',
+                    '<% author %>',
+                    '<% folder_name %>',
+                    '<% workspace %>',
+                    '<% git_branch %>',
+                    '<% uuid %>'
+                  ].map((token) => (
+                    <button
+                      key={token}
+                      type="button"
+                      title={
+                        focusedFmPropKey &&
+                        defaultFrontmatterProps.some((p) => p.key === focusedFmPropKey)
+                          ? `Insert ${token} into "${focusedFmPropKey}" default value`
+                          : `Insert ${token} into New Property default value`
+                      }
+                      onClick={() => {
+                        const targetProp = focusedFmPropKey
+                          ? defaultFrontmatterProps.find((p) => p.key === focusedFmPropKey)
+                          : null
+                        if (targetProp) {
+                          const cur = targetProp.defaultValue || ''
+                          handleUpdateDefaultFmProp(targetProp.key, {
+                            defaultValue: cur ? `${cur} ${token}` : token
+                          })
+                        } else {
+                          setNewFmDefaultValue((prev) => (prev ? `${prev} ${token}` : token))
+                        }
+                        if (typeof navigator !== 'undefined' && !navigator.webdriver) {
+                          navigator.clipboard?.writeText(token).catch(() => {})
+                        }
+                      }}
+                      className="h-6 px-2 rounded-md bg-panel border border-subtle text-accent font-mono text-[10px] hover:border-accent hover:bg-accent/10 flex items-center transition-colors"
+                    >
+                      {token}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Aligned Table of Default Frontmatter Properties */}
+              <div className="rounded-lg border border-subtle bg-app overflow-hidden shadow-xs">
+                <div className="grid grid-cols-12 items-center gap-2.5 px-3.5 py-2 bg-secondary border-b border-subtle text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  <div className="col-span-3">Property &amp; YAML Key</div>
+                  <div className="col-span-2">Field Type</div>
+                  <div className="col-span-4">Default Value / Variable</div>
+                  <div className="col-span-2">Evaluated Preview</div>
+                  <div className="col-span-1 text-right">Remove</div>
+                </div>
+
+                <div className="divide-y divide-subtle/60" data-testid="settings-fm-properties-list">
+                  {defaultFrontmatterProps.map((prop) => {
+                    const displayLabel =
+                      prop.key === 'date' || prop.key === 'creation_date'
+                        ? 'Creation Date'
+                        : prop.label || prop.key.replace(/_/g, ' ')
+                    const previewEvaluated = prop.defaultValue
+                      ? evaluateTemplateVariables(prop.defaultValue, {
+                          fileTitle: 'Untitled',
+                          folderName: 'Notes',
+                          rootName: 'Workspace'
+                        }).output
+                      : ''
+                    const isFocused = focusedFmPropKey === prop.key
+
+                    return (
+                      <div
+                        key={prop.key}
+                        data-testid={`settings-fm-prop-row-${prop.key}`}
+                        className={`grid grid-cols-12 items-center gap-2.5 px-3.5 py-2.5 transition-colors ${
+                          isFocused ? 'bg-accent/5' : 'bg-app hover:bg-panel/40'
+                        }`}
+                      >
+                        <div className="col-span-3 flex items-center justify-between gap-2 min-w-0 pr-1">
+                          <span
+                            data-testid={`settings-fm-prop-label-${prop.key}`}
+                            className="font-semibold text-primary capitalize truncate text-xs"
+                            title={displayLabel}
+                          >
+                            {displayLabel}
+                          </span>
+                          <span
+                            className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] font-mono text-muted shrink-0"
+                            title={`YAML frontmatter key: ${prop.key}`}
+                          >
+                            {prop.key}
+                          </span>
+                        </div>
+
+                        <div className="col-span-2">
+                          <select
+                            data-testid={`settings-fm-type-select-${prop.key}`}
+                            value={prop.type}
+                            onChange={(e) =>
+                              handleUpdateDefaultFmProp(prop.key, {
+                                type: e.target.value as FrontmatterFieldType
+                              })
+                            }
+                            className="w-full h-8 px-2 rounded-md bg-panel border border-subtle text-primary text-xs font-medium focus:outline-none focus:border-accent transition-colors"
+                          >
+                            <option value="text">Text</option>
+                            <option value="date">Date</option>
+                            <option value="dropdown">Dropdown</option>
+                            <option value="tags">Tags</option>
+                            <option value="number">Number</option>
+                            <option value="checkbox">Checkbox</option>
+                          </select>
+                        </div>
+
+                        <div className="col-span-4">
+                          <input
+                            type="text"
+                            data-testid={`settings-fm-default-input-${prop.key}`}
+                            placeholder="Static value or <% variable %>..."
+                            value={prop.defaultValue || ''}
+                            onFocus={() => setFocusedFmPropKey(prop.key)}
+                            onChange={(e) =>
+                              handleUpdateDefaultFmProp(prop.key, {
+                                defaultValue: e.target.value
+                              })
+                            }
+                            className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary font-mono text-xs focus:outline-none focus:border-accent transition-colors"
+                          />
+                        </div>
+
+                        <div className="col-span-2 min-w-0">
+                          {prop.defaultValue && prop.defaultValue.includes('<%') ? (
+                            <div
+                              data-testid={`settings-fm-preview-${prop.key}`}
+                              title={`Evaluates to: ${previewEvaluated}`}
+                              className="w-full h-8 px-2.5 rounded-md bg-accent/10 border border-accent/30 flex items-center gap-1.5 text-[11px] font-mono text-accent truncate"
+                            >
+                              <span className="text-muted text-[10px] shrink-0">→</span>
+                              <span className="truncate">{previewEvaluated}</span>
+                            </div>
+                          ) : prop.defaultValue ? (
+                            <div
+                              data-testid={`settings-fm-preview-${prop.key}`}
+                              title={`Static default: ${prop.defaultValue}`}
+                              className="w-full h-8 px-2.5 rounded-md bg-panel/70 border border-subtle flex items-center text-[11px] font-mono text-primary truncate"
+                            >
+                              <span className="truncate">{prop.defaultValue}</span>
+                            </div>
+                          ) : (
+                            <div className="w-full h-8 px-2.5 rounded-md bg-panel/30 border border-dashed border-subtle flex items-center text-[10px] text-muted italic truncate">
+                              Empty on create
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="col-span-1 flex items-center justify-end">
+                          <button
+                            type="button"
+                            title={`Remove default property "${displayLabel}"`}
+                            data-testid={`settings-fm-remove-btn-${prop.key}`}
+                            onClick={() => handleRemoveDefaultFmProp(prop.key)}
+                            className="w-8 h-8 rounded-md bg-panel border border-subtle text-muted hover:text-danger hover:border-danger flex items-center justify-center transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Add New Default Property Form (Aligned to the same 12-column grid) */}
+              <div
+                data-testid="settings-fm-add-section"
+                className="p-3.5 rounded-lg bg-app border border-subtle space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-primary uppercase tracking-wider text-[11px]">
+                    Add New Default Frontmatter Property
+                  </div>
+                  <span className="text-[10px] text-muted">
+                    Added properties appear automatically on all newly created notes
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-12 gap-2.5 items-end">
+                  <div className="col-span-3 space-y-1">
+                    <label className="block text-[10px] font-medium text-muted">
+                      Property Name / Key
+                    </label>
+                    <input
+                      type="text"
+                      data-testid="settings-fm-new-key-input"
+                      placeholder="e.g. category, reviewer..."
+                      value={newFmKey}
+                      onFocus={() => setFocusedFmPropKey(null)}
+                      onChange={(e) => setNewFmKey(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddDefaultFmProp()
+                        }
+                      }}
+                      className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="block text-[10px] font-medium text-muted">Field Type</label>
+                    <select
+                      data-testid="settings-fm-new-type-select"
+                      value={newFmType}
+                      onChange={(e) => setNewFmType(e.target.value as FrontmatterFieldType)}
+                      className="w-full h-8 px-2 rounded-md bg-panel border border-subtle text-primary text-xs font-medium focus:outline-none focus:border-accent transition-colors"
+                    >
+                      <option value="text">Text</option>
+                      <option value="date">Date</option>
+                      <option value="dropdown">Dropdown</option>
+                      <option value="tags">Tags</option>
+                      <option value="number">Number</option>
+                      <option value="checkbox">Checkbox</option>
+                    </select>
+                  </div>
+                  <div className="col-span-5 space-y-1">
+                    <label className="block text-[10px] font-medium text-muted">
+                      Default Value / Dynamic Variable
+                    </label>
+                    <input
+                      type="text"
+                      data-testid="settings-fm-new-default-input"
+                      placeholder="e.g. <% folder_name %> or <% creation_date %>..."
+                      value={newFmDefaultValue}
+                      onFocus={() => setFocusedFmPropKey(null)}
+                      onChange={(e) => setNewFmDefaultValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddDefaultFmProp()
+                        }
+                      }}
+                      className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary font-mono text-xs focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <button
+                      type="button"
+                      data-testid="settings-fm-add-btn"
+                      onClick={handleAddDefaultFmProp}
+                      className="w-full h-8 px-3 rounded-md bg-accent text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Property</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
             <>
               {/* Page Tabs Position */}

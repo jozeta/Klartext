@@ -823,6 +823,57 @@ export function registerAllIpcHandlers(
     }
   })
 
+  ipcMain.handle(IPC_CHANNELS.EXPORT_DOCX, async (_e, rawInput) => {
+    const input = ExportRequestSchema.parse(rawInput)
+    let defaultDocxOut: string
+    try {
+      defaultDocxOut = registry.pathGuard.resolveScopedPath(
+        input.rootId,
+        input.relativePath.replace(/\.(md|markdown)$/i, '') + '.docx'
+      )
+    } catch {
+      defaultDocxOut = path.join(
+        app.getPath('documents'),
+        path.basename(input.relativePath).replace(/\.(md|markdown)$/i, '') + '.docx'
+      )
+    }
+    let outputPath = input.targetFilePath
+    if (!outputPath && process.env.KLARTEXT_E2E_AUTO_SAVE_EXPORT !== '1') {
+      const win = getMainWindow()
+      const saveRes = await dialog.showSaveDialog(win!, {
+        title: 'Export Document to Word (.docx)',
+        defaultPath: defaultDocxOut,
+        buttonLabel: 'Export DOCX',
+        filters: [{ name: 'Word Document (.docx)', extensions: ['docx'] }]
+      })
+      if (saveRes.canceled || !saveRes.filePath) {
+        return { outputPath: '', sizeBytes: 0, canceled: true }
+      }
+      outputPath = saveRes.filePath
+    }
+    outputPath = outputPath || defaultDocxOut
+    return exportService.exportToDocxFile({
+      ...input,
+      targetFilePath: outputPath
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WEB_FETCH_METADATA, async (_e, rawInput) => {
+    const { url } = z.object({ url: z.string().url() }).parse(rawInput)
+    if (!isSafeUrl(url)) {
+      throw new Error('Blocked unsafe URL')
+    }
+    return exportService.fetchUrlMetadata(url)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WEB_CLIP_URL, async (_e, rawInput) => {
+    const { url } = z.object({ url: z.string().url() }).parse(rawInput)
+    if (!isSafeUrl(url)) {
+      throw new Error('Blocked unsafe URL')
+    }
+    return exportService.clipWebPageToMarkdown(url)
+  })
+
   // Window & External Links
   ipcMain.handle(IPC_CHANNELS.WINDOW_MINIMIZE, () => {
     getMainWindow()?.minimize()

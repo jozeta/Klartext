@@ -12,6 +12,19 @@ import {
   toggleTaskAtLineInMarkdown,
   type WorkspaceDocEntry
 } from '../../shared/markdown/knowledge-features'
+import {
+  formatImageAltMetadata,
+  parseImageAltMetadata,
+  renderMarkdownDocument
+} from '../../shared/markdown/pipeline'
+import {
+  convertMarkdownToGfm,
+  convertMarkdownToJira,
+  convertMarkdownToSlack,
+  htmlToCleanMarkdown,
+  parseSlideDeck
+} from '../../shared/markdown/export-formats'
+import { generateDocxBufferFromMarkdown } from '../../main/export/export-service'
 
 const sampleDocs: WorkspaceDocEntry[] = [
   {
@@ -199,3 +212,138 @@ describe('3.2 Global Task Aggregation & Toggling', () => {
     expect(toggled2).toContain('- [ ] Second task')
   })
 })
+
+describe('3.4 Image Resize, Alignment & Captions Metadata + 4.1 Bookmark Card Rendering', () => {
+  it('parses and formats image alt metadata for width, alignment, and caption', () => {
+    const parsed = parseImageAltMetadata('Architecture v2|420|right')
+    expect(parsed.caption).toBe('Architecture v2')
+    expect(parsed.width).toBe(420)
+    expect(parsed.align).toBe('right')
+
+    const formatted = formatImageAltMetadata(parsed)
+    expect(formatted).toBe('Architecture v2|width=420|align=right')
+  })
+
+  it('renders :::bookmark blocks as rich Notion-style bookmark cards in HTML pipeline', async () => {
+    const md = [
+      ':::bookmark https://example.com/docs',
+      'title: Example Documentation',
+      'description: Complete guide to Example APIs.',
+      'domain: example.com',
+      ':::'
+    ].join('\n')
+    const res = await renderMarkdownDocument(md)
+    expect(res.html).toContain('klartext-bookmark-card')
+    expect(res.html).toContain('Example Documentation')
+    expect(res.html).toContain('Complete guide to Example APIs.')
+    expect(res.html).toContain('example.com')
+  })
+})
+
+describe('4.2 Web Clipper HTML-to-Markdown & 4.3 Slide Deck / DOCX / Slack / Jira / GFM Exports', () => {
+  it('converts HTML articles into clean Markdown with frontmatter metadata', () => {
+    const html = `
+      <html>
+        <head><title>Test Spec</title></head>
+        <body>
+          <article>
+            <h1>Main Heading</h1>
+            <p>This is <strong>important</strong> and has a <a href="https://example.com">link</a>.</p>
+            <ul><li>First item</li><li>Second item</li></ul>
+          </article>
+        </body>
+      </html>
+    `
+    const clipped = htmlToCleanMarkdown(html, 'https://example.com/article')
+    expect(clipped.title).toBe('Test Spec')
+    expect(clipped.fullMarkdown).toContain('source_url: "https://example.com/article"')
+    expect(clipped.bodyMarkdown).toContain('# Main Heading')
+    expect(clipped.bodyMarkdown).toContain('**important**')
+    expect(clipped.bodyMarkdown).toContain('[link](https://example.com)')
+    expect(clipped.bodyMarkdown).toContain('- First item')
+  })
+
+  it('splits a Markdown document separated by --- horizontal rules into presentation slides with speaker notes', () => {
+    const md = [
+      '---',
+      'title: Deck',
+      '---',
+      '# Slide One',
+      'Intro point',
+      'Note: Speak slowly here',
+      '---',
+      '## Slide Two',
+      '- Bullet A',
+      '<!-- note: Mention Q4 metrics -->'
+    ].join('\n')
+
+    const slides = parseSlideDeck(md)
+    expect(slides.length).toBe(2)
+    expect(slides[0].title).toBe('Slide One')
+    expect(slides[0].speakerNotes).toContain('Speak slowly here')
+    expect(slides[1].title).toBe('Slide Two')
+    expect(slides[1].speakerNotes).toContain('Mention Q4 metrics')
+  })
+
+  it('automatically splits heading-structured Markdown notes into slides when --- dividers are absent', () => {
+    const structuredDoc = [
+      '# Architecture Overview',
+      'High-level summary of the platform.',
+      '',
+      '## 1. Data Pipeline',
+      '| Stage | Latency |',
+      '| --- | --- |',
+      '| Ingest | 12ms |',
+      '',
+      '## 2. Diagram Flow',
+      '```mermaid',
+      'flowchart LR',
+      '  A --> B',
+      '```'
+    ].join('\n')
+
+    const autoSlides = parseSlideDeck(structuredDoc, 'auto')
+    expect(autoSlides.length).toBe(3)
+    expect(autoSlides[0].title).toBe('Architecture Overview')
+    expect(autoSlides[0].layout).toBe('cover')
+    expect(autoSlides[1].title).toBe('1. Data Pipeline')
+    expect(autoSlides[1].hasTable).toBe(true)
+    expect(autoSlides[2].title).toBe('2. Diagram Flow')
+    expect(autoSlides[2].hasMermaid).toBe(true)
+
+    const hrOnlySlides = parseSlideDeck(structuredDoc, 'hr')
+    expect(hrOnlySlides.length).toBe(1)
+  })
+
+  it('converts Markdown to Slack mrkdwn, Jira Wiki Markup, and clean GFM', () => {
+    const source = '# Release Notes\n\nCheck **bold** and [Klartext](https://klartext.app)!\n\n- [x] Done\n- [ ] Todo'
+    const slack = convertMarkdownToSlack(source)
+    expect(slack).toContain('*Release Notes*')
+    expect(slack).toContain('*bold*')
+    expect(slack).toContain('<https://klartext.app|Klartext>')
+    expect(slack).toContain('• ☑ Done')
+
+    const jira = convertMarkdownToJira(source)
+    expect(jira).toContain('h1. Release Notes')
+    expect(jira).toContain('*bold*')
+    expect(jira).toContain('[Klartext|https://klartext.app]')
+
+    const gfm = convertMarkdownToGfm(source)
+    expect(gfm).toContain('# Release Notes')
+    expect(gfm).toContain('[Klartext](https://klartext.app)')
+  })
+
+  it('generates a valid OpenXML .docx ZIP buffer from Markdown', () => {
+    const buf = generateDocxBufferFromMarkdown(
+      '# Quarterly Report\n\nThis is **bold** and *italic* text.\n\n- First bullet\n- [x] Completed task',
+      'Quarterly Report'
+    )
+    expect(Buffer.isBuffer(buf)).toBe(true)
+    // ZIP magic bytes PK\x03\x04
+    expect(buf[0]).toBe(0x50)
+    expect(buf[1]).toBe(0x4b)
+    expect(buf.includes(Buffer.from('word/document.xml'))).toBe(true)
+    expect(buf.includes(Buffer.from('Quarterly Report'))).toBe(true)
+  })
+})
+

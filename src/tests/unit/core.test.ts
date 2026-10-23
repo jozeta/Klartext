@@ -236,12 +236,47 @@ flowchart LR
       }
     })
     expect(foundWidgets).toEqual([
+      'InlineCalloutHeaderWidget@L14',
       'InlineTableWidget@L19',
       'TaskCheckboxWidget@L25',
       'TaskCheckboxWidget@L26',
       'TaskCheckboxWidget@L27',
       'InlineMermaidBlockWidget@L29'
     ])
+
+    // Verify new Inline Rich decorations: underline, superscript, subscript, bold-italic, TOC, HR, details, and inline code protection
+    const richSample = [
+      '[[_TOC_]]',
+      '',
+      '---',
+      '',
+      'Here is ***bold italic***, <u>underlined</u>, x<sup>2</sup>, H<sub>2</sub>O, and `**not bold inside code**`.',
+      '',
+      '<details>',
+      '<summary>Expandable</summary>',
+      'Hidden body',
+      '</details>'
+    ].join('\n')
+    const richState = EditorState.create({
+      doc: richSample,
+      extensions: [ext]
+    })
+    const richDecoSet = richState.field(ext[0])
+    const richClasses: string[] = []
+    const richWidgets: string[] = []
+    richDecoSet.between(0, richState.doc.length, (_from, _to, value) => {
+      const cls = (value.spec as { class?: string })?.class
+      if (cls) richClasses.push(cls)
+      const w = (value.spec as { widget?: { constructor: { name: string } } })?.widget
+      if (w) richWidgets.push(w.constructor.name)
+    })
+    expect(richWidgets).toContain('InlineTocWidget')
+    expect(richWidgets).toContain('InlineHorizontalRuleWidget')
+    expect(richWidgets).toContain('InlineDetailsBlockWidget')
+    expect(richClasses).toContain('cm-live-bold-italic')
+    expect(richClasses).toContain('cm-live-underline')
+    expect(richClasses).toContain('cm-live-sup')
+    expect(richClasses).toContain('cm-live-sub')
   })
 
   it('color-codes code blocks with row numbers, validates spellcheck explanations & synonyms, and parses/generates Mermaid visual graphs', async () => {
@@ -253,8 +288,16 @@ flowchart LR
     } = await import('../../renderer/features/editor/spellcheck-extension')
     const {
       generateMermaidFromVisualGraph,
-      parseMermaidToVisualGraph
+      parseMermaidToVisualGraph,
+      MERMAID_DIAGRAM_PRESETS
     } = await import('../../renderer/features/diagrams/DiagramWidgets')
+
+    // Packet (TCP) and C4 Context are removed from presets
+    const presetIds = MERMAID_DIAGRAM_PRESETS.map((p) => p.id)
+    expect(presetIds).not.toContain('packet')
+    expect(presetIds).not.toContain('c4')
+    expect(presetIds).toContain('flowchart')
+    expect(presetIds).toContain('sequence')
 
     const highlighted = highlightCodeToHtml(
       'export async function compute(x: number): Promise<string> { return "ok" // comment\n}',
@@ -278,19 +321,27 @@ flowchart LR
     expect(detailed.synonyms.length).toBeGreaterThan(0)
     expect(detailed.synonyms[0].explanation.length).toBeGreaterThan(0)
 
-    // Visual Mermaid Builder code generation + round-trip parsing
+    // Visual Mermaid Builder code generation + round-trip parsing (including subroutine, hexagon, and <--> arrows)
     const mermaidOut = generateMermaidFromVisualGraph(
       'LR',
       [
         { id: 'A', label: 'Start', shape: 'round', x: 10, y: 10 },
-        { id: 'B', label: 'Check?', shape: 'diamond', x: 150, y: 10 }
+        { id: 'B', label: 'Check?', shape: 'diamond', x: 150, y: 10 },
+        { id: 'C', label: 'Worker', shape: 'subroutine', x: 300, y: 10 },
+        { id: 'D', label: 'Prep', shape: 'hexagon', x: 450, y: 10 }
       ],
-      [{ id: 'E1', from: 'A', to: 'B', style: '-->', label: 'Verify' }]
+      [
+        { id: 'E1', from: 'A', to: 'B', style: '-->', label: 'Verify' },
+        { id: 'E2', from: 'B', to: 'C', style: '<-->', label: 'Sync' }
+      ]
     )
     expect(mermaidOut).toContain('flowchart LR')
     expect(mermaidOut).toContain('A("Start")')
     expect(mermaidOut).toContain('B{"Check?"}')
+    expect(mermaidOut).toContain('C[["Worker"]]')
+    expect(mermaidOut).toContain('D{{"Prep"}}')
     expect(mermaidOut).toContain('A -->|"Verify"| B')
+    expect(mermaidOut).toContain('B <-->|"Sync"| C')
 
     // Starting a new diagram in the Visual Mermaid Builder returns a clean, empty canvas
     const emptyGraph = parseMermaidToVisualGraph()
@@ -299,11 +350,14 @@ flowchart LR
 
     const parsedGraph = parseMermaidToVisualGraph(mermaidOut)
     expect(parsedGraph.direction).toBe('LR')
-    expect(parsedGraph.nodes.length).toBe(2)
+    expect(parsedGraph.nodes.length).toBe(4)
     expect(parsedGraph.nodes[0]).toMatchObject({ id: 'A', label: 'Start', shape: 'round' })
     expect(parsedGraph.nodes[1]).toMatchObject({ id: 'B', label: 'Check?', shape: 'diamond' })
-    expect(parsedGraph.edges.length).toBe(1)
+    expect(parsedGraph.nodes[2]).toMatchObject({ id: 'C', label: 'Worker', shape: 'subroutine' })
+    expect(parsedGraph.nodes[3]).toMatchObject({ id: 'D', label: 'Prep', shape: 'hexagon' })
+    expect(parsedGraph.edges.length).toBe(2)
     expect(parsedGraph.edges[0]).toMatchObject({ from: 'A', to: 'B', style: '-->', label: 'Verify' })
+    expect(parsedGraph.edges[1]).toMatchObject({ from: 'B', to: 'C', style: '<-->', label: 'Sync' })
   })
 
   it('supports extended Markdown syntax (highlight, spoiler, kbd, TOC, definition list), document formatter, and HTML-to-Markdown paste', async () => {

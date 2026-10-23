@@ -75,9 +75,12 @@ export const IPC_CHANNELS = {
   AI_STREAM_CANCEL: 'ai:stream-cancel',
   AI_RAG_QUERY: 'ai:rag-query',
 
-  // Export
+  // Export & Web Clipper
   EXPORT_HTML: 'export:html',
   EXPORT_PDF: 'export:pdf',
+  EXPORT_DOCX: 'export:docx',
+  WEB_FETCH_METADATA: 'web:fetch-metadata',
+  WEB_CLIP_URL: 'web:clip-url',
 
   // Window & Shell
   WINDOW_MINIMIZE: 'window:minimize',

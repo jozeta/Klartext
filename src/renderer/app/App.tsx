@@ -40,7 +40,11 @@ import type {
   WorkspaceRoot
 } from '../../shared/types'
 import { DEFAULT_NORDIC_SAVED_THEMES } from '../../shared/constants'
-import type { DynamicCandidateDocument } from '../../shared/markdown/dynamic-workspace'
+import { DEFAULT_FRONTMATTER_PROPERTIES } from '../../shared/schemas'
+import {
+  parseTagListInput,
+  type DynamicCandidateDocument
+} from '../../shared/markdown/dynamic-workspace'
 import {
   extractHeadings,
   extractFrontmatter,
@@ -84,6 +88,8 @@ import {
   type CommandActionItem
 } from '../components/command-palette/CommandPaletteAndSettings'
 import { KnowledgeGraphModal } from '../features/knowledge/KnowledgeGraphModal'
+import { SlideDeckModal } from '../features/presentation/SlideDeckModal'
+import { WebClipperModal } from '../features/clipper/WebClipperModal'
 import {
   extractGlobalTasks,
   findUnlinkedMentions,
@@ -246,6 +252,8 @@ export const App: React.FC = () => {
   // Modals & Overlays
   const [paletteMode, setPaletteMode] = useState<'commands' | 'files' | 'icons' | null>(null)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showSlideDeckModal, setShowSlideDeckModal] = useState(false)
+  const [showWebClipperModal, setShowWebClipperModal] = useState(false)
   const [excalidrawTarget, setExcalidrawTarget] = useState<{
     rootId: string
     relativePath: string
@@ -1074,7 +1082,9 @@ export const App: React.FC = () => {
   // 3.1 Open or auto-create a Daily Note (Daily-Notes/YYYY-MM-DD.md)
   const handleOpenDailyNote = useCallback(
     async (dateYmd?: string) => {
-      const targetRootId = activeTab?.rootId || roots[0]?.id
+      const targetRootId =
+        (activeTab && activeTab.rootId !== '__templates__' ? activeTab.rootId : null) ||
+        roots[0]?.id
       if (!targetRootId) return
       const now = new Date()
       const ymd =
@@ -1152,6 +1162,18 @@ export const App: React.FC = () => {
     })
     if ((res as any)?.canceled || !res.outputPath) return
     setExportStatusBanner(`Exported PDF (${res.sizeBytes} bytes): ${res.outputPath}`)
+  }, [activeTab])
+
+  const handleExportDocx = useCallback(async () => {
+    if (!activeTab) return
+    const res = await window.klartext.exportDocx({
+      rootId: activeTab.rootId,
+      relativePath: activeTab.relativePath,
+      markdown: activeTab.content,
+      title: activeTab.relativePath
+    })
+    if ((res as any)?.canceled || !res.outputPath) return
+    setExportStatusBanner(`Exported DOCX (${res.sizeBytes} bytes): ${res.outputPath}`)
   }, [activeTab])
 
   // Subscribe to native application File, Edit, View, Format, Insert & Help Menu actions
@@ -2001,6 +2023,124 @@ export const App: React.FC = () => {
     ]
   )
 
+  const [aiServerConnected, setAiServerConnected] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const enabled = settings?.ai?.enabled
+    const activeModel = settings?.ai?.activeModel?.trim()
+    const endpoint = settings?.ai?.endpoint?.trim()
+    if (!enabled || !activeModel || !endpoint) {
+      setAiServerConnected(false)
+      return
+    }
+    window.klartext
+      .testAIConnection()
+      .then((res) => {
+        if (!cancelled) {
+          setAiServerConnected(Boolean(res.ok && Array.isArray(res.models) && res.models.length > 0))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAiServerConnected(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    settings?.ai?.enabled,
+    settings?.ai?.activeModel,
+    settings?.ai?.endpoint,
+    settings?.ai?.provider
+  ])
+
+  const aiModelConfigured = Boolean(
+    settings?.ai?.enabled &&
+      settings?.ai?.activeModel &&
+      settings.ai.activeModel.trim().length > 0 &&
+      aiServerConnected
+  )
+
+  const buildNewDocumentContentWithDefaultFrontmatter = useCallback(
+    async (rootId: string, relativePath: string, baseTitle: string): Promise<string> => {
+      const rootObj = roots.find((r) => r.id === rootId) || roots[0]
+      const now = new Date()
+      const parts = relativePath.split('/').filter(Boolean)
+      const fileName = parts.length > 0 ? parts[parts.length - 1] : `${baseTitle}.md`
+      const folderRelPath = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+      const folderParts = folderRelPath.split('/').filter(Boolean)
+      const folderName =
+        folderParts.length > 0
+          ? folderParts[folderParts.length - 1]
+          : rootObj?.name || 'Workspace'
+      const parentFolderName =
+        folderParts.length > 1
+          ? folderParts[folderParts.length - 2]
+          : rootObj?.name || 'Workspace'
+      const gitSt = rootObj ? gitStatuses[rootObj.id] : undefined
+
+      const creationDateIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+      const evalCtx: TemplateEvaluationContext = {
+        ...templateEvaluationContext,
+        now,
+        creationDate: creationDateIso,
+        fileName,
+        fileTitle: baseTitle,
+        relativePath,
+        folderName,
+        folderPath: folderRelPath || '/',
+        parentFolderName,
+        rootName: rootObj?.name || 'Workspace',
+        rootPath: rootObj?.path || '',
+        gitBranch: gitSt?.branch || 'main',
+        gitStatus: gitSt?.state || 'Local'
+      }
+
+      const defaultProps = Array.isArray(settings?.defaultFrontmatterProperties)
+        ? settings.defaultFrontmatterProperties
+        : DEFAULT_FRONTMATTER_PROPERTIES
+
+      const baseBody = `# ${baseTitle}\n\n`
+      if (defaultProps.length === 0) {
+        return baseBody
+      }
+
+      const fmObj: Record<string, unknown> = {}
+      for (const prop of defaultProps) {
+        if (!prop.key) continue
+        const rawDefault =
+          (prop.key === 'date' || prop.key === 'creation_date') && !prop.defaultValue
+            ? '<% creation_date %>'
+            : prop.defaultValue || ''
+        let evaluatedStr = ''
+        if (rawDefault) {
+          const res = await evaluateTemplateVariablesAsync(rawDefault, evalCtx)
+          evaluatedStr = res.output.trim()
+        }
+        if (prop.type === 'tags') {
+          fmObj[prop.key] = evaluatedStr ? parseTagListInput(evaluatedStr) : []
+        } else if (prop.type === 'checkbox') {
+          const lower = evaluatedStr.toLowerCase()
+          fmObj[prop.key] = lower === 'true' || lower === '1' || lower === 'yes'
+        } else if (prop.type === 'number') {
+          if (evaluatedStr !== '' && !Number.isNaN(Number(evaluatedStr))) {
+            fmObj[prop.key] = Number(evaluatedStr)
+          } else {
+            fmObj[prop.key] = evaluatedStr
+          }
+        } else {
+          fmObj[prop.key] = evaluatedStr
+        }
+      }
+
+      return updateFrontmatterInMarkdown(baseBody, fmObj)
+    },
+    [roots, gitStatuses, templateEvaluationContext, settings?.defaultFrontmatterProperties]
+  )
+
   const commandActions: CommandActionItem[] = useMemo(
     () => [
       {
@@ -2009,6 +2149,30 @@ export const App: React.FC = () => {
         label: 'Insert Icon from Untitled UI Free Icons (:icon[Name]:)',
         shortcut: 'Mod+Shift+I',
         run: () => setPaletteMode('icons')
+      },
+      {
+        id: 'insert-mermaid-builder',
+        category: 'Insert',
+        label: 'Open Visual Mermaid Diagram Studio',
+        run: () => dispatchEditorCommand('open-mermaid-builder')
+      },
+      {
+        id: 'import-web-clipper',
+        category: 'File',
+        label: 'Import Web Page / URL as Markdown (Web Clipper)',
+        run: () => setShowWebClipperModal(true)
+      },
+      {
+        id: 'open-daily-note',
+        category: 'Productivity',
+        label: "Open or Create Today's Daily Note",
+        run: () => handleOpenDailyNote()
+      },
+      {
+        id: 'start-slide-deck',
+        category: 'Presentation',
+        label: 'Present Document as Slide Deck',
+        run: () => setShowSlideDeckModal(true)
       },
       {
         id: 'mode-source',
@@ -2059,6 +2223,26 @@ export const App: React.FC = () => {
           })
       },
       {
+        id: 'calendar-panel-toggle',
+        category: 'View',
+        label: 'Toggle Right Daily Notes & Calendar Panel',
+        run: () =>
+          settings &&
+          handleUpdateSettings({
+            calendarPanelVisible: !settings.calendarPanelVisible
+          })
+      },
+      {
+        id: 'tasks-panel-toggle',
+        category: 'View',
+        label: 'Toggle Right Global Tasks Dashboard',
+        run: () =>
+          settings &&
+          handleUpdateSettings({
+            tasksPanelVisible: !settings.tasksPanelVisible
+          })
+      },
+      {
         id: 'help-variables-guide',
         category: 'Help',
         label: 'Open Help: Dynamic Variables (<% %>) & Formatting Reference',
@@ -2103,6 +2287,12 @@ export const App: React.FC = () => {
         category: 'Export',
         label: 'Export Document to PDF',
         run: handleExportPdf
+      },
+      {
+        id: 'export-docx',
+        category: 'Export',
+        label: 'Export Document to Word (.docx)',
+        run: handleExportDocx
       }
     ],
     [
@@ -2112,6 +2302,10 @@ export const App: React.FC = () => {
       refreshWorkspaceAndTrees,
       handleExportHtml,
       handleExportPdf,
+      handleExportDocx,
+      handleOpenDailyNote,
+      dispatchEditorCommand,
+      openRightHelpPanel,
       handleUpdateSettings,
       handleChangeEditMode
     ]
@@ -2133,10 +2327,7 @@ export const App: React.FC = () => {
     if (!activeTab) return
     const currentObj: Record<string, unknown> = { ...(parsedFrontmatter.frontmatter || {}) }
     if (key === 'tags' && typeof value === 'string') {
-      currentObj[key] = value
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
+      currentObj[key] = parseTagListInput(value)
     } else {
       currentObj[key] = value
     }
@@ -2291,6 +2482,35 @@ export const App: React.FC = () => {
                   <div className="my-1 border-t border-subtle" />
                   <button
                     type="button"
+                    data-testid="file-menu-web-clipper"
+                    onClick={() => {
+                      setShowFileMenu(false)
+                      setShowWebClipperModal(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Download className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>Import Web Page / URL as Markdown...</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="file-menu-slide-deck"
+                    onClick={() => {
+                      setShowFileMenu(false)
+                      setShowSlideDeckModal(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>Present as Slide Deck...</span>
+                    </span>
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
                     data-testid="export-html-btn"
                     onClick={async () => {
                       setShowFileMenu(false)
@@ -2318,6 +2538,20 @@ export const App: React.FC = () => {
                       <span>Export to PDF...</span>
                     </span>
                     <kbd className="text-[10px] font-mono text-muted">⌥⌘E</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="export-docx-btn"
+                    onClick={async () => {
+                      setShowFileMenu(false)
+                      await handleExportDocx()
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>Export to Word (.docx)...</span>
+                    </span>
                   </button>
                   <div className="my-1 border-t border-subtle" />
                   <button
@@ -2624,6 +2858,19 @@ export const App: React.FC = () => {
                         </button>
                         <button
                           type="button"
+                          data-testid="insert-menu-bookmark-card"
+                          onClick={() => {
+                            setShowInsertMenu(false)
+                            setShowEditMenu(false)
+                            dispatchEditorCommand('bookmark-card')
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between"
+                        >
+                          <span>Web Bookmark Card</span>
+                          <kbd className="text-[10px] font-mono text-muted">:::bookmark</kbd>
+                        </button>
+                        <button
+                          type="button"
                           data-testid="insert-menu-wikilink"
                           onClick={() => {
                             setShowInsertMenu(false)
@@ -2784,6 +3031,45 @@ export const App: React.FC = () => {
                     className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
                   >
                     <span>Copy Rich HTML</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="copy-slack-md-btn"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('copy-slack-md')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Copy as Slack Markdown</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="copy-jira-md-btn"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('copy-jira-md')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Copy as Jira Markdown</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="copy-gfm-md-btn"
+                    onMouseEnter={() => setShowInsertMenu(false)}
+                    onClick={() => {
+                      setShowEditMenu(false)
+                      setShowInsertMenu(false)
+                      dispatchEditorCommand('copy-gfm-md')
+                    }}
+                    className="w-full text-left px-3 py-1 hover:bg-secondary text-primary flex items-center justify-between"
+                  >
+                    <span>Copy as GitHub Markdown (GFM)</span>
                   </button>
 
                   {/* Document Cleanup Section (moved from Format menu to Edit menu) */}
@@ -3288,6 +3574,21 @@ export const App: React.FC = () => {
                       📅
                     </span>
                     <span>Open Today&apos;s Daily Note</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="view-menu-slide-deck"
+                    onClick={() => {
+                      setShowViewMenu(false)
+                      setShowSlideDeckModal(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center gap-2"
+                  >
+                    <span className="w-4 inline-flex items-center justify-center shrink-0">
+                      📽️
+                    </span>
+                    <span>Start Slide Deck Presentation</span>
                   </button>
 
                   <div className="my-1 border-t border-subtle" />
@@ -4060,13 +4361,16 @@ export const App: React.FC = () => {
                   await refreshWorkspaceAndTrees()
                 }}
                 onCreateFileInRoot={async (rootId, relativePath) => {
-                  const baseTitle =
-                    (relativePath.split('/').pop() || relativePath).replace(/\.md$/i, '')
-                  await window.klartext.createDocument(
+                  const baseTitle = (relativePath.split('/').pop() || relativePath).replace(
+                    /\.(md|markdown|mdx)$/i,
+                    ''
+                  )
+                  const initialContent = await buildNewDocumentContentWithDefaultFrontmatter(
                     rootId,
                     relativePath,
-                    `# ${baseTitle}\n\n`
+                    baseTitle
                   )
+                  await window.klartext.createDocument(rootId, relativePath, initialContent)
                   await refreshWorkspaceAndTrees()
                   await openDocument(rootId, relativePath)
                 }}
@@ -4104,28 +4408,98 @@ export const App: React.FC = () => {
                 onRenameFileInRoot={async (rootId, oldRelativePath, newRelativePath) => {
                   await window.klartext.renameDocument(rootId, oldRelativePath, newRelativePath)
 
+                  // If the renamed file is a Markdown document and its headline is still Untitled, update the headline (and frontmatter title if Untitled) to the new file name without extension
+                  const oldKey = `${rootId}::${oldRelativePath}`
+                  const newKey = `${rootId}::${newRelativePath}`
+                  let updatedRenamedDocContent: string | undefined
+                  if (
+                    oldRelativePath !== newRelativePath &&
+                    /\.(md|markdown|mdx)$/i.test(newRelativePath)
+                  ) {
+                    const newBaseTitle = (
+                      newRelativePath.split('/').pop() || newRelativePath
+                    ).replace(/\.(md|markdown|mdx)$/i, '')
+                    const openRenamedTab =
+                      tabs.find((t) => t.key === oldKey) ||
+                      secondaryTabs.find((t) => t.key === oldKey)
+                    let currentDocContent = openRenamedTab?.content
+                    if (currentDocContent === undefined) {
+                      try {
+                        const diskDoc = await window.klartext.readDocument(rootId, newRelativePath)
+                        currentDocContent = diskDoc.content
+                      } catch {
+                        // Ignore read failure
+                      }
+                    }
+                    if (typeof currentDocContent === 'string') {
+                      const { frontmatter, body } = extractFrontmatter(currentDocContent)
+                      let nextDocContent = currentDocContent
+                      const untitledHeadingRegex = /^#\s+Untitled(?:-\d+)?\s*$/im
+                      if (untitledHeadingRegex.test(body)) {
+                        const updatedBody = body.replace(
+                          untitledHeadingRegex,
+                          `# ${newBaseTitle}`
+                        )
+                        if (frontmatter) {
+                          const nextFm = { ...frontmatter }
+                          if (
+                            typeof nextFm.title === 'string' &&
+                            /^Untitled(?:-\d+)?$/i.test(nextFm.title.trim())
+                          ) {
+                            nextFm.title = newBaseTitle
+                          }
+                          nextDocContent = updateFrontmatterInMarkdown(updatedBody, nextFm)
+                        } else {
+                          nextDocContent = updatedBody
+                        }
+                      } else if (
+                        frontmatter &&
+                        typeof frontmatter.title === 'string' &&
+                        /^Untitled(?:-\d+)?$/i.test(frontmatter.title.trim())
+                      ) {
+                        nextDocContent = updateFrontmatterInMarkdown(currentDocContent, {
+                          ...frontmatter,
+                          title: newBaseTitle
+                        })
+                      }
+                      if (nextDocContent !== currentDocContent) {
+                        updatedRenamedDocContent = nextDocContent
+                        await window.klartext
+                          .writeDocument(rootId, newRelativePath, nextDocContent)
+                          .catch(() => {})
+                      }
+                    }
+                  }
+
                   // Automatically refactor [[WikiLinks]] and ![[Transclusions]] across workspace documents
                   if (
                     oldRelativePath !== newRelativePath &&
                     /\.(md|markdown|mdx)$/i.test(oldRelativePath)
                   ) {
                     for (const doc of workspaceMarkdownDocs) {
-                      const targetRel =
+                      const isRenamedDoc =
                         doc.rootId === rootId && doc.relativePath === oldRelativePath
-                          ? newRelativePath
-                          : doc.relativePath
+                      const targetRel = isRenamedDoc ? newRelativePath : doc.relativePath
                       const openTab =
                         tabs.find((t) => t.rootId === doc.rootId && t.relativePath === doc.relativePath) ||
                         secondaryTabs.find(
                           (t) => t.rootId === doc.rootId && t.relativePath === doc.relativePath
                         )
-                      const sourceContent = openTab ? openTab.content : doc.content
+                      const sourceContent =
+                        isRenamedDoc && updatedRenamedDocContent !== undefined
+                          ? updatedRenamedDocContent
+                          : openTab
+                            ? openTab.content
+                            : doc.content
                       const refactored = refactorWikiLinksOnRename(
                         sourceContent,
                         oldRelativePath,
                         newRelativePath
                       )
                       if (refactored.changed) {
+                        if (isRenamedDoc) {
+                          updatedRenamedDocContent = refactored.nextContent
+                        }
                         await window.klartext
                           .writeDocument(doc.rootId, targetRel, refactored.nextContent)
                           .catch(() => {})
@@ -4158,8 +4532,6 @@ export const App: React.FC = () => {
                   }
 
                   await refreshWorkspaceAndTrees()
-                  const oldKey = `${rootId}::${oldRelativePath}`
-                  const newKey = `${rootId}::${newRelativePath}`
                   const oldFolderKey = `${rootId}/${oldRelativePath}`
                   const newFolderKey = `${rootId}/${newRelativePath}`
                   const oldFolderPrefix = `${oldRelativePath}/`
@@ -4262,10 +4634,21 @@ export const App: React.FC = () => {
                     selectedFolder: updatedSelectedFolder
                   })
 
-                  setTabs((prev) =>
+                  const applyTabRename = (prev: OpenDocumentTab[]) =>
                     prev.map((t) => {
                       if (t.key === oldKey) {
-                        return { ...t, key: newKey, relativePath: newRelativePath }
+                        return {
+                          ...t,
+                          key: newKey,
+                          relativePath: newRelativePath,
+                          ...(updatedRenamedDocContent !== undefined
+                            ? {
+                                content: updatedRenamedDocContent,
+                                savedContent: updatedRenamedDocContent,
+                                dirty: false
+                              }
+                            : {})
+                        }
                       }
                       if (t.rootId === rootId && t.relativePath.startsWith(oldFolderPrefix)) {
                         const updatedRel = `${newRelativePath}/${t.relativePath.slice(oldFolderPrefix.length)}`
@@ -4277,7 +4660,8 @@ export const App: React.FC = () => {
                       }
                       return t
                     })
-                  )
+                  setTabs(applyTabRename)
+                  setSecondaryTabs(applyTabRename)
                   if (activeTabKey === oldKey) {
                     setActiveTabKey(newKey)
                   } else if (/\.(md|markdown|svg)$/i.test(newRelativePath)) {
@@ -4539,6 +4923,7 @@ export const App: React.FC = () => {
                 floatingToolbarEnabled={settings.floatingToolbarEnabled}
                 formattingToolbarVisible={Boolean(settings.formattingToolbarVisible)}
                 aiEnabled={settings.ai.enabled}
+                aiModelConfigured={aiModelConfigured}
                 showLineNumbers={Boolean(settings.showLineNumbers)}
                 wordWrap={settings.wordWrap !== false}
                 marginMode={settings.editorMarginMode || 'medium'}
@@ -4785,6 +5170,7 @@ export const App: React.FC = () => {
                     floatingToolbarEnabled={settings.floatingToolbarEnabled}
                     formattingToolbarVisible={Boolean(settings.formattingToolbarVisible)}
                     aiEnabled={settings.ai.enabled}
+                    aiModelConfigured={aiModelConfigured}
                     showLineNumbers={Boolean(settings.showLineNumbers)}
                     wordWrap={settings.wordWrap !== false}
                     marginMode={settings.editorMarginMode || 'medium'}
@@ -4928,6 +5314,7 @@ export const App: React.FC = () => {
                         ...secondaryTabs.map((t) => t.content)
                       ]}
                       settings={settings}
+                      evaluationContext={templateEvaluationContext}
                       onUpdateSettings={handleUpdateSettings}
                       onUpdateFrontmatterField={updateFrontmatterField}
                       onClose={() => handleUpdateSettings({ frontmatterPanelVisible: false })}
@@ -5023,6 +5410,9 @@ export const App: React.FC = () => {
                         onOpenHelpAI={() => openRightHelpPanel('ai')}
                         onOpenCitation={(rootId, relPath) => openDocument(rootId, relPath)}
                         onOpenCustomInstructionDialog={() => openAICustomInstructionDialog()}
+                        onConnectionStatusChange={(ok, modelsCount) =>
+                          setAiServerConnected(Boolean(ok && modelsCount > 0))
+                        }
                       />
                     )}
 
@@ -5609,6 +5999,39 @@ export const App: React.FC = () => {
             setAiInstructionDialog(null)
           }}
           onClose={() => setAiInstructionDialog(null)}
+        />
+      )}
+
+      {/* 4.3 Slide Deck Presentation Mode Modal */}
+      {showSlideDeckModal && activeTab && (
+        <SlideDeckModal
+          markdown={activeTab.content}
+          rootId={activeTab.rootId}
+          documentTitle={activeTab.relativePath.split('/').pop() || activeTab.relativePath}
+          onClose={() => setShowSlideDeckModal(false)}
+        />
+      )}
+
+      {/* 4.2 Web Clipper / Import from URL to Markdown Modal */}
+      {showWebClipperModal && (
+        <WebClipperModal
+          onCreateNoteFromClip={async (clippedTitle, markdownContent) => {
+            const targetRootId = activeTab?.rootId || roots[0]?.id
+            if (!targetRootId) return
+            const safeStem =
+              clippedTitle
+                .replace(/[^a-zA-Z0-9-_ ]/g, '')
+                .trim()
+                .replace(/\s+/g, '-') || 'Clipped-Note'
+            const relPath = `${safeStem}.md`
+            await window.klartext.createDocument(targetRootId, relPath, markdownContent)
+            await refreshWorkspaceAndTrees()
+            await openDocument(targetRootId, relPath)
+          }}
+          onInsertIntoCurrentDocument={(markdownContent) => {
+            dispatchTextInsert(`\n${markdownContent}\n`, null)
+          }}
+          onClose={() => setShowWebClipperModal(false)}
         />
       )}
 

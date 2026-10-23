@@ -214,8 +214,15 @@ export const MermaidDiagramWidget: React.FC<{
  * VISUAL MERMAID DIAGRAM STUDIO (Mermaid Live Editor + 2D Visual Node Builder)
  * ============================================================================ */
 
-export type VisualMermaidNodeShape = 'rect' | 'round' | 'diamond' | 'cylinder' | 'circle'
-export type VisualMermaidEdgeStyle = '-->' | '-.->' | '==>'
+export type VisualMermaidNodeShape =
+  | 'rect'
+  | 'round'
+  | 'diamond'
+  | 'cylinder'
+  | 'circle'
+  | 'subroutine'
+  | 'hexagon'
+export type VisualMermaidEdgeStyle = '-->' | '-.->' | '==>' | '<-->' | '---'
 
 export interface VisualMermaidNode {
   id: string
@@ -257,38 +264,6 @@ export const MERMAID_DIAGRAM_PRESETS: MermaidDiagramPreset[] = [
       { label: '+ Subgraph', snippet: '\n    subgraph Group["Service Boundary"]\n        G1["Worker Node"]\n    end' },
       { label: '+ Decision', snippet: '\n    DEC{"Check Condition?"} -->|"Pass"| OK["Continue"]' },
       { label: '+ Database', snippet: '\n    DB[("PostgreSQL Replica")]' }
-    ]
-  },
-  {
-    id: 'packet',
-    label: 'Packet (TCP)',
-    category: 'Network & Systems',
-    description: 'Bit-aligned network protocol & binary header layout (32-bit rows).',
-    code: `---
-title: "TCP Packet"
----
-packet
-0-15: "Source Port"
-16-31: "Destination Port"
-32-63: "Sequence Number"
-64-95: "Acknowledgment Number"
-96-99: "Data Offset"
-100-105: "Reserved"
-106: "URG"
-107: "ACK"
-108: "PSH"
-109: "RST"
-110: "SYN"
-111: "FIN"
-112-127: "Window"
-128-143: "Checksum"
-144-159: "Urgent Pointer"
-160-191: "(Options and Padding)"
-192-255: "Data (variable length)"`,
-    snippets: [
-      { label: '+ 16-bit Field', snippet: '\n256-271: "Extension Header"' },
-      { label: '+ 32-bit Word', snippet: '\n256-287: "Payload Checksum (32-bit)"' },
-      { label: '+ 1-bit Flag', snippet: '\n288: "FLAG"' }
     ]
   },
   {
@@ -654,28 +629,176 @@ Auth Service,Rate Limited (429),10`,
     snippets: [
       { label: '+ Slice', snippet: '\n    "Security Approved" : 15' }
     ]
-  },
-  {
-    id: 'c4',
-    label: 'C4 Context',
-    category: 'Flow & Architecture',
-    description: 'C4 software architecture context diagram with Persons, Systems, and Relationships.',
-    code: `C4Context
-    title System Context Diagram for Klartext Knowledge Platform
-    Person(author, "Technical Author", "Writes Markdown, runbooks, and architecture specs.")
-    System(klartext, "Klartext Desktop App", "Local-first multi-root Markdown, Git, and Diagram studio.")
-    System_Ext(github, "GitHub / Git Remote", "Stores versioned Markdown repositories.")
-    System_Ext(ollama, "Local Ollama Runtime", "Runs private LLM inference on 127.0.0.1.")
-
-    Rel(author, klartext, "Creates docs & diagrams in")
-    Rel(klartext, github, "Pulls & pushes via SSH/HTTPS")
-    Rel(klartext, ollama, "Streams local AI completions")`,
-    snippets: [
-      { label: '+ External System', snippet: '\n    System_Ext(ci, "CI Pipeline", "Validates docs & links.")' },
-      { label: '+ Relationship', snippet: '\n    Rel(github, ci, "Triggers webhook")' }
-    ]
   }
 ]
+
+/**
+ * Crisp SVG Icon for Flowchart Node Shapes (Visio-style stencil icons)
+ */
+const ShapeStencilIcon: React.FC<{ shape: VisualMermaidNodeShape; className?: string }> = ({
+  shape,
+  className = 'w-4 h-3.5 shrink-0'
+}) => {
+  switch (shape) {
+    case 'rect':
+      return (
+        <svg viewBox="0 0 24 18" fill="none" className={className}>
+          <rect
+            x="2"
+            y="2.5"
+            width="20"
+            height="13"
+            rx="1.5"
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="currentColor"
+            fillOpacity="0.14"
+          />
+        </svg>
+      )
+    case 'round':
+      return (
+        <svg viewBox="0 0 24 18" fill="none" className={className}>
+          <rect
+            x="2"
+            y="2.5"
+            width="20"
+            height="13"
+            rx="6.5"
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="currentColor"
+            fillOpacity="0.14"
+          />
+        </svg>
+      )
+    case 'diamond':
+      return (
+        <svg viewBox="0 0 24 18" fill="none" className={className}>
+          <polygon
+            points="12,1.5 22.5,9 12,16.5 1.5,9"
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="currentColor"
+            fillOpacity="0.14"
+          />
+        </svg>
+      )
+    case 'cylinder':
+      return (
+        <svg viewBox="0 0 24 18" fill="none" className={className}>
+          <path
+            d="M4 5C4 3.34 7.58 2 12 2C16.42 2 20 3.34 20 5V13C20 14.66 16.42 16 12 16C7.58 16 4 14.66 4 13V5Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            fill="currentColor"
+            fillOpacity="0.14"
+          />
+          <ellipse cx="12" cy="5" rx="8" ry="2.6" stroke="currentColor" strokeWidth="1.8" />
+        </svg>
+      )
+    case 'circle':
+      return (
+        <svg viewBox="0 0 24 18" fill="none" className={className}>
+          <circle
+            cx="12"
+            cy="9"
+            r="7"
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="currentColor"
+            fillOpacity="0.14"
+          />
+        </svg>
+      )
+    case 'subroutine':
+      return (
+        <svg viewBox="0 0 24 18" fill="none" className={className}>
+          <rect
+            x="2"
+            y="2.5"
+            width="20"
+            height="13"
+            rx="1.5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            fill="currentColor"
+            fillOpacity="0.14"
+          />
+          <line x1="5.5" y1="2.5" x2="5.5" y2="15.5" stroke="currentColor" strokeWidth="1.8" />
+          <line x1="18.5" y1="2.5" x2="18.5" y2="15.5" stroke="currentColor" strokeWidth="1.8" />
+        </svg>
+      )
+    case 'hexagon':
+      return (
+        <svg viewBox="0 0 24 18" fill="none" className={className}>
+          <polygon
+            points="6,2.5 18,2.5 22.5,9 18,15.5 6,15.5 1.5,9"
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="currentColor"
+            fillOpacity="0.14"
+          />
+        </svg>
+      )
+  }
+}
+
+/**
+ * Crisp SVG Icon for Flowchart Connector / Arrow Styles
+ */
+const ArrowStyleIcon: React.FC<{ style: VisualMermaidEdgeStyle; className?: string }> = ({
+  style,
+  className = 'w-6 h-3.5 shrink-0'
+}) => {
+  switch (style) {
+    case '-->':
+      return (
+        <svg viewBox="0 0 28 14" fill="none" className={className}>
+          <line x1="2" y1="7" x2="21" y2="7" stroke="currentColor" strokeWidth="2" />
+          <polygon points="20,3 26.5,7 20,11" fill="currentColor" />
+        </svg>
+      )
+    case '-.->':
+      return (
+        <svg viewBox="0 0 28 14" fill="none" className={className}>
+          <line
+            x1="2"
+            y1="7"
+            x2="21"
+            y2="7"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeDasharray="3.5 2.5"
+          />
+          <polygon points="20,3 26.5,7 20,11" fill="currentColor" />
+        </svg>
+      )
+    case '==>':
+      return (
+        <svg viewBox="0 0 28 14" fill="none" className={className}>
+          <line x1="2" y1="7" x2="20" y2="7" stroke="currentColor" strokeWidth="3.6" />
+          <polygon points="19,2.2 27,7 19,11.8" fill="currentColor" />
+        </svg>
+      )
+    case '<-->':
+      return (
+        <svg viewBox="0 0 28 14" fill="none" className={className}>
+          <polygon points="7,3 1.5,7 7,11" fill="currentColor" />
+          <line x1="6" y1="7" x2="22" y2="7" stroke="currentColor" strokeWidth="2" />
+          <polygon points="21,3 26.5,7 21,11" fill="currentColor" />
+        </svg>
+      )
+    case '---':
+      return (
+        <svg viewBox="0 0 28 14" fill="none" className={className}>
+          <line x1="2" y1="7" x2="26" y2="7" stroke="currentColor" strokeWidth="2" />
+          <circle cx="4" cy="7" r="2" fill="currentColor" />
+          <circle cx="24" cy="7" r="2" fill="currentColor" />
+        </svg>
+      )
+  }
+}
 
 /**
  * Strips YAML frontmatter (`---\n...\n---`) and `%%{init: ...}%%` directives
@@ -695,7 +818,6 @@ export function detectMermaidDiagramType(code?: string): string {
       .find((l) => l.length > 0 && !l.startsWith('%%')) || ''
 
   if (/^(?:flowchart|graph)\b/i.test(firstLine)) return 'flowchart'
-  if (/^packet(?:-beta)?\b/i.test(firstLine)) return 'packet'
   if (/^sequenceDiagram\b/i.test(firstLine)) return 'sequence'
   if (/^architecture(?:-beta)?\b/i.test(firstLine)) return 'architecture'
   if (/^block(?:-beta)?\b/i.test(firstLine)) return 'block'
@@ -712,7 +834,6 @@ export function detectMermaidDiagramType(code?: string): string {
   if (/^sankey(?:-beta)?\b/i.test(firstLine)) return 'sankey'
   if (/^journey\b/i.test(firstLine)) return 'journey'
   if (/^pie\b/i.test(firstLine)) return 'pie'
-  if (/^C4(?:Context|Container|Component|Dynamic|Deployment)\b/i.test(firstLine)) return 'c4'
   return 'custom'
 }
 
@@ -729,6 +850,8 @@ export function generateMermaidFromVisualGraph(
     else if (n.shape === 'diamond') formatted = `${n.id}{"${safeLabel}"}`
     else if (n.shape === 'cylinder') formatted = `${n.id}[("${safeLabel}")]`
     else if (n.shape === 'circle') formatted = `${n.id}(("${safeLabel}"))`
+    else if (n.shape === 'subroutine') formatted = `${n.id}[["${safeLabel}"]]`
+    else if (n.shape === 'hexagon') formatted = `${n.id}{{"${safeLabel}"}}`
     lines.push(`    ${formatted}`)
   }
   for (const e of edges) {
@@ -749,6 +872,18 @@ function parseNodeToken(rawToken: string): {
 } | null {
   const token = rawToken.trim()
   if (!token) return null
+
+  // Match ID[["Label"]] - subroutine
+  const subMatch = token.match(/^([A-Za-z0-9_-]+)\s*\[\[\s*"?([^"]*?)"?\s*\]\]$/)
+  if (subMatch) {
+    return { id: subMatch[1], label: subMatch[2], shape: 'subroutine' }
+  }
+
+  // Match ID{{"Label"}} - hexagon
+  const hexMatch = token.match(/^([A-Za-z0-9_-]+)\s*\{\{\s*"?([^"]*?)"?\s*\}\}$/)
+  if (hexMatch) {
+    return { id: hexMatch[1], label: hexMatch[2], shape: 'hexagon' }
+  }
 
   // Match ID[("Label")] - cylinder
   const cylMatch = token.match(/^([A-Za-z0-9_-]+)\s*\[\(\s*"?([^"]*?)"?\s*\)\]$/)
@@ -847,9 +982,9 @@ export function parseMermaidToVisualGraph(code?: string): {
       continue
     }
 
-    // Check if line contains an edge arrow: -->, -.->, ==> with optional |"label"|
+    // Check if line contains an edge arrow: <--> , --> , -.-> , ==> , --- with optional |"label"|
     const edgeMatch = line.match(
-      /^(.+?)\s*(-->|-\.->|==>)\s*(?:\|\s*"?([^"|]*?)"?\s*\|\s*)?(.+)$/
+      /^(.+?)\s*(<-->|-->|-\.->|==>|---)\s*(?:\|\s*"?([^"|]*?)"?\s*\|\s*)?(.+)$/
     )
     if (edgeMatch) {
       const [, leftRaw, arrowRaw, edgeLabelRaw, rightRaw] = edgeMatch
@@ -888,15 +1023,15 @@ export function parseMermaidToVisualGraph(code?: string): {
       return {
         ...n,
         x: 60 + col * 220,
-        y: 55 + row * 105
+        y: 60 + row * 115
       }
     } else {
       const col = idx % 2
       const row = Math.floor(idx / 2)
       return {
         ...n,
-        x: 140 + col * 260,
-        y: 35 + row * 85
+        x: 140 + col * 250,
+        y: 45 + row * 95
       }
     }
   })
@@ -905,6 +1040,66 @@ export function parseMermaidToVisualGraph(code?: string): {
     direction,
     nodes: positionedNodes,
     edges
+  }
+}
+
+/**
+ * Computes smart boundary anchor points between two 136x54 flowchart nodes
+ * so edges connect cleanly to node edges (like Visio) instead of cutting through centers.
+ */
+function computeSmartEdgeEndpoints(
+  fromNode: VisualMermaidNode,
+  toNode: VisualMermaidNode,
+  w = 136,
+  h = 54
+): { x1: number; y1: number; x2: number; y2: number; mx: number; my: number } {
+  const cx1 = fromNode.x + w / 2
+  const cy1 = fromNode.y + h / 2
+  const cx2 = toNode.x + w / 2
+  const cy2 = toNode.y + h / 2
+  const dx = cx2 - cx1
+  const dy = cy2 - cy1
+
+  let x1 = cx1
+  let y1 = cy1
+  let x2 = cx2
+  let y2 = cy2
+
+  if (Math.abs(dx) >= Math.abs(dy) * 0.85) {
+    // Horizontal connection (Right -> Left or Left -> Right)
+    if (dx >= 0) {
+      x1 = fromNode.x + w
+      y1 = cy1
+      x2 = toNode.x
+      y2 = cy2
+    } else {
+      x1 = fromNode.x
+      y1 = cy1
+      x2 = toNode.x + w
+      y2 = cy2
+    }
+  } else {
+    // Vertical connection (Bottom -> Top or Top -> Bottom)
+    if (dy >= 0) {
+      x1 = cx1
+      y1 = fromNode.y + h
+      x2 = cx2
+      y2 = toNode.y
+    } else {
+      x1 = cx1
+      y1 = fromNode.y
+      x2 = cx2
+      y2 = toNode.y + h
+    }
+  }
+
+  return {
+    x1,
+    y1,
+    x2,
+    y2,
+    mx: (x1 + x2) / 2,
+    my: (y1 + y2) / 2
   }
 }
 
@@ -922,7 +1117,7 @@ export const VisualMermaidBuilderModal: React.FC<{
   const [nodes, setNodes] = useState<VisualMermaidNode[]>(initialGraph.nodes)
   const [edges, setEdges] = useState<VisualMermaidEdge[]>(initialGraph.edges)
 
-  // Live Mermaid source code (supports all 19+ Mermaid diagram types, frontmatter, and directives)
+  // Live Mermaid source code (supports all 17 Mermaid diagram types, frontmatter, and directives)
   const [customCode, setCustomCode] = useState<string>(() => {
     if (initialCode && initialCode.trim()) {
       return initialCode.trim()
@@ -944,7 +1139,24 @@ export const VisualMermaidBuilderModal: React.FC<{
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null)
   const [edgeStyleToCreate, setEdgeStyleToCreate] = useState<VisualMermaidEdgeStyle>('-->')
 
-  // Mermaid Live Studio Preview Controls (inspired by mermaid.live/edit)
+  // Visio-style 2D Visual Canvas Controls (Pan, Zoom, Tool Mode, Snap-to-Grid, Inline Editing)
+  const [canvasTool, setCanvasTool] = useState<'select' | 'pan'>('select')
+  const [canvasZoom, setCanvasZoom] = useState<number>(1)
+  const [canvasPan, setCanvasPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [snapToGrid, setSnapToGrid] = useState<boolean>(true)
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
+  const [inlineEditingNodeId, setInlineEditingNodeId] = useState<string | null>(null)
+  const [inlineEditingEdgeId, setInlineEditingEdgeId] = useState<string | null>(null)
+  const [rubberBandCursor, setRubberBandCursor] = useState<{ x: number; y: number } | null>(null)
+
+  const canvasPanDragRef = useRef<{
+    startX: number
+    startY: number
+    originX: number
+    originY: number
+  } | null>(null)
+
+  // Live Output Preview Controls (Pan, Zoom, Grid, Theme)
   const [previewSvg, setPreviewSvg] = useState<string>('')
   const [syntaxError, setSyntaxError] = useState<string | null>(null)
   const [previewGrid, setPreviewGrid] = useState<boolean>(true)
@@ -959,18 +1171,29 @@ export const VisualMermaidBuilderModal: React.FC<{
     originY: number
   } | null>(null)
 
-  // Packet diagram quick-field builder state
-  const [packetStartBit, setPacketStartBit] = useState<string>('256')
-  const [packetEndBit, setPacketEndBit] = useState<string>('271')
-  const [packetFieldLabel, setPacketFieldLabel] = useState<string>('Custom Header Field')
-
-  // Resizable main wizard window dimensions
+  // Flexible Resizable Workspace Layout State:
+  // 1. Main Modal Window Dimensions + Maximize Toggle
+  const [isMaximized, setIsMaximized] = useState<boolean>(false)
   const [modalSize, setModalSize] = useState<{ width: number; height: number }>(() => ({
-    width: Math.min(1220, Math.max(820, window.innerWidth - 48)),
-    height: Math.min(820, Math.max(560, window.innerHeight - 48))
+    width: Math.min(1440, Math.max(920, window.innerWidth - 36)),
+    height: Math.min(900, Math.max(620, window.innerHeight - 36))
   }))
+  // 2. Horizontal Split Ratio between Visual Builder (left %) and Live Output Preview (right %)
+  const [leftPanePercent, setLeftPanePercent] = useState<number>(52)
+  // 3. Vertical Split Height & Collapse Toggle for Mermaid Code Drawer
+  const [codeDrawerHeight, setCodeDrawerHeight] = useState<number>(125)
+  const [isCodeDrawerOpen, setIsCodeDrawerOpen] = useState<boolean>(true)
+
+  const workspaceContainerRef = useRef<HTMLDivElement | null>(null)
+  const leftColumnRef = useRef<HTMLDivElement | null>(null)
+  const splitDragRef = useRef<
+    | { type: 'horizontal'; startX: number; startPercent: number }
+    | { type: 'vertical'; startY: number; startHeight: number }
+    | null
+  >(null)
+
   const modalResizeRef = useRef<{
-    dir: 'right' | 'bottom' | 'corner'
+    dir: 'right' | 'left' | 'bottom' | 'top' | 'corner'
     startX: number
     startY: number
     startW: number
@@ -983,16 +1206,36 @@ export const VisualMermaidBuilderModal: React.FC<{
         const { dir, startX, startY, startW, startH } = modalResizeRef.current
         const dx = e.clientX - startX
         const dy = e.clientY - startY
+        setIsMaximized(false)
         setModalSize((prev) => ({
           width:
             dir === 'right' || dir === 'corner'
-              ? Math.max(660, Math.min(window.innerWidth - 24, startW + dx * 2))
-              : prev.width,
+              ? Math.max(720, Math.min(window.innerWidth - 16, startW + dx * 2))
+              : dir === 'left'
+                ? Math.max(720, Math.min(window.innerWidth - 16, startW - dx * 2))
+                : prev.width,
           height:
             dir === 'bottom' || dir === 'corner'
-              ? Math.max(460, Math.min(window.innerHeight - 24, startH + dy * 2))
-              : prev.height
+              ? Math.max(480, Math.min(window.innerHeight - 16, startH + dy * 2))
+              : dir === 'top'
+                ? Math.max(480, Math.min(window.innerHeight - 16, startH - dy * 2))
+                : prev.height
         }))
+      }
+      if (splitDragRef.current) {
+        if (splitDragRef.current.type === 'horizontal' && workspaceContainerRef.current) {
+          const rect = workspaceContainerRef.current.getBoundingClientRect()
+          const deltaX = e.clientX - splitDragRef.current.startX
+          const deltaPct = (deltaX / Math.max(1, rect.width)) * 100
+          setLeftPanePercent(
+            Math.max(22, Math.min(78, Math.round(splitDragRef.current.startPercent + deltaPct)))
+          )
+        } else if (splitDragRef.current.type === 'vertical') {
+          const deltaY = splitDragRef.current.startY - e.clientY
+          setCodeDrawerHeight(
+            Math.max(75, Math.min(360, Math.round(splitDragRef.current.startHeight + deltaY)))
+          )
+        }
       }
       if (previewPanDragRef.current) {
         const { startX, startY, originX, originY } = previewPanDragRef.current
@@ -1001,10 +1244,19 @@ export const VisualMermaidBuilderModal: React.FC<{
           y: originY + (e.clientY - startY)
         })
       }
+      if (canvasPanDragRef.current) {
+        const { startX, startY, originX, originY } = canvasPanDragRef.current
+        setCanvasPan({
+          x: originX + (e.clientX - startX),
+          y: originY + (e.clientY - startY)
+        })
+      }
     }
     const onWindowMouseUp = () => {
       modalResizeRef.current = null
+      splitDragRef.current = null
       previewPanDragRef.current = null
+      canvasPanDragRef.current = null
     }
     window.addEventListener('mousemove', onWindowMouseMove)
     window.addEventListener('mouseup', onWindowMouseUp)
@@ -1035,11 +1287,22 @@ export const VisualMermaidBuilderModal: React.FC<{
   const svgRef = useRef<SVGSVGElement | null>(null)
   const draggingNodeRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null)
 
-  // Dynamically expand drawing canvas based on node positions AND modal size
-  const maxNodeRight = nodes.reduce((acc, n) => Math.max(acc, n.x + 240), 720)
-  const maxNodeBottom = nodes.reduce((acc, n) => Math.max(acc, n.y + 150), 420)
-  const canvasWidth = Math.max(720, Math.round(modalSize.width * 0.54), maxNodeRight)
-  const canvasHeight = Math.max(360, Math.round(modalSize.height - 290), maxNodeBottom)
+  const effectiveModalW = isMaximized ? window.innerWidth - 16 : modalSize.width
+  const effectiveModalH = isMaximized ? window.innerHeight - 16 : modalSize.height
+
+  // Dynamically expand drawing canvas based on node positions AND resizable pane size
+  const maxNodeRight = nodes.reduce((acc, n) => Math.max(acc, n.x + 260), 820)
+  const maxNodeBottom = nodes.reduce((acc, n) => Math.max(acc, n.y + 180), 480)
+  const canvasWidth = Math.max(
+    820,
+    Math.round(effectiveModalW * (leftPanePercent / 100)),
+    maxNodeRight
+  )
+  const canvasHeight = Math.max(
+    460,
+    Math.round(effectiveModalH - (isCodeDrawerOpen ? codeDrawerHeight + 210 : 190)),
+    maxNodeBottom
+  )
 
   const visualFlowchartCode = generateMermaidFromVisualGraph(direction, nodes, edges)
   const effectiveMermaidCode = isCodeManuallyEdited ? customCode : visualFlowchartCode
@@ -1079,6 +1342,8 @@ export const VisualMermaidBuilderModal: React.FC<{
     setActivePresetId(preset.id)
     setPreviewZoom(1)
     setPreviewPan({ x: 0, y: 0 })
+    setCanvasZoom(1)
+    setCanvasPan({ x: 0, y: 0 })
     if (preset.id === 'flowchart') {
       const parsed = parseMermaidToVisualGraph(preset.code)
       setDirection(parsed.direction)
@@ -1115,7 +1380,25 @@ export const VisualMermaidBuilderModal: React.FC<{
     handleCodeEditorChange(updated)
   }
 
-  const addNode = (shape: VisualMermaidNodeShape, customX?: number, customY?: number) => {
+  const toCanvasCoords = (clientX: number, clientY: number) => {
+    if (!svgRef.current) return { x: 60, y: 60 }
+    const rect = svgRef.current.getBoundingClientRect()
+    const scaleX = canvasWidth / Math.max(1, rect.width)
+    const scaleY = canvasHeight / Math.max(1, rect.height)
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    }
+  }
+
+  const snapCoord = (val: number) => (snapToGrid ? Math.round(val / 16) * 16 : Math.round(val))
+
+  const addNode = (
+    shape: VisualMermaidNodeShape,
+    customX?: number,
+    customY?: number,
+    connectFromNodeId?: string
+  ) => {
     const nextIdx = nodes.length + 1
     const id = `N${Date.now().toString(36).slice(-3).toUpperCase()}${nextIdx}`
     const defaultLabels: Record<VisualMermaidNodeShape, string> = {
@@ -1123,31 +1406,63 @@ export const VisualMermaidBuilderModal: React.FC<{
       round: `Step ${nextIdx}`,
       diamond: `Decision ${nextIdx}?`,
       cylinder: `Database ${nextIdx}`,
-      circle: `Event ${nextIdx}`
+      circle: `Event ${nextIdx}`,
+      subroutine: `Subroutine ${nextIdx}`,
+      hexagon: `Prepare ${nextIdx}`
     }
     const col = nodes.length % 3
     const row = Math.floor(nodes.length / 3)
+    const rawX = customX !== undefined ? customX : 64 + col * 210
+    const rawY = customY !== undefined ? customY : 64 + row * 110
     const newNode: VisualMermaidNode = {
       id,
       label: defaultLabels[shape],
       shape,
-      x: customX !== undefined ? Math.max(16, Math.round(customX)) : 50 + col * 210,
-      y: customY !== undefined ? Math.max(16, Math.round(customY)) : 50 + row * 105
+      x: Math.max(16, snapCoord(rawX)),
+      y: Math.max(16, snapCoord(rawY))
     }
     setIsCodeManuallyEdited(false)
     setActivePresetId('flowchart')
     setNodes((prev) => [...prev, newNode])
+    if (connectFromNodeId) {
+      const newEdge: VisualMermaidEdge = {
+        id: `E-${Date.now()}`,
+        from: connectFromNodeId,
+        to: id,
+        style: edgeStyleToCreate,
+        label: ''
+      }
+      setEdges((prev) => [...prev, newEdge])
+    }
     setSelectedNodeId(id)
     setSelectedEdgeId(null)
   }
 
+  const autoLayoutNodes = (targetDir: 'LR' | 'TD' = direction) => {
+    setIsCodeManuallyEdited(false)
+    setDirection(targetDir)
+    setNodes((prev) =>
+      prev.map((n, idx) => {
+        if (targetDir === 'LR') {
+          const col = idx % 3
+          const row = Math.floor(idx / 3)
+          return { ...n, x: 64 + col * 224, y: 64 + row * 112 }
+        } else {
+          const col = idx % 2
+          const row = Math.floor(idx / 2)
+          return { ...n, x: 144 + col * 256, y: 48 + row * 104 }
+        }
+      })
+    )
+    setCanvasPan({ x: 0, y: 0 })
+  }
+
   const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!draggingNodeRef.current || !svgRef.current) return
-    const rect = svgRef.current.getBoundingClientRect()
-    const scaleX = canvasWidth / Math.max(1, rect.width)
-    const scaleY = canvasHeight / Math.max(1, rect.height)
-    const mouseX = (e.clientX - rect.left) * scaleX
-    const mouseY = (e.clientY - rect.top) * scaleY
+    const pt = toCanvasCoords(e.clientX, e.clientY)
+    if (connectSourceId) {
+      setRubberBandCursor(pt)
+    }
+    if (!draggingNodeRef.current) return
     const { id, offsetX, offsetY } = draggingNodeRef.current
     setIsCodeManuallyEdited(false)
     setNodes((prev) =>
@@ -1155,31 +1470,38 @@ export const VisualMermaidBuilderModal: React.FC<{
         n.id === id
           ? {
               ...n,
-              // No upper clamp: dragging toward the right or bottom dynamically expands the canvas!
-              x: Math.max(16, Math.round(mouseX - offsetX)),
-              y: Math.max(16, Math.round(mouseY - offsetY))
+              x: Math.max(16, snapCoord(pt.x - offsetX)),
+              y: Math.max(16, snapCoord(pt.y - offsetY))
             }
           : n
       )
     )
   }
 
+  const completeConnectionToNode = (targetNodeId: string) => {
+    if (!connectSourceId || connectSourceId === targetNodeId) {
+      setConnectSourceId(null)
+      setRubberBandCursor(null)
+      return
+    }
+    const newEdge: VisualMermaidEdge = {
+      id: `E-${Date.now()}`,
+      from: connectSourceId,
+      to: targetNodeId,
+      style: edgeStyleToCreate,
+      label: ''
+    }
+    setIsCodeManuallyEdited(false)
+    setEdges((prev) => [...prev, newEdge])
+    setSelectedEdgeId(newEdge.id)
+    setSelectedNodeId(null)
+    setConnectSourceId(null)
+    setRubberBandCursor(null)
+  }
+
   const handleNodeClick = (nodeId: string) => {
     if (connectSourceId) {
-      if (connectSourceId !== nodeId) {
-        const newEdge: VisualMermaidEdge = {
-          id: `E-${Date.now()}`,
-          from: connectSourceId,
-          to: nodeId,
-          style: edgeStyleToCreate,
-          label: ''
-        }
-        setIsCodeManuallyEdited(false)
-        setEdges((prev) => [...prev, newEdge])
-        setSelectedEdgeId(newEdge.id)
-        setSelectedNodeId(null)
-      }
-      setConnectSourceId(null)
+      completeConnectionToNode(nodeId)
       return
     }
     setSelectedNodeId(nodeId)
@@ -1188,40 +1510,138 @@ export const VisualMermaidBuilderModal: React.FC<{
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId) || null
+  const connectOriginNode = nodes.find((n) => n.id === connectSourceId) || null
   const currentPreset =
     MERMAID_DIAGRAM_PRESETS.find((p) => p.id === activePresetId) || MERMAID_DIAGRAM_PRESETS[0]
   const isFlowchartMode = activePresetId === 'flowchart'
 
+  const shapeStencilButtons: {
+    shape: VisualMermaidNodeShape
+    testId: string
+    label: string
+    hint: string
+  }[] = [
+    { shape: 'rect', testId: 'mermaid-add-rect', label: 'Process', hint: 'Process Rectangle ["..."]' },
+    { shape: 'round', testId: 'mermaid-add-round', label: 'Rounded', hint: 'Rounded Step ("...")' },
+    { shape: 'diamond', testId: 'mermaid-add-diamond', label: 'Decision', hint: 'Decision Diamond {"..."}' },
+    { shape: 'cylinder', testId: 'mermaid-add-cylinder', label: 'Database', hint: 'Database Cylinder [("...")]' },
+    { shape: 'circle', testId: 'mermaid-add-circle', label: 'Circle', hint: 'Circle Event Node (("..."))' },
+    { shape: 'subroutine', testId: 'mermaid-add-subroutine', label: 'Subroutine', hint: 'Subroutine [["..."]]' },
+    { shape: 'hexagon', testId: 'mermaid-add-hexagon', label: 'Hexagon', hint: 'Preparation Hexagon {{"..."}}' }
+  ]
+
+  const arrowStyleButtons: {
+    style: VisualMermaidEdgeStyle
+    testId: string
+    label: string
+    hint: string
+  }[] = [
+    { style: '-->', testId: 'mermaid-arrow-solid', label: 'Solid', hint: 'Solid Directed Arrow (-->)' },
+    { style: '-.->', testId: 'mermaid-arrow-dashed', label: 'Dashed', hint: 'Dashed Dotted Arrow (-.->)' },
+    { style: '==>', testId: 'mermaid-arrow-thick', label: 'Thick', hint: 'Bold Thick Arrow (==>)' },
+    { style: '<-->', testId: 'mermaid-arrow-bi', label: 'Two-Way', hint: 'Bi-directional Arrow (<-->)' },
+    { style: '---', testId: 'mermaid-arrow-line', label: 'Line', hint: 'Undirected Line Link (---)' }
+  ]
+
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-center justify-center p-2"
       data-testid="visual-mermaid-builder-modal"
     >
       <div
         data-testid="visual-mermaid-builder-window"
         style={{
-          width: `${modalSize.width}px`,
-          height: `${modalSize.height}px`,
-          minWidth: '660px',
-          minHeight: '460px',
-          maxWidth: '96vw',
-          maxHeight: '94vh',
+          width: isMaximized ? 'calc(100vw - 16px)' : `${modalSize.width}px`,
+          height: isMaximized ? 'calc(100vh - 16px)' : `${modalSize.height}px`,
+          minWidth: '720px',
+          minHeight: '480px',
+          maxWidth: '99vw',
+          maxHeight: '98vh',
           resize: 'both'
         }}
-        className="relative bg-panel border border-subtle rounded-lg shadow-xl flex flex-col overflow-hidden"
+        className="relative bg-panel border border-subtle rounded-lg shadow-2xl flex flex-col overflow-hidden"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-secondary border-b border-subtle shrink-0">
-          <div className="flex items-center gap-2">
-            <GitCommit className="w-4 h-4 text-accent" />
-            <span className="font-semibold text-sm text-primary">
-              Mermaid Live Diagram Studio &amp; Graphical Drag-and-Drop Builder
-            </span>
-            <span className="text-xs px-2 py-0.5 rounded bg-panel border border-subtle text-muted">
-              19 Popular Diagram Types • Graphical Drag &amp; Drop GUI + Live Preview
-            </span>
+        {/* Top Professional Studio Header */}
+        <div className="flex items-center justify-between px-4 py-2 bg-secondary border-b border-subtle shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded bg-accent/15 border border-accent/30 flex items-center justify-center text-accent">
+              <GitCommit className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm text-primary">
+                  Visual Diagram Studio
+                </span>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-panel border border-subtle text-muted font-medium">
+                  {MERMAID_DIAGRAM_PRESETS.length} Diagram Types • Visio-Style Canvas &amp; Live Output
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Center Layout Split Presets */}
+          <div className="hidden md:flex items-center gap-1 bg-panel border border-subtle rounded p-0.5 text-[11px]">
+            <span className="px-2 text-muted font-medium">Layout:</span>
+            <button
+              type="button"
+              onClick={() => setLeftPanePercent(68)}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                leftPanePercent > 58
+                  ? 'bg-accent text-white font-medium'
+                  : 'text-primary hover:bg-secondary'
+              }`}
+              title="Expand Visual Canvas (68% / 32%)"
+            >
+              Focus Canvas
+            </button>
+            <button
+              type="button"
+              onClick={() => setLeftPanePercent(50)}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                leftPanePercent >= 42 && leftPanePercent <= 58
+                  ? 'bg-accent text-white font-medium'
+                  : 'text-primary hover:bg-secondary'
+              }`}
+              title="Balanced Split View (50% / 50%)"
+            >
+              50 / 50 Split
+            </button>
+            <button
+              type="button"
+              onClick={() => setLeftPanePercent(32)}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                leftPanePercent < 42
+                  ? 'bg-accent text-white font-medium'
+                  : 'text-primary hover:bg-secondary'
+              }`}
+              title="Expand Rendered Output Preview (32% / 68%)"
+            >
+              Focus Output
+            </button>
+            <button
+              type="button"
+              data-testid="mermaid-toggle-code-drawer"
+              onClick={() => setIsCodeDrawerOpen((v) => !v)}
+              className={`px-2 py-0.5 rounded border-l border-subtle ml-0.5 transition-colors ${
+                isCodeDrawerOpen ? 'text-accent font-medium' : 'text-muted hover:text-primary'
+              }`}
+              title="Show or Hide the Mermaid Code Drawer to maximize canvas height"
+            >
+              {isCodeDrawerOpen ? 'Hide Code' : 'Show Code'}
+            </button>
+          </div>
+
+          {/* Right Action Buttons */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              data-testid="mermaid-maximize-btn"
+              onClick={() => setIsMaximized((v) => !v)}
+              className="px-2.5 py-1 text-xs rounded bg-panel border border-subtle text-primary hover:border-accent"
+              title={isMaximized ? 'Restore Window Size' : 'Maximize Diagram Studio Window'}
+            >
+              {isMaximized ? 'Restore Size' : 'Maximize'}
+            </button>
             <button
               type="button"
               data-testid="mermaid-copy-code-btn"
@@ -1241,28 +1661,28 @@ export const VisualMermaidBuilderModal: React.FC<{
                 onInsertOrUpdateMermaid(effectiveMermaidCode)
                 onClose()
               }}
-              className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded bg-accent text-white hover:opacity-90"
+              className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded bg-accent text-white hover:opacity-90 shadow-2xs"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>Insert / Update Mermaid in Document</span>
+              <span>Insert / Update Diagram</span>
             </button>
             <button
               type="button"
               data-testid="mermaid-builder-close-btn"
               onClick={onClose}
-              className="px-3 py-1 text-xs rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2.5 py-1 text-xs rounded bg-panel border border-subtle text-primary hover:border-accent"
             >
               Close
             </button>
           </div>
         </div>
 
-        {/* Diagram Type Gallery Bar */}
+        {/* Diagram Type Gallery Ribbon */}
         <div
           data-testid="mermaid-preset-gallery"
-          className="flex items-center gap-1.5 px-4 py-2 bg-secondary/40 border-b border-subtle overflow-x-auto shrink-0 text-xs"
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-secondary/40 border-b border-subtle overflow-x-auto shrink-0 text-xs"
         >
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted mr-1 shrink-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted mr-1 shrink-0">
             Diagram Type:
           </span>
           {MERMAID_DIAGRAM_PRESETS.map((preset) => {
@@ -1276,7 +1696,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                 title={`${preset.label} — ${preset.description}`}
                 className={`px-2.5 py-1 rounded border text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${
                   isActive
-                    ? 'bg-accent text-white border-accent shadow-xs'
+                    ? 'bg-accent text-white border-accent shadow-2xs'
                     : 'bg-panel border-subtle text-primary hover:border-accent'
                 }`}
               >
@@ -1286,30 +1706,19 @@ export const VisualMermaidBuilderModal: React.FC<{
           })}
         </div>
 
-        {/* Context-Aware Drag-and-Drop Building Block Palette Toolbar */}
+        {/* Visio-Style Shape & Connector Stencil Ribbon */}
         <div
           data-testid="mermaid-draggable-palette"
           className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-app border-b border-subtle text-xs shrink-0"
         >
           {isFlowchartMode ? (
             <>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-muted font-medium mr-1">
-                  Drag or Click Shape:
+              {/* Shape Stencil Buttons with SVG Shape Icons */}
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted mr-1">
+                  Shapes:
                 </span>
-                {(
-                  [
-                    { shape: 'rect', testId: 'mermaid-add-rect', label: '+ Process [Rect]' },
-                    { shape: 'round', testId: 'mermaid-add-round', label: '+ Rounded (Step)' },
-                    { shape: 'diamond', testId: 'mermaid-add-diamond', label: '+ Decision {Diamond}' },
-                    {
-                      shape: 'cylinder',
-                      testId: 'mermaid-add-cylinder',
-                      label: '+ Database [(Cylinder)]'
-                    },
-                    { shape: 'circle', testId: 'mermaid-add-circle', label: '+ Circle ((Node))' }
-                  ] as const
-                ).map((item) => (
+                {shapeStencilButtons.map((item) => (
                   <button
                     key={item.shape}
                     type="button"
@@ -1319,25 +1728,53 @@ export const VisualMermaidBuilderModal: React.FC<{
                       e.dataTransfer.setData('text/klartext-mermaid-shape', item.shape)
                     }}
                     onClick={() => addNode(item.shape)}
-                    title="Click to add or drag onto the 2D canvas"
-                    className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary cursor-grab active:cursor-grabbing"
+                    title={`${item.hint} — Click to add or drag onto canvas`}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent hover:bg-secondary/50 text-primary font-medium cursor-grab active:cursor-grabbing shadow-2xs transition-colors"
                   >
-                    ⋮⋮ {item.label}
+                    <ShapeStencilIcon shape={item.shape} className="w-4 h-3.5 text-accent" />
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
-                <label className="text-muted">Arrow Type:</label>
-                <select
-                  value={edgeStyleToCreate}
-                  onChange={(e) => setEdgeStyleToCreate(e.target.value as VisualMermaidEdgeStyle)}
-                  className="px-2 py-1 rounded bg-panel border border-subtle text-primary"
-                >
-                  <option value="-->">Solid Arrow (--&gt;)</option>
-                  <option value="-.->">Dashed Arrow (-.-&gt;)</option>
-                  <option value="==>">Thick Arrow (==&gt;)</option>
-                </select>
+              {/* Arrow Style Stencil Buttons with SVG Arrow Icons + Layout Direction */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted mr-0.5">
+                  Connectors:
+                </span>
+                <div className="flex items-center bg-panel border border-subtle rounded p-0.5 gap-0.5">
+                  {arrowStyleButtons.map((arr) => {
+                    const isActive =
+                      (selectedEdge ? selectedEdge.style : edgeStyleToCreate) === arr.style
+                    return (
+                      <button
+                        key={arr.style}
+                        type="button"
+                        data-testid={arr.testId}
+                        onClick={() => {
+                          setEdgeStyleToCreate(arr.style)
+                          if (selectedEdgeId) {
+                            setIsCodeManuallyEdited(false)
+                            setEdges((prev) =>
+                              prev.map((ed) =>
+                                ed.id === selectedEdgeId ? { ...ed, style: arr.style } : ed
+                              )
+                            )
+                          }
+                        }}
+                        title={arr.hint}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                          isActive
+                            ? 'bg-accent text-white shadow-2xs'
+                            : 'text-primary hover:bg-secondary'
+                        }`}
+                      >
+                        <ArrowStyleIcon style={arr.style} className="w-5 h-3" />
+                        <span>{arr.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
 
                 <button
                   type="button"
@@ -1345,41 +1782,53 @@ export const VisualMermaidBuilderModal: React.FC<{
                   onClick={() => {
                     if (connectSourceId) {
                       setConnectSourceId(null)
+                      setRubberBandCursor(null)
                     } else if (selectedNodeId) {
                       setConnectSourceId(selectedNodeId)
                     } else if (nodes[0]) {
                       setConnectSourceId(nodes[0].id)
                     }
                   }}
-                  className={`px-2.5 py-1 rounded border font-medium ${
+                  className={`px-2.5 py-1 rounded border font-medium transition-colors ${
                     connectSourceId
-                      ? 'bg-accent text-white border-accent'
+                      ? 'bg-accent text-white border-accent shadow-2xs'
                       : 'bg-panel border-subtle text-primary hover:border-accent'
                   }`}
+                  title="Click to start connecting from the selected node, or drag directly from any node's port handle"
                 >
-                  {connectSourceId
-                    ? `Click Target Node to Connect from ${connectSourceId}...`
-                    : 'Connect Selected Node →'}
+                  {connectSourceId ? `Connecting from ${connectSourceId}...` : 'Connect Node →'}
                 </button>
 
                 <select
                   value={direction}
                   onChange={(e) => {
+                    const nextDir = e.target.value as 'LR' | 'TD'
                     setIsCodeManuallyEdited(false)
-                    setDirection(e.target.value as 'LR' | 'TD')
+                    setDirection(nextDir)
                   }}
-                  className="px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                  className="px-2 py-1 rounded bg-panel border border-subtle text-primary font-medium"
+                  title="Flowchart Orientation"
                 >
-                  <option value="LR">Left → Right (LR)</option>
-                  <option value="TD">Top → Down (TD)</option>
+                  <option value="LR">⇄ Left → Right (LR)</option>
+                  <option value="TD">⇅ Top → Down (TD)</option>
                 </select>
+
+                <button
+                  type="button"
+                  data-testid="mermaid-auto-layout-btn"
+                  onClick={() => autoLayoutNodes(direction)}
+                  className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
+                  title="Auto-arrange nodes into a clean grid"
+                >
+                  Auto-Layout
+                </button>
               </div>
             </>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 w-full">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-muted font-medium mr-1">
-                  Drag onto Builder or Click to Add ({currentPreset.label}):
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted mr-1">
+                  Add {currentPreset.label} Elements:
                 </span>
                 {(DIAGRAM_PALETTE_ITEMS[activePresetId] || []).map((pal) => (
                   <button
@@ -1408,10 +1857,10 @@ export const VisualMermaidBuilderModal: React.FC<{
                         targetEl.dispatchEvent(dropEvt)
                       }
                     }}
-                    className="px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary font-medium flex items-center gap-1 cursor-grab active:cursor-grabbing"
+                    className="px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary font-medium flex items-center gap-1.5 cursor-grab active:cursor-grabbing shadow-2xs"
                     title="Drag and drop onto the visual builder below, or click to add"
                   >
-                    <span>⋮⋮ {pal.badge}</span>
+                    <span>{pal.badge}</span>
                     <span>{pal.label}</span>
                   </button>
                 ))}
@@ -1420,7 +1869,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                 data-testid="mermaid-quick-snippets"
                 className="flex items-center gap-1.5 flex-wrap"
               >
-                <span className="text-muted font-medium">Snippets:</span>
+                <span className="text-muted font-medium">Templates:</span>
                 {currentPreset.snippets.map((s, idx) => (
                   <button
                     key={idx}
@@ -1436,84 +1885,132 @@ export const VisualMermaidBuilderModal: React.FC<{
           )}
         </div>
 
-        {/* Selected Node/Edge Inspector OR Context-Aware Diagram Type Quick Builder */}
-        <div className="px-4 py-2 bg-secondary/50 border-b border-subtle flex flex-wrap items-center justify-between gap-2 text-xs min-h-[40px] shrink-0">
+        {/* Context-Aware Property Inspector Bar (Selected Shape / Connector Inspector) */}
+        <div className="px-4 py-1.5 bg-secondary/50 border-b border-subtle flex flex-wrap items-center justify-between gap-2 text-xs min-h-[38px] shrink-0">
           {isFlowchartMode && selectedNode ? (
-            <div className="flex items-center gap-3">
-              <span className="font-semibold text-accent">Node {selectedNode.id}:</span>
-              <label className="text-muted">Label:</label>
-              <input
-                type="text"
-                data-testid="mermaid-node-label-input"
-                value={selectedNode.label}
-                onChange={(e) => {
-                  setIsCodeManuallyEdited(false)
-                  setNodes((prev) =>
-                    prev.map((n) =>
-                      n.id === selectedNode.id ? { ...n, label: e.target.value } : n
+            <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-semibold text-accent flex items-center gap-1.5">
+                  <ShapeStencilIcon shape={selectedNode.shape} className="w-4 h-3.5" />
+                  <span>Shape {selectedNode.id}:</span>
+                </span>
+                <label className="text-muted">Label:</label>
+                <input
+                  type="text"
+                  data-testid="mermaid-node-label-input"
+                  value={selectedNode.label}
+                  onChange={(e) => {
+                    setIsCodeManuallyEdited(false)
+                    setNodes((prev) =>
+                      prev.map((n) =>
+                        n.id === selectedNode.id ? { ...n, label: e.target.value } : n
+                      )
                     )
-                  )
-                }}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
-              />
-              <label className="text-muted">Shape:</label>
-              <select
-                value={selectedNode.shape}
-                onChange={(e) => {
-                  setIsCodeManuallyEdited(false)
-                  setNodes((prev) =>
-                    prev.map((n) =>
-                      n.id === selectedNode.id
-                        ? { ...n, shape: e.target.value as VisualMermaidNodeShape }
-                        : n
+                  }}
+                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary font-medium w-44 focus:outline-none focus:border-accent"
+                />
+                <label className="text-muted">Change Shape:</label>
+                <div className="flex items-center gap-1">
+                  {shapeStencilButtons.map((sh) => (
+                    <button
+                      key={sh.shape}
+                      type="button"
+                      onClick={() => {
+                        setIsCodeManuallyEdited(false)
+                        setNodes((prev) =>
+                          prev.map((n) =>
+                            n.id === selectedNode.id ? { ...n, shape: sh.shape } : n
+                          )
+                        )
+                      }}
+                      title={`Convert to ${sh.label}`}
+                      className={`p-1 rounded border transition-colors ${
+                        selectedNode.shape === sh.shape
+                          ? 'bg-accent text-white border-accent'
+                          : 'bg-panel border-subtle text-primary hover:border-accent'
+                      }`}
+                    >
+                      <ShapeStencilIcon shape={sh.shape} className="w-4 h-3.5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  data-testid="mermaid-quick-chain-node-btn"
+                  onClick={() => {
+                    const offsetX = direction === 'LR' ? selectedNode.x + 210 : selectedNode.x
+                    const offsetY = direction === 'TD' ? selectedNode.y + 105 : selectedNode.y
+                    addNode(selectedNode.shape, offsetX, offsetY, selectedNode.id)
+                  }}
+                  className="px-2.5 py-0.5 rounded bg-accent/15 border border-accent/40 text-accent hover:bg-accent hover:text-white font-medium transition-colors"
+                  title="Add a new connected node directly after this shape (Visio Quick-Connect)"
+                >
+                  + Add Connected Shape
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCodeManuallyEdited(false)
+                    setNodes((prev) => prev.filter((n) => n.id !== selectedNode.id))
+                    setEdges((prev) =>
+                      prev.filter(
+                        (e) => e.from !== selectedNode.id && e.to !== selectedNode.id
+                      )
                     )
-                  )
-                }}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
-              >
-                <option value="rect">Rectangle</option>
-                <option value="round">Rounded</option>
-                <option value="diamond">Diamond</option>
-                <option value="cylinder">Database</option>
-                <option value="circle">Circle</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCodeManuallyEdited(false)
-                  setNodes((prev) => prev.filter((n) => n.id !== selectedNode.id))
-                  setEdges((prev) =>
-                    prev.filter(
-                      (e) => e.from !== selectedNode.id && e.to !== selectedNode.id
-                    )
-                  )
-                  setSelectedNodeId(null)
-                }}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger"
-              >
-                Delete Node
-              </button>
+                    setSelectedNodeId(null)
+                  }}
+                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger"
+                >
+                  Delete Shape
+                </button>
+              </div>
             </div>
           ) : isFlowchartMode && selectedEdge ? (
-            <div className="flex items-center gap-3">
-              <span className="font-semibold text-accent">
-                Arrow ({selectedEdge.from} → {selectedEdge.to}):
-              </span>
-              <label className="text-muted">Arrow Label:</label>
-              <input
-                type="text"
-                value={selectedEdge.label}
-                placeholder="Optional label..."
-                onChange={(e) => {
-                  setIsCodeManuallyEdited(false)
-                  setEdges((prev) =>
-                    prev.map((ed) =>
-                      ed.id === selectedEdge.id ? { ...ed, label: e.target.value } : ed
+            <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-semibold text-accent flex items-center gap-1.5">
+                  <ArrowStyleIcon style={selectedEdge.style} className="w-5 h-3.5" />
+                  <span>
+                    Connector ({selectedEdge.from} → {selectedEdge.to}):
+                  </span>
+                </span>
+                <label className="text-muted">Label:</label>
+                <input
+                  type="text"
+                  data-testid="mermaid-edge-label-input"
+                  value={selectedEdge.label}
+                  placeholder="Optional connector label..."
+                  onChange={(e) => {
+                    setIsCodeManuallyEdited(false)
+                    setEdges((prev) =>
+                      prev.map((ed) =>
+                        ed.id === selectedEdge.id ? { ...ed, label: e.target.value } : ed
+                      )
                     )
-                  )
-                }}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
-              />
+                  }}
+                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary w-44 focus:outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCodeManuallyEdited(false)
+                    setEdges((prev) =>
+                      prev.map((ed) =>
+                        ed.id === selectedEdge.id
+                          ? { ...ed, from: ed.to, to: ed.from }
+                          : ed
+                      )
+                    )
+                  }}
+                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                  title="Reverse arrow direction"
+                >
+                  ⇄ Reverse Direction
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -1521,60 +2018,10 @@ export const VisualMermaidBuilderModal: React.FC<{
                   setEdges((prev) => prev.filter((ed) => ed.id !== selectedEdge.id))
                   setSelectedEdgeId(null)
                 }}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger"
+                className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger"
               >
-                Delete Arrow
+                Delete Connector
               </button>
-            </div>
-          ) : activePresetId === 'packet' ? (
-            <div
-              data-testid="mermaid-packet-builder-bar"
-              className="flex flex-wrap items-center gap-2 w-full justify-between"
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-accent">Packet Bit-Field Builder:</span>
-                <label className="text-muted">Start Bit:</label>
-                <input
-                  type="number"
-                  data-testid="mermaid-packet-start-input"
-                  value={packetStartBit}
-                  onChange={(e) => setPacketStartBit(e.target.value)}
-                  className="w-16 px-2 py-0.5 rounded bg-panel border border-subtle text-primary font-mono"
-                />
-                <label className="text-muted">End Bit (optional):</label>
-                <input
-                  type="number"
-                  data-testid="mermaid-packet-end-input"
-                  value={packetEndBit}
-                  onChange={(e) => setPacketEndBit(e.target.value)}
-                  className="w-16 px-2 py-0.5 rounded bg-panel border border-subtle text-primary font-mono"
-                />
-                <label className="text-muted">Field Name:</label>
-                <input
-                  type="text"
-                  data-testid="mermaid-packet-label-input"
-                  value={packetFieldLabel}
-                  onChange={(e) => setPacketFieldLabel(e.target.value)}
-                  className="w-44 px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
-                />
-                <button
-                  type="button"
-                  data-testid="mermaid-packet-add-field-btn"
-                  onClick={() => {
-                    const start = packetStartBit.trim() || '0'
-                    const end = packetEndBit.trim()
-                    const range = end && end !== start ? `${start}-${end}` : start
-                    const label = (packetFieldLabel.trim() || 'Field').replace(/"/g, "'")
-                    appendSnippetToCode(`\n${range}: "${label}"`)
-                  }}
-                  className="px-2.5 py-0.5 rounded bg-accent text-white font-medium hover:opacity-90"
-                >
-                  + Append Bit Field
-                </button>
-              </div>
-              <span className="text-muted text-[11px]">
-                Tip: Drag &amp; drop bit-field blocks below to reorder or change bit widths!
-              </span>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 w-full">
@@ -1583,25 +2030,117 @@ export const VisualMermaidBuilderModal: React.FC<{
                 {currentPreset.description}
               </span>
               <span className="text-accent font-medium text-[11px]">
-                Drag &amp; drop items in the graphical builder below to reorder or edit visually
+                {isFlowchartMode
+                  ? 'Tip: Drag any ● port on a shape to draw a connector, or double-click a shape/arrow to rename inline'
+                  : 'Tip: Drag & drop items in the visual editor below or drag the center divider to resize panes'}
               </span>
             </div>
           )}
         </div>
 
-        {/* Main Studio Workspace: Left (Graphical Drag-and-Drop Builder + Synced Code) & Right (Interactive Pan/Zoom/Grid Live Preview) */}
-        <div className="grid grid-cols-12 gap-4 p-4 bg-app overflow-hidden flex-1 min-h-0">
-          <div className="col-span-6 flex flex-col space-y-2.5 min-h-0 h-full">
+        {/* Main Flexible Resizable Split Workspace */}
+        <div
+          ref={workspaceContainerRef}
+          className="flex flex-1 min-h-0 bg-app overflow-hidden select-none"
+        >
+          {/* LEFT PANE: Interactive Visio-Style 2D Canvas (or Structured Visual Builder) + Resizable/Collapsible Code Drawer */}
+          <div
+            ref={leftColumnRef}
+            style={{ width: `${leftPanePercent}%` }}
+            className="flex flex-col min-w-[260px] min-h-0 h-full p-3 pr-1.5 gap-2"
+          >
             {isFlowchartMode ? (
-              <div className="flex flex-col space-y-1.5 flex-1 min-h-[180px]">
-                <div className="text-[11px] font-semibold uppercase text-muted flex items-center justify-between shrink-0">
-                  <span>
-                    Interactive 2D Visual Canvas (Drop Shapes Here, Drag Nodes, or Drag ● Port to Connect)
-                  </span>
-                  <span className="font-mono text-[10px]">
-                    {canvasWidth} × {canvasHeight}px
-                  </span>
+              <div className="flex flex-col flex-1 min-h-[160px] bg-panel border border-subtle rounded-md overflow-hidden shadow-xs">
+                {/* 2D Visual Canvas Viewport Toolbar (Select/Pan Tools, Zoom Controls, Snap Grid) */}
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-secondary/60 border-b border-subtle text-[11px] shrink-0">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      data-testid="mermaid-canvas-tool-select"
+                      onClick={() => setCanvasTool('select')}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${
+                        canvasTool === 'select'
+                          ? 'bg-accent text-white border-accent font-medium'
+                          : 'bg-panel border-subtle text-primary hover:border-accent'
+                      }`}
+                      title="Pointer Tool — Select, move shapes, or drag connection ports"
+                    >
+                      <MousePointer className="w-3 h-3" />
+                      <span>Select / Connect</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="mermaid-canvas-tool-pan"
+                      onClick={() => setCanvasTool('pan')}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${
+                        canvasTool === 'pan'
+                          ? 'bg-accent text-white border-accent font-medium'
+                          : 'bg-panel border-subtle text-primary hover:border-accent'
+                      }`}
+                      title="Hand Tool — Drag anywhere on the canvas to pan"
+                    >
+                      <span>✋ Pan Canvas</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSnapToGrid((v) => !v)}
+                      className={`px-2 py-0.5 rounded border transition-colors ${
+                        snapToGrid
+                          ? 'bg-accent/15 text-accent border-accent/40 font-medium'
+                          : 'bg-panel border-subtle text-muted hover:text-primary'
+                      }`}
+                      title="Snap shapes to 16px alignment grid"
+                    >
+                      Snap Grid
+                    </button>
+                  </div>
+
+                  {/* Canvas Zoom & Reset Controls */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      data-testid="mermaid-canvas-zoom-out"
+                      onClick={() =>
+                        setCanvasZoom((z) => Math.max(0.4, Number((z - 0.15).toFixed(2))))
+                      }
+                      className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+                      title="Zoom Out Visual Canvas"
+                    >
+                      −
+                    </button>
+                    <span
+                      data-testid="mermaid-canvas-zoom-level"
+                      className="font-mono text-[11px] text-muted min-w-[42px] text-center"
+                    >
+                      {Math.round(canvasZoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="mermaid-canvas-zoom-in"
+                      onClick={() =>
+                        setCanvasZoom((z) => Math.min(2.5, Number((z + 0.15).toFixed(2))))
+                      }
+                      className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+                      title="Zoom In Visual Canvas"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="mermaid-canvas-zoom-reset"
+                      onClick={() => {
+                        setCanvasZoom(1)
+                        setCanvasPan({ x: 0, y: 0 })
+                      }}
+                      className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                      title="Reset Canvas Pan & Zoom to 100%"
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
+
+                {/* Pannable & Zoomable 2D Visio-Style Drawing Surface */}
                 <div
                   data-testid="mermaid-visual-canvas-scroll"
                   onDragOver={(e) => e.preventDefault()}
@@ -1611,199 +2150,484 @@ export const VisualMermaidBuilderModal: React.FC<{
                       'text/klartext-mermaid-shape'
                     ) as VisualMermaidNodeShape
                     if (shape && svgRef.current) {
-                      const rect = svgRef.current.getBoundingClientRect()
-                      const scaleX = canvasWidth / Math.max(1, rect.width)
-                      const scaleY = canvasHeight / Math.max(1, rect.height)
-                      const dropX = (e.clientX - rect.left) * scaleX - 65
-                      const dropY = (e.clientY - rect.top) * scaleY - 26
-                      addNode(shape, dropX, dropY)
+                      const pt = toCanvasCoords(e.clientX, e.clientY)
+                      addNode(shape, pt.x - 68, pt.y - 27)
                     }
                   }}
-                  className="flex-1 overflow-auto bg-panel border border-subtle rounded shadow-sm min-h-0"
-                >
-                  <svg
-                    ref={svgRef}
-                    width={canvasWidth}
-                    height={canvasHeight}
-                    viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
-                    onMouseMove={handleSvgMouseMove}
-                    onMouseUp={() => {
-                      draggingNodeRef.current = null
-                    }}
-                    className="block select-none"
-                    data-testid="mermaid-visual-canvas-svg"
-                  >
-                    <defs>
-                      <marker
-                        id="vb-arrow"
-                        viewBox="0 0 10 10"
-                        refX="8"
-                        refY="5"
-                        markerWidth="6"
-                        markerHeight="6"
-                        orient="auto-start-reverse"
-                      >
-                        <path d="M 0 1 L 10 5 L 0 9 z" fill="#426B79" />
-                      </marker>
-                    </defs>
-
-                    {/* Edges */}
-                    {edges.map((ed) => {
-                      const fromNode = nodes.find((n) => n.id === ed.from)
-                      const toNode = nodes.find((n) => n.id === ed.to)
-                      if (!fromNode || !toNode) return null
-                      const x1 = fromNode.x + 65
-                      const y1 = fromNode.y + 26
-                      const x2 = toNode.x + 65
-                      const y2 = toNode.y + 26
-                      const mx = (x1 + x2) / 2
-                      const my = (y1 + y2) / 2
-                      const isSelected = ed.id === selectedEdgeId
-
-                      return (
-                        <g
-                          key={ed.id}
-                          onClick={() => {
-                            setSelectedEdgeId(ed.id)
-                            setSelectedNodeId(null)
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <line
-                            x1={x1}
-                            y1={y1}
-                            x2={x2}
-                            y2={y2}
-                            stroke={isSelected ? '#3B7A57' : '#426B79'}
-                            strokeWidth={ed.style === '==>' ? 3.5 : 2}
-                            strokeDasharray={ed.style === '-.->' ? '5,4' : undefined}
-                            markerEnd="url(#vb-arrow)"
-                          />
-                          {ed.label && (
-                            <text
-                              x={mx}
-                              y={my - 6}
-                              textAnchor="middle"
-                              fontSize="11"
-                              fill="#426B79"
-                              fontWeight="600"
-                            >
-                              {ed.label}
-                            </text>
-                          )}
-                        </g>
+                  onMouseDown={(e) => {
+                    if (
+                      canvasTool === 'pan' ||
+                      e.button === 1 ||
+                      (e.target === e.currentTarget && e.button === 0)
+                    ) {
+                      canvasPanDragRef.current = {
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        originX: canvasPan.x,
+                        originY: canvasPan.y
+                      }
+                    }
+                  }}
+                  onWheel={(e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                      e.preventDefault()
+                      const delta = e.deltaY < 0 ? 0.12 : -0.12
+                      setCanvasZoom((z) =>
+                        Math.min(2.5, Math.max(0.4, Number((z + delta).toFixed(2))))
                       )
-                    })}
-
-                    {/* Nodes */}
-                    {nodes.map((node) => {
-                      const isSelected = node.id === selectedNodeId
-                      const isConnectOrigin = node.id === connectSourceId
-                      const w = 130
-                      const h = 52
-                      return (
-                        <g
-                          key={node.id}
-                          data-testid={`visual-mermaid-node-${node.id}`}
-                          onMouseDown={(e) => {
-                            e.stopPropagation()
-                            if (!svgRef.current) return
-                            const rect = svgRef.current.getBoundingClientRect()
-                            const scaleX = canvasWidth / Math.max(1, rect.width)
-                            const scaleY = canvasHeight / Math.max(1, rect.height)
-                            draggingNodeRef.current = {
-                              id: node.id,
-                              offsetX: (e.clientX - rect.left) * scaleX - node.x,
-                              offsetY: (e.clientY - rect.top) * scaleY - node.y
+                    }
+                  }}
+                  style={{
+                    backgroundImage:
+                      theme === 'dark'
+                        ? 'radial-gradient(rgba(255,255,255,0.11) 1px, transparent 1px)'
+                        : 'radial-gradient(rgba(15,23,42,0.13) 1px, transparent 1px)',
+                    backgroundSize: `${Math.max(8, Math.round(16 * canvasZoom))}px ${Math.max(8, Math.round(16 * canvasZoom))}px`,
+                    backgroundPosition: `${canvasPan.x}px ${canvasPan.y}px`
+                  }}
+                  className={`relative flex-1 overflow-auto min-h-0 ${
+                    canvasTool === 'pan'
+                      ? 'cursor-grab active:cursor-grabbing'
+                      : connectSourceId
+                        ? 'cursor-crosshair'
+                        : 'cursor-default'
+                  }`}
+                >
+                  <div
+                    style={{
+                      transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${canvasZoom})`,
+                      transformOrigin: '0 0',
+                      width: `${canvasWidth}px`,
+                      height: `${canvasHeight}px`
+                    }}
+                  >
+                    <svg
+                      ref={svgRef}
+                      width={canvasWidth}
+                      height={canvasHeight}
+                      viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
+                      onMouseMove={handleSvgMouseMove}
+                      onMouseDown={(e) => {
+                        if (e.target === svgRef.current) {
+                          setSelectedNodeId(null)
+                          setSelectedEdgeId(null)
+                          setInlineEditingNodeId(null)
+                          setInlineEditingEdgeId(null)
+                          if (connectSourceId) {
+                            setConnectSourceId(null)
+                            setRubberBandCursor(null)
+                          }
+                          if (e.button === 0) {
+                            canvasPanDragRef.current = {
+                              startX: e.clientX,
+                              startY: e.clientY,
+                              originX: canvasPan.x,
+                              originY: canvasPan.y
                             }
-                            handleNodeClick(node.id)
-                          }}
-                          onMouseUp={(e) => {
-                            if (connectSourceId && connectSourceId !== node.id) {
-                              e.stopPropagation()
-                              handleNodeClick(node.id)
-                            }
-                          }}
-                          className="cursor-move"
+                          }
+                        }
+                      }}
+                      onMouseUp={() => {
+                        draggingNodeRef.current = null
+                        if (connectSourceId) {
+                          setConnectSourceId(null)
+                          setRubberBandCursor(null)
+                        }
+                      }}
+                      className="block select-none"
+                      data-testid="mermaid-visual-canvas-svg"
+                    >
+                      <defs>
+                        <marker
+                          id="vb-arrow"
+                          viewBox="0 0 10 10"
+                          refX="8.5"
+                          refY="5"
+                          markerWidth="6"
+                          markerHeight="6"
+                          orient="auto-start-reverse"
                         >
-                          {node.shape === 'diamond' ? (
-                            <polygon
-                              points={`${node.x + w / 2},${node.y - 6} ${node.x + w + 8},${node.y + h / 2} ${node.x + w / 2},${node.y + h + 6} ${node.x - 8},${node.y + h / 2}`}
-                              fill={theme === 'dark' ? '#202428' : '#EEF1F3'}
-                              stroke={
-                                isConnectOrigin
-                                  ? '#B8860B'
-                                  : isSelected
-                                    ? '#3B7A57'
-                                    : '#426B79'
-                              }
-                              strokeWidth={isSelected || isConnectOrigin ? 3 : 2}
-                            />
-                          ) : node.shape === 'circle' ? (
-                            <ellipse
-                              cx={node.x + w / 2}
-                              cy={node.y + h / 2}
-                              rx={w / 2}
-                              ry={h / 2}
-                              fill={theme === 'dark' ? '#202428' : '#EEF1F3'}
-                              stroke={isSelected ? '#3B7A57' : '#426B79'}
-                              strokeWidth={isSelected ? 3 : 2}
-                            />
-                          ) : (
-                            <rect
-                              x={node.x}
-                              y={node.y}
-                              width={w}
-                              height={h}
-                              rx={
-                                node.shape === 'round'
-                                  ? 20
-                                  : node.shape === 'cylinder'
-                                    ? 10
-                                    : 4
-                              }
-                              fill={theme === 'dark' ? '#202428' : '#EEF1F3'}
-                              stroke={
-                                isConnectOrigin
-                                  ? '#B8860B'
-                                  : isSelected
-                                    ? '#3B7A57'
-                                    : '#426B79'
-                              }
-                              strokeWidth={isSelected || isConnectOrigin ? 3 : 2}
-                            />
-                          )}
-                          <text
-                            x={node.x + w / 2}
-                            y={node.y + h / 2 + 4}
-                            textAnchor="middle"
-                            fontSize="12"
-                            fontFamily="Inter, sans-serif"
-                            fill={theme === 'dark' ? '#E8ECEF' : '#20272D'}
+                          <path d="M 0 1 L 10 5 L 0 9 z" fill="#426B79" />
+                        </marker>
+                        <marker
+                          id="vb-arrow-selected"
+                          viewBox="0 0 10 10"
+                          refX="8.5"
+                          refY="5"
+                          markerWidth="6"
+                          markerHeight="6"
+                          orient="auto-start-reverse"
+                        >
+                          <path d="M 0 1 L 10 5 L 0 9 z" fill="#3B7A57" />
+                        </marker>
+                      </defs>
+
+                      {/* Edges / Connectors */}
+                      {edges.map((ed) => {
+                        const fromNode = nodes.find((n) => n.id === ed.from)
+                        const toNode = nodes.find((n) => n.id === ed.to)
+                        if (!fromNode || !toNode) return null
+                        const { x1, y1, x2, y2, mx, my } = computeSmartEdgeEndpoints(
+                          fromNode,
+                          toNode,
+                          136,
+                          54
+                        )
+                        const isSelected = ed.id === selectedEdgeId
+                        const strokeCol = isSelected ? '#3B7A57' : '#426B79'
+                        const markerUrl = isSelected
+                          ? 'url(#vb-arrow-selected)'
+                          : 'url(#vb-arrow)'
+
+                        return (
+                          <g
+                            key={ed.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedEdgeId(ed.id)
+                              setSelectedNodeId(null)
+                            }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedEdgeId(ed.id)
+                              setSelectedNodeId(null)
+                              setInlineEditingEdgeId(ed.id)
+                            }}
+                            className="cursor-pointer group"
                           >
-                            {node.label}
-                          </text>
-                          {/* Right-edge Connector Port Handle: Click or Drag to connect to another node */}
-                          <circle
-                            cx={node.x + w}
-                            cy={node.y + h / 2}
-                            r={6}
-                            fill={isConnectOrigin ? '#B8860B' : '#3B7A57'}
-                            stroke="#FFFFFF"
-                            strokeWidth={1.5}
+                            {/* Wide invisible hit target for easy clicking */}
+                            <line
+                              x1={x1}
+                              y1={y1}
+                              x2={x2}
+                              y2={y2}
+                              stroke="transparent"
+                              strokeWidth={14}
+                            />
+                            <line
+                              x1={x1}
+                              y1={y1}
+                              x2={x2}
+                              y2={y2}
+                              stroke={strokeCol}
+                              strokeWidth={ed.style === '==>' ? 3.6 : isSelected ? 2.8 : 2}
+                              strokeDasharray={ed.style === '-.->' ? '6,4' : undefined}
+                              markerStart={ed.style === '<-->' ? markerUrl : undefined}
+                              markerEnd={ed.style === '---' ? undefined : markerUrl}
+                            />
+                            {ed.label && (
+                              <g>
+                                <rect
+                                  x={mx - Math.max(24, ed.label.length * 3.8)}
+                                  y={my - 11}
+                                  width={Math.max(48, ed.label.length * 7.6)}
+                                  height={18}
+                                  rx={4}
+                                  fill={theme === 'dark' ? '#181C20' : '#FFFFFF'}
+                                  stroke={strokeCol}
+                                  strokeWidth={1}
+                                />
+                                <text
+                                  x={mx}
+                                  y={my + 2}
+                                  textAnchor="middle"
+                                  fontSize="11"
+                                  fill={theme === 'dark' ? '#E8ECEF' : '#20272D'}
+                                  fontWeight="600"
+                                >
+                                  {ed.label}
+                                </text>
+                              </g>
+                            )}
+                          </g>
+                        )
+                      })}
+
+                      {/* Live Rubber-Band Connector Line while dragging from a port */}
+                      {connectOriginNode && rubberBandCursor && (
+                        <line
+                          x1={connectOriginNode.x + 68}
+                          y1={connectOriginNode.y + 27}
+                          x2={rubberBandCursor.x}
+                          y2={rubberBandCursor.y}
+                          stroke="#B8860B"
+                          strokeWidth={2.2}
+                          strokeDasharray="5,4"
+                          markerEnd="url(#vb-arrow)"
+                          className="pointer-events-none"
+                        />
+                      )}
+
+                      {/* Flowchart Nodes with 4-Side Visio Connection Ports */}
+                      {nodes.map((node) => {
+                        const isSelected = node.id === selectedNodeId
+                        const isHovered = node.id === hoveredNodeId
+                        const isConnectOrigin = node.id === connectSourceId
+                        const w = 136
+                        const h = 54
+                        const fillCol = theme === 'dark' ? '#202428' : '#F4F6F8'
+                        const strokeCol = isConnectOrigin
+                          ? '#B8860B'
+                          : isSelected
+                            ? '#3B7A57'
+                            : '#426B79'
+                        const strokeW = isSelected || isConnectOrigin ? 2.8 : 2
+
+                        const ports = [
+                          { side: 'top', cx: node.x + w / 2, cy: node.y },
+                          { side: 'right', cx: node.x + w, cy: node.y + h / 2 },
+                          { side: 'bottom', cx: node.x + w / 2, cy: node.y + h },
+                          { side: 'left', cx: node.x, cy: node.y + h / 2 }
+                        ]
+
+                        return (
+                          <g
+                            key={node.id}
+                            data-testid={`visual-mermaid-node-${node.id}`}
+                            onMouseEnter={() => setHoveredNodeId(node.id)}
+                            onMouseLeave={() =>
+                              setHoveredNodeId((prev) => (prev === node.id ? null : prev))
+                            }
                             onMouseDown={(e) => {
                               e.stopPropagation()
-                              draggingNodeRef.current = null
-                              setConnectSourceId(node.id)
+                              if (canvasTool === 'pan') return
+                              const pt = toCanvasCoords(e.clientX, e.clientY)
+                              draggingNodeRef.current = {
+                                id: node.id,
+                                offsetX: pt.x - node.x,
+                                offsetY: pt.y - node.y
+                              }
+                              handleNodeClick(node.id)
                             }}
-                            className="cursor-crosshair"
+                            onMouseUp={(e) => {
+                              if (connectSourceId && connectSourceId !== node.id) {
+                                e.stopPropagation()
+                                completeConnectionToNode(node.id)
+                              }
+                            }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedNodeId(node.id)
+                              setInlineEditingNodeId(node.id)
+                            }}
+                            className={canvasTool === 'pan' ? 'cursor-grab' : 'cursor-move'}
                           >
-                            <title>Click or drag to connect an arrow from {node.label}</title>
-                          </circle>
-                        </g>
-                      )
-                    })}
-                  </svg>
+                            {node.shape === 'diamond' ? (
+                              <polygon
+                                points={`${node.x + w / 2},${node.y - 6} ${node.x + w + 8},${node.y + h / 2} ${node.x + w / 2},${node.y + h + 6} ${node.x - 8},${node.y + h / 2}`}
+                                fill={fillCol}
+                                stroke={strokeCol}
+                                strokeWidth={strokeW}
+                              />
+                            ) : node.shape === 'hexagon' ? (
+                              <polygon
+                                points={`${node.x + 16},${node.y} ${node.x + w - 16},${node.y} ${node.x + w + 6},${node.y + h / 2} ${node.x + w - 16},${node.y + h} ${node.x + 16},${node.y + h} ${node.x - 6},${node.y + h / 2}`}
+                                fill={fillCol}
+                                stroke={strokeCol}
+                                strokeWidth={strokeW}
+                              />
+                            ) : node.shape === 'circle' ? (
+                              <ellipse
+                                cx={node.x + w / 2}
+                                cy={node.y + h / 2}
+                                rx={w / 2}
+                                ry={h / 2}
+                                fill={fillCol}
+                                stroke={strokeCol}
+                                strokeWidth={strokeW}
+                              />
+                            ) : node.shape === 'cylinder' ? (
+                              <g>
+                                <rect
+                                  x={node.x}
+                                  y={node.y + 4}
+                                  width={w}
+                                  height={h - 4}
+                                  rx={10}
+                                  fill={fillCol}
+                                  stroke={strokeCol}
+                                  strokeWidth={strokeW}
+                                />
+                                <ellipse
+                                  cx={node.x + w / 2}
+                                  cy={node.y + 8}
+                                  rx={w / 2}
+                                  ry={6}
+                                  fill={fillCol}
+                                  stroke={strokeCol}
+                                  strokeWidth={1.6}
+                                />
+                              </g>
+                            ) : node.shape === 'subroutine' ? (
+                              <g>
+                                <rect
+                                  x={node.x}
+                                  y={node.y}
+                                  width={w}
+                                  height={h}
+                                  rx={4}
+                                  fill={fillCol}
+                                  stroke={strokeCol}
+                                  strokeWidth={strokeW}
+                                />
+                                <line
+                                  x1={node.x + 10}
+                                  y1={node.y}
+                                  x2={node.x + 10}
+                                  y2={node.y + h}
+                                  stroke={strokeCol}
+                                  strokeWidth={1.8}
+                                />
+                                <line
+                                  x1={node.x + w - 10}
+                                  y1={node.y}
+                                  x2={node.x + w - 10}
+                                  y2={node.y + h}
+                                  stroke={strokeCol}
+                                  strokeWidth={1.8}
+                                />
+                              </g>
+                            ) : (
+                              <rect
+                                x={node.x}
+                                y={node.y}
+                                width={w}
+                                height={h}
+                                rx={node.shape === 'round' ? 24 : 5}
+                                fill={fillCol}
+                                stroke={strokeCol}
+                                strokeWidth={strokeW}
+                              />
+                            )}
+
+                            <text
+                              x={node.x + w / 2}
+                              y={node.y + h / 2 + 4}
+                              textAnchor="middle"
+                              fontSize="12"
+                              fontWeight="500"
+                              fontFamily="Inter, sans-serif"
+                              fill={theme === 'dark' ? '#E8ECEF' : '#20272D'}
+                            >
+                              {node.label}
+                            </text>
+
+                            {/* 4-Sided Visio Connection Ports (visible on hover/select, right port always subtly ready) */}
+                            {ports.map((port) => {
+                              const showPort =
+                                isSelected ||
+                                isHovered ||
+                                isConnectOrigin ||
+                                Boolean(connectSourceId) ||
+                                port.side === 'right'
+                              if (!showPort) return null
+                              return (
+                                <circle
+                                  key={port.side}
+                                  cx={port.cx}
+                                  cy={port.cy}
+                                  r={isSelected || isHovered ? 5.5 : 4.5}
+                                  fill={isConnectOrigin ? '#B8860B' : '#3B7A57'}
+                                  stroke="#FFFFFF"
+                                  strokeWidth={1.5}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation()
+                                    draggingNodeRef.current = null
+                                    setConnectSourceId(node.id)
+                                    setRubberBandCursor({ x: port.cx, y: port.cy })
+                                  }}
+                                  onMouseUp={(e) => {
+                                    if (connectSourceId && connectSourceId !== node.id) {
+                                      e.stopPropagation()
+                                      completeConnectionToNode(node.id)
+                                    }
+                                  }}
+                                  className="cursor-crosshair"
+                                >
+                                  <title>
+                                    Drag from this {port.side} port to another shape to connect an arrow
+                                  </title>
+                                </circle>
+                              )
+                            })}
+                          </g>
+                        )
+                      })}
+                    </svg>
+
+                    {/* Inline Double-Click Node Label Editor Overlay */}
+                    {inlineEditingNodeId &&
+                      (() => {
+                        const target = nodes.find((n) => n.id === inlineEditingNodeId)
+                        if (!target) return null
+                        return (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={target.label}
+                            onChange={(e) => {
+                              setIsCodeManuallyEdited(false)
+                              setNodes((prev) =>
+                                prev.map((n) =>
+                                  n.id === target.id ? { ...n, label: e.target.value } : n
+                                )
+                              )
+                            }}
+                            onBlur={() => setInlineEditingNodeId(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === 'Escape') {
+                                setInlineEditingNodeId(null)
+                              }
+                            }}
+                            style={{
+                              left: `${target.x + 8}px`,
+                              top: `${target.y + 13}px`,
+                              width: '120px'
+                            }}
+                            className="absolute px-2 py-0.5 text-xs text-center rounded bg-panel border-2 border-accent text-primary shadow-md focus:outline-none"
+                          />
+                        )
+                      })()}
+
+                    {/* Inline Double-Click Edge Label Editor Overlay */}
+                    {inlineEditingEdgeId &&
+                      (() => {
+                        const targetEd = edges.find((e) => e.id === inlineEditingEdgeId)
+                        if (!targetEd) return null
+                        const fn = nodes.find((n) => n.id === targetEd.from)
+                        const tn = nodes.find((n) => n.id === targetEd.to)
+                        if (!fn || !tn) return null
+                        const { mx, my } = computeSmartEdgeEndpoints(fn, tn, 136, 54)
+                        return (
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="Connector label..."
+                            value={targetEd.label}
+                            onChange={(e) => {
+                              setIsCodeManuallyEdited(false)
+                              setEdges((prev) =>
+                                prev.map((ed) =>
+                                  ed.id === targetEd.id ? { ...ed, label: e.target.value } : ed
+                                )
+                              )
+                            }}
+                            onBlur={() => setInlineEditingEdgeId(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === 'Escape') {
+                                setInlineEditingEdgeId(null)
+                              }
+                            }}
+                            style={{
+                              left: `${mx - 55}px`,
+                              top: `${my - 14}px`,
+                              width: '110px'
+                            }}
+                            className="absolute px-2 py-0.5 text-xs text-center rounded bg-panel border-2 border-accent text-primary shadow-md focus:outline-none"
+                          />
+                        )
+                      })()}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1815,13 +2639,47 @@ export const VisualMermaidBuilderModal: React.FC<{
               />
             )}
 
-            {/* Compact Two-Way Synced Mermaid Code Editor */}
-            <div className="flex flex-col space-y-1.5 h-32 shrink-0">
+            {/* Vertical Drag Splitter for Mermaid Code Drawer */}
+            {isCodeDrawerOpen && (
+              <div
+                data-testid="mermaid-split-divider-vertical"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  splitDragRef.current = {
+                    type: 'vertical',
+                    startY: e.clientY,
+                    startHeight: codeDrawerHeight
+                  }
+                }}
+                className="h-1.5 w-full cursor-row-resize rounded bg-subtle/60 hover:bg-accent/60 transition-colors shrink-0 flex items-center justify-center"
+                title="Drag up or down to resize Mermaid Code Editor height"
+              >
+                <div className="w-8 h-0.5 rounded bg-muted/50" />
+              </div>
+            )}
+
+            {/* Resizable & Collapsible Two-Way Synced Mermaid Code Editor */}
+            <div
+              style={{ height: isCodeDrawerOpen ? `${codeDrawerHeight}px` : '0px' }}
+              className={`flex flex-col space-y-1 shrink-0 overflow-hidden transition-all ${
+                isCodeDrawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+            >
               <div className="flex items-center justify-between text-[11px] font-semibold uppercase text-muted shrink-0">
-                <span>Mermaid Code Editor (Live Two-Way Sync)</span>
-                <span className="font-mono text-[10px] text-accent">
-                  {currentPreset.label} ({activePresetId})
-                </span>
+                <span>Mermaid Source Code (Two-Way Live Sync)</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-accent">
+                    {currentPreset.label} ({activePresetId})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsCodeDrawerOpen(false)}
+                    className="text-[10px] text-muted hover:text-primary px-1"
+                    title="Collapse Code Drawer"
+                  >
+                    ▼ Hide
+                  </button>
+                </div>
               </div>
               <textarea
                 data-testid="mermaid-builder-code-editor"
@@ -1831,151 +2689,191 @@ export const VisualMermaidBuilderModal: React.FC<{
                 placeholder="Write or paste any Mermaid diagram syntax here..."
                 className="flex-1 w-full p-2 rounded bg-panel border border-subtle font-mono text-xs text-primary focus:outline-none focus:border-accent resize-none leading-relaxed"
               />
-              {/* Keep pre element with data-testid="mermaid-builder-generated-code" for full test & accessibility compatibility */}
-              <pre
-                data-testid="mermaid-builder-generated-code"
-                className="sr-only"
-              >
-                {effectiveMermaidCode}
-              </pre>
             </div>
+
+            {/* Keep pre element with data-testid="mermaid-builder-generated-code" always mounted for full test & accessibility compatibility */}
+            <pre
+              data-testid="mermaid-builder-generated-code"
+              className="sr-only"
+            >
+              {effectiveMermaidCode}
+            </pre>
           </div>
 
-          {/* Right Column: mermaid.live-inspired Interactive Pan & Zoom Diagram Preview */}
-          <div className="col-span-6 flex flex-col space-y-2 min-h-0 h-full">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] shrink-0">
-              <span className="font-semibold uppercase text-muted">
-                Live Mermaid Output Preview (Drag to Pan)
-              </span>
-              <div className="flex items-center gap-1.5">
-                <label className="text-muted text-[11px]">Theme:</label>
-                <select
-                  data-testid="mermaid-theme-select"
-                  value={previewMermaidTheme}
-                  onChange={(e) =>
-                    setPreviewMermaidTheme(e.target.value as MermaidPreviewTheme)
-                  }
-                  className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary text-xs"
-                >
-                  <option value="auto">Auto ({theme})</option>
-                  <option value="default">Default</option>
-                  <option value="neutral">Neutral</option>
-                  <option value="dark">Dark</option>
-                  <option value="forest">Forest</option>
-                  <option value="base">Base</option>
-                </select>
-                <button
-                  type="button"
-                  data-testid="mermaid-preview-grid-toggle"
-                  onClick={() => setPreviewGrid((v) => !v)}
-                  className={`px-2 py-0.5 rounded border text-xs ${
-                    previewGrid
-                      ? 'bg-accent text-white border-accent'
-                      : 'bg-panel border-subtle text-primary'
-                  }`}
-                >
-                  Grid
-                </button>
-                <button
-                  type="button"
-                  data-testid="mermaid-zoom-out-btn"
-                  onClick={() =>
-                    setPreviewZoom((z) => Math.max(0.4, Number((z - 0.15).toFixed(2))))
-                  }
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
-                  title="Zoom Out"
-                >
-                  −
-                </button>
-                <span
-                  data-testid="mermaid-zoom-level"
-                  className="font-mono text-[11px] text-muted min-w-[40px] text-center"
-                >
-                  {Math.round(previewZoom * 100)}%
-                </span>
-                <button
-                  type="button"
-                  data-testid="mermaid-zoom-in-btn"
-                  onClick={() =>
-                    setPreviewZoom((z) => Math.min(2.5, Number((z + 0.15).toFixed(2))))
-                  }
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
-                  title="Zoom In"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  data-testid="mermaid-zoom-reset-btn"
-                  onClick={() => {
-                    setPreviewZoom(1)
-                    setPreviewPan({ x: 0, y: 0 })
-                  }}
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs"
-                  title="Reset Pan & Zoom"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-
-            {syntaxError && (
-              <div
-                data-testid="mermaid-builder-error-banner"
-                className="px-3 py-1.5 rounded bg-secondary border border-subtle text-danger font-mono text-xs shrink-0"
-              >
-                Mermaid Syntax Diagnostic: {syntaxError}
-              </div>
-            )}
-
-            <div
-              data-testid="mermaid-live-preview-viewport"
-              onMouseDown={(e) => {
-                if (e.button !== 0) return
-                previewPanDragRef.current = {
-                  startX: e.clientX,
-                  startY: e.clientY,
-                  originX: previewPan.x,
-                  originY: previewPan.y
-                }
-              }}
-              onWheel={(e) => {
-                if (e.ctrlKey || e.metaKey) {
-                  e.preventDefault()
-                  const delta = e.deltaY < 0 ? 0.1 : -0.1
-                  setPreviewZoom((z) =>
-                    Math.min(2.5, Math.max(0.4, Number((z + delta).toFixed(2))))
-                  )
-                }
-              }}
-              style={
-                previewGrid
-                  ? {
-                      backgroundImage:
-                        theme === 'dark'
-                          ? 'radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)'
-                          : 'radial-gradient(rgba(15,23,42,0.14) 1px, transparent 1px)',
-                      backgroundSize: '18px 18px'
-                    }
-                  : undefined
+          {/* INTERACTIVE HORIZONTAL SPLIT RESIZE HANDLE between Visual Builder and Live Output Preview */}
+          <div
+            data-testid="mermaid-split-divider-horizontal"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              splitDragRef.current = {
+                type: 'horizontal',
+                startX: e.clientX,
+                startPercent: leftPanePercent
               }
-              className="flex-1 p-4 rounded bg-panel border border-subtle flex items-center justify-center overflow-auto min-h-[160px] cursor-grab active:cursor-grabbing select-none"
-            >
+            }}
+            onDoubleClick={() => setLeftPanePercent(50)}
+            className="w-2 h-full cursor-col-resize bg-subtle/50 hover:bg-accent/60 active:bg-accent transition-colors flex flex-col items-center justify-center shrink-0 group"
+            title="Drag left or right to resize Visual Canvas vs. Live Output Preview (Double-click to reset 50/50)"
+          >
+            <div className="h-10 w-0.5 rounded bg-muted/60 group-hover:bg-white" />
+          </div>
+
+          {/* RIGHT PANE: Resizable Interactive Pan & Zoom Live Output Preview */}
+          <div
+            style={{ width: `${100 - leftPanePercent}%` }}
+            className="flex flex-col min-w-[260px] min-h-0 h-full p-3 pl-1.5 gap-2"
+          >
+            <div className="flex flex-col flex-1 min-h-0 bg-panel border border-subtle rounded-md overflow-hidden shadow-xs">
+              {/* Live Output Preview Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-secondary/60 border-b border-subtle text-[11px] shrink-0">
+                <span className="font-semibold uppercase text-muted">
+                  Live Output Preview (Drag to Pan • Scroll to Zoom)
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <label className="text-muted text-[11px]">Theme:</label>
+                  <select
+                    data-testid="mermaid-theme-select"
+                    value={previewMermaidTheme}
+                    onChange={(e) =>
+                      setPreviewMermaidTheme(e.target.value as MermaidPreviewTheme)
+                    }
+                    className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary text-xs"
+                  >
+                    <option value="auto">Auto ({theme})</option>
+                    <option value="default">Default</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="dark">Dark</option>
+                    <option value="forest">Forest</option>
+                    <option value="base">Base</option>
+                  </select>
+                  <button
+                    type="button"
+                    data-testid="mermaid-preview-grid-toggle"
+                    onClick={() => setPreviewGrid((v) => !v)}
+                    className={`px-2 py-0.5 rounded border text-xs ${
+                      previewGrid
+                        ? 'bg-accent text-white border-accent'
+                        : 'bg-panel border-subtle text-primary'
+                    }`}
+                  >
+                    Grid
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="mermaid-zoom-out-btn"
+                    onClick={() =>
+                      setPreviewZoom((z) => Math.max(0.35, Number((z - 0.15).toFixed(2))))
+                    }
+                    className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
+                    title="Zoom Out Output Preview"
+                  >
+                    −
+                  </button>
+                  <span
+                    data-testid="mermaid-zoom-level"
+                    className="font-mono text-[11px] text-muted min-w-[40px] text-center"
+                  >
+                    {Math.round(previewZoom * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="mermaid-zoom-in-btn"
+                    onClick={() =>
+                      setPreviewZoom((z) => Math.min(3.0, Number((z + 0.15).toFixed(2))))
+                    }
+                    className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
+                    title="Zoom In Output Preview"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="mermaid-zoom-reset-btn"
+                    onClick={() => {
+                      setPreviewZoom(1)
+                      setPreviewPan({ x: 0, y: 0 })
+                    }}
+                    className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs"
+                    title="Reset Output Pan & Zoom"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              {syntaxError && (
+                <div
+                  data-testid="mermaid-builder-error-banner"
+                  className="px-3 py-1.5 bg-secondary border-b border-subtle text-danger font-mono text-xs shrink-0"
+                >
+                  Mermaid Syntax Diagnostic: {syntaxError}
+                </div>
+              )}
+
+              {/* Interactive Pan & Wheel-Zoom Output Viewport */}
               <div
-                data-testid="mermaid-live-preview-svg"
-                style={{
-                  transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
-                  transformOrigin: 'center center',
-                  transition: previewPanDragRef.current ? 'none' : 'transform 120ms ease-out'
+                data-testid="mermaid-live-preview-viewport"
+                onMouseDown={(e) => {
+                  if (e.button !== 0) return
+                  previewPanDragRef.current = {
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    originX: previewPan.x,
+                    originY: previewPan.y
+                  }
                 }}
-                className="max-w-full"
-                dangerouslySetInnerHTML={{ __html: previewSvg }}
-              />
+                onWheel={(e) => {
+                  e.preventDefault()
+                  const delta = e.deltaY < 0 ? 0.12 : -0.12
+                  setPreviewZoom((z) =>
+                    Math.min(3.0, Math.max(0.35, Number((z + delta).toFixed(2))))
+                  )
+                }}
+                style={
+                  previewGrid
+                    ? {
+                        backgroundImage:
+                          theme === 'dark'
+                            ? 'radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)'
+                            : 'radial-gradient(rgba(15,23,42,0.14) 1px, transparent 1px)',
+                        backgroundSize: `${Math.max(10, Math.round(18 * previewZoom))}px ${Math.max(10, Math.round(18 * previewZoom))}px`,
+                        backgroundPosition: `${previewPan.x}px ${previewPan.y}px`
+                      }
+                    : undefined
+                }
+                className="flex-1 p-6 flex items-center justify-center overflow-hidden min-h-[160px] cursor-grab active:cursor-grabbing select-none"
+              >
+                <div
+                  data-testid="mermaid-live-preview-svg"
+                  style={{
+                    transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
+                    transformOrigin: 'center center',
+                    transition: previewPanDragRef.current ? 'none' : 'transform 90ms ease-out'
+                  }}
+                  className="w-full h-full flex items-center justify-center [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:w-auto [&_svg]:h-auto"
+                  dangerouslySetInnerHTML={{ __html: previewSvg }}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Interactive Window Resize Handles (Right Edge, Bottom Edge, and Corner Grip) */}
+        {/* Interactive Window Resize Handles (Left, Right, Top, Bottom, and Corner Grip) */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            modalResizeRef.current = {
+              dir: 'left',
+              startX: e.clientX,
+              startY: e.clientY,
+              startW: modalSize.width,
+              startH: modalSize.height
+            }
+          }}
+          className="absolute top-0 left-0 w-2 h-full cursor-ew-resize hover:bg-accent/30"
+          title="Drag left edge to resize window width"
+        />
         <div
           onMouseDown={(e) => {
             e.preventDefault()
@@ -1989,7 +2887,7 @@ export const VisualMermaidBuilderModal: React.FC<{
             }
           }}
           className="absolute top-0 right-0 w-2 h-full cursor-ew-resize hover:bg-accent/30"
-          title="Drag to resize Diagram Wizard width"
+          title="Drag right edge to resize window width"
         />
         <div
           onMouseDown={(e) => {
@@ -2004,7 +2902,7 @@ export const VisualMermaidBuilderModal: React.FC<{
             }
           }}
           className="absolute bottom-0 left-0 h-2 w-full cursor-ns-resize hover:bg-accent/30"
-          title="Drag to resize Diagram Wizard height"
+          title="Drag bottom edge to resize window height"
         />
         <div
           data-testid="mermaid-wizard-resize-handle"
@@ -2020,7 +2918,7 @@ export const VisualMermaidBuilderModal: React.FC<{
             }
           }}
           className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize bg-accent/60 hover:bg-accent rounded-tl"
-          title="Drag corner to resize Diagram Wizard window"
+          title="Drag corner to resize Diagram Studio window"
         />
       </div>
     </div>

@@ -1,7 +1,9 @@
 import fs from 'fs'
 import path from 'path'
+import zlib from 'zlib'
 import { MultiRootRegistry, atomicWriteFile } from '../workspace/multi-root-registry'
-import { renderMarkdownDocument } from '../../shared/markdown/pipeline'
+import { renderMarkdownDocument, extractFrontmatter } from '../../shared/markdown/pipeline'
+import { htmlToCleanMarkdown } from '../../shared/markdown/export-formats'
 
 const NORDIC_EXPORT_STYLES = `
   :root {
@@ -68,6 +70,16 @@ const NORDIC_EXPORT_STYLES = `
     margin-bottom: 4px;
     color: var(--accent-primary);
   }
+  .klartext-bookmark-card {
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 1em 0;
+    background: var(--bg-secondary);
+  }
+  .klartext-bookmark-title { font-weight: 600; margin-bottom: 4px; }
+  .klartext-bookmark-desc { font-size: 0.9em; color: var(--text-secondary); margin-bottom: 4px; }
+  .klartext-bookmark-domain { font-size: 0.8em; font-family: monospace; color: var(--accent-primary); }
   img { max-width: 100%; height: auto; border-radius: 4px; }
   @media print {
     body { padding: 0; max-width: none; }
@@ -81,6 +93,201 @@ const NORDIC_EXPORT_STYLES = `
     }
   }
 `
+
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function computeCrc32(buf: Buffer): number {
+  if (typeof (zlib as any).crc32 === 'function') {
+    return (zlib as any).crc32(buf) >>> 0
+  }
+  let crc = 0xffffffff
+  for (let i = 0; i < buf.length; i++) {
+    crc ^= buf[i]
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+/**
+ * Create a valid PKZIP buffer from in-memory files (used to package OpenXML .docx)
+ */
+function buildZipArchive(files: Array<{ name: string; data: Buffer }>): Buffer {
+  const localParts: Buffer[] = []
+  const centralParts: Buffer[] = []
+  let offset = 0
+
+  for (const file of files) {
+    const nameBuf = Buffer.from(file.name, 'utf-8')
+    const dataBuf = file.data
+    const crc = computeCrc32(dataBuf)
+
+    const localHeader = Buffer.alloc(30 + nameBuf.length)
+    localHeader.writeUInt32LE(0x04034b50, 0) // Local file header signature
+    localHeader.writeUInt16LE(20, 4) // Version needed to extract (2.0)
+    localHeader.writeUInt16LE(0, 6) // General purpose bit flag
+    localHeader.writeUInt16LE(0, 8) // Compression method (0 = store)
+    localHeader.writeUInt16LE(0, 10) // Last mod file time
+    localHeader.writeUInt16LE(0, 12) // Last mod file date
+    localHeader.writeUInt32LE(crc, 14) // CRC-32
+    localHeader.writeUInt32LE(dataBuf.length, 18) // Compressed size
+    localHeader.writeUInt32LE(dataBuf.length, 22) // Uncompressed size
+    localHeader.writeUInt16LE(nameBuf.length, 26) // File name length
+    localHeader.writeUInt16LE(0, 28) // Extra field length
+    nameBuf.copy(localHeader, 30)
+
+    localParts.push(localHeader, dataBuf)
+
+    const centralHeader = Buffer.alloc(46 + nameBuf.length)
+    centralHeader.writeUInt32LE(0x02014b50, 0) // Central directory signature
+    centralHeader.writeUInt16LE(20, 4) // Version made by
+    centralHeader.writeUInt16LE(20, 6) // Version needed
+    centralHeader.writeUInt16LE(0, 8) // General purpose bit flag
+    centralHeader.writeUInt16LE(0, 10) // Compression method (0 = store)
+    centralHeader.writeUInt16LE(0, 12) // Mod time
+    centralHeader.writeUInt16LE(0, 14) // Mod date
+    centralHeader.writeUInt32LE(crc, 16) // CRC-32
+    centralHeader.writeUInt32LE(dataBuf.length, 20) // Compressed size
+    centralHeader.writeUInt32LE(dataBuf.length, 24) // Uncompressed size
+    centralHeader.writeUInt16LE(nameBuf.length, 28) // File name length
+    centralHeader.writeUInt16LE(0, 30) // Extra field length
+    centralHeader.writeUInt16LE(0, 32) // File comment length
+    centralHeader.writeUInt16LE(0, 34) // Disk number start
+    centralHeader.writeUInt16LE(0, 36) // Internal file attributes
+    centralHeader.writeUInt32LE(0, 38) // External file attributes
+    centralHeader.writeUInt32LE(offset, 42) // Relative offset of local header
+    nameBuf.copy(centralHeader, 46)
+
+    centralParts.push(centralHeader)
+    offset += localHeader.length + dataBuf.length
+  }
+
+  const centralDirBuf = Buffer.concat(centralParts)
+  const eocd = Buffer.alloc(22)
+  eocd.writeUInt32LE(0x06054b50, 0) // End of central directory signature
+  eocd.writeUInt16LE(0, 4) // Number of this disk
+  eocd.writeUInt16LE(0, 6) // Disk where central directory starts
+  eocd.writeUInt16LE(files.length, 8) // Number of central directory records on this disk
+  eocd.writeUInt16LE(files.length, 10) // Total number of central directory records
+  eocd.writeUInt32LE(centralDirBuf.length, 12) // Size of central directory
+  eocd.writeUInt32LE(offset, 16) // Offset of start of central directory
+  eocd.writeUInt16LE(0, 20) // Comment length
+
+  return Buffer.concat([...localParts, centralDirBuf, eocd])
+}
+
+/**
+ * Convert Markdown inline text into WordprocessingML <w:r> elements
+ */
+function markdownInlineToWordXml(text: string): string {
+  const clean = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)')
+  const tokens = clean.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).filter(Boolean)
+  return tokens
+    .map((tok) => {
+      if (tok.startsWith('**') && tok.endsWith('**')) {
+        return `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${escapeXml(tok.slice(2, -2))}</w:t></w:r>`
+      }
+      if (tok.startsWith('*') && tok.endsWith('*')) {
+        return `<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">${escapeXml(tok.slice(1, -1))}</w:t></w:r>`
+      }
+      if (tok.startsWith('`') && tok.endsWith('`')) {
+        return `<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/></w:rPr><w:t xml:space="preserve">${escapeXml(tok.slice(1, -1))}</w:t></w:r>`
+      }
+      return `<w:r><w:t xml:space="preserve">${escapeXml(tok)}</w:t></w:r>`
+    })
+    .join('')
+}
+
+/**
+ * Build a complete OpenXML .docx Buffer from a Markdown string
+ */
+export function generateDocxBufferFromMarkdown(markdown: string, title?: string): Buffer {
+  const { body } = extractFrontmatter(markdown)
+  const lines = body.split(/\r?\n/)
+  const paragraphsXml: string[] = []
+  let inCodeFence = false
+
+  for (const rawLine of lines) {
+    if (/^\s*```/.test(rawLine)) {
+      inCodeFence = !inCodeFence
+      continue
+    }
+    if (inCodeFence) {
+      paragraphsXml.push(
+        `<w:p><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">${escapeXml(rawLine)}</w:t></w:r></w:p>`
+      )
+      continue
+    }
+    const trimmed = rawLine.trim()
+    if (!trimmed) {
+      paragraphsXml.push('<w:p/>')
+      continue
+    }
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/)
+    if (headingMatch) {
+      const level = headingMatch[1].length
+      const fontSizeHalfPt = level === 1 ? 36 : level === 2 ? 30 : level === 3 ? 26 : 24
+      paragraphsXml.push(
+        `<w:p><w:pPr><w:pStyle w:val="Heading${level}"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="${fontSizeHalfPt}"/></w:rPr><w:t xml:space="preserve">${escapeXml(headingMatch[2].trim())}</w:t></w:r></w:p>`
+      )
+      continue
+    }
+    const listMatch = trimmed.match(/^[-*+]\s+(.+)$/)
+    if (listMatch) {
+      paragraphsXml.push(
+        `<w:p><w:r><w:t xml:space="preserve">• </w:t></w:r>${markdownInlineToWordXml(listMatch[1])}</w:p>`
+      )
+      continue
+    }
+    paragraphsXml.push(`<w:p>${markdownInlineToWordXml(trimmed)}</w:p>`)
+  }
+
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+</Types>`
+
+  const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+</Relationships>`
+
+  const coreXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <dc:title>${escapeXml(title || 'Klartext Document')}</dc:title>
+  <dc:creator>Klartext</dc:creator>
+</cp:coreProperties>`
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${paragraphsXml.join('\n    ')}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`
+
+  return buildZipArchive([
+    { name: '[Content_Types].xml', data: Buffer.from(contentTypesXml, 'utf-8') },
+    { name: '_rels/.rels', data: Buffer.from(relsXml, 'utf-8') },
+    { name: 'docProps/core.xml', data: Buffer.from(coreXml, 'utf-8') },
+    { name: 'word/document.xml', data: Buffer.from(documentXml, 'utf-8') }
+  ])
+}
 
 export class ExportService {
   constructor(private registry: MultiRootRegistry) {}
@@ -169,5 +376,101 @@ export class ExportService {
     const outputPath = params.targetFilePath || defaultOut
     await atomicWriteFile(outputPath, html)
     return { outputPath, html }
+  }
+
+  async exportToDocxFile(params: {
+    rootId: string
+    relativePath: string
+    markdown: string
+    title?: string
+    targetFilePath?: string
+  }): Promise<{ outputPath: string; sizeBytes: number }> {
+    const docxBuffer = generateDocxBufferFromMarkdown(
+      params.markdown,
+      params.title || path.basename(params.relativePath, '.md')
+    )
+    const defaultOut = this.registry.pathGuard.resolveScopedPath(
+      params.rootId,
+      params.relativePath.replace(/\.(md|markdown)$/i, '') + '.docx'
+    )
+    const outputPath = params.targetFilePath || defaultOut
+    await atomicWriteFile(outputPath, docxBuffer)
+    return { outputPath, sizeBytes: docxBuffer.length }
+  }
+
+  async fetchUrlMetadata(url: string): Promise<{
+    url: string
+    title: string
+    description: string
+    domain: string
+  }> {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`)
+    }
+    const domain = parsedUrl.hostname.replace(/^www\./, '')
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Klartext-Markdown-Editor/1.3'
+        }
+      })
+      const rawHtml = await res.text()
+      const parsed = htmlToCleanMarkdown(rawHtml, url)
+      return {
+        url,
+        title: parsed.title || domain,
+        description: parsed.description || '',
+        domain: parsed.domain || domain
+      }
+    } catch {
+      return {
+        url,
+        title: domain || url,
+        description: '',
+        domain
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  async clipWebPageToMarkdown(url: string): Promise<{
+    url: string
+    title: string
+    description: string
+    domain: string
+    markdown: string
+    bodyMarkdown: string
+  }> {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`)
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Klartext-Markdown-Editor/1.3'
+        }
+      })
+      const rawHtml = await res.text()
+      const parsed = htmlToCleanMarkdown(rawHtml, url)
+      return {
+        url,
+        title: parsed.title,
+        description: parsed.description,
+        domain: parsed.domain,
+        markdown: parsed.fullMarkdown,
+        bodyMarkdown: parsed.bodyMarkdown
+      }
+    } finally {
+      clearTimeout(timer)
+    }
   }
 }

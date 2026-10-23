@@ -163,6 +163,53 @@ export const DynamicWorkspaceDefSchema = z.object({
 })
 export type DynamicWorkspaceDef = z.infer<typeof DynamicWorkspaceDefSchema>
 
+export const DefaultFrontmatterPropertyDefSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().optional(),
+  type: z.enum(['text', 'date', 'dropdown', 'tags', 'number', 'checkbox']).default('text'),
+  defaultValue: z.string().default(''),
+  options: z.array(z.string()).default([])
+})
+export type DefaultFrontmatterPropertyDef = z.infer<typeof DefaultFrontmatterPropertyDefSchema>
+
+export const DEFAULT_FRONTMATTER_PROPERTIES: DefaultFrontmatterPropertyDef[] = [
+  {
+    key: 'title',
+    label: 'Title',
+    type: 'text',
+    defaultValue: '<% title %>',
+    options: []
+  },
+  {
+    key: 'author',
+    label: 'Author',
+    type: 'text',
+    defaultValue: '',
+    options: []
+  },
+  {
+    key: 'date',
+    label: 'Creation Date',
+    type: 'date',
+    defaultValue: '<% creation_date %>',
+    options: []
+  },
+  {
+    key: 'tags',
+    label: 'Tags',
+    type: 'tags',
+    defaultValue: '',
+    options: []
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    type: 'dropdown',
+    defaultValue: 'Draft',
+    options: ['Draft', 'In Progress', 'In Review', 'Approved', 'Published', 'Archived']
+  }
+]
+
 export const AppSettingsSchema = z.object({
   theme: ThemeModeSchema.default('system'),
   accentColorOverride: z.string().optional(),
@@ -235,6 +282,9 @@ export const AppSettingsSchema = z.object({
       })
     )
     .optional(),
+  defaultFrontmatterProperties: z
+    .array(DefaultFrontmatterPropertyDefSchema)
+    .default(DEFAULT_FRONTMATTER_PROPERTIES),
   frontmatterStatusOptions: z
     .array(z.string())
     .default(['Draft', 'In Progress', 'In Review', 'Approved', 'Published', 'Archived']),
@@ -302,6 +352,8 @@ export const AppSettingsSchema = z.object({
 export type FrontmatterFieldType = 'text' | 'date' | 'dropdown' | 'tags' | 'number' | 'checkbox'
 export interface CustomFrontmatterPropertyDef {
   key: string
+  label?: string
+  defaultValue?: string
   type: FrontmatterFieldType
   options: string[]
 }

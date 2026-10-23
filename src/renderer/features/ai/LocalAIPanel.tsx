@@ -40,6 +40,7 @@ export const LocalAIPanel: React.FC<{
   onOpenHelpAI?: () => void
   onOpenCitation?: (rootId: string, relativePath: string) => void
   onOpenCustomInstructionDialog?: () => void
+  onConnectionStatusChange?: (ok: boolean, modelsCount: number) => void
 }> = ({
   settings,
   roots,
@@ -54,7 +55,8 @@ export const LocalAIPanel: React.FC<{
   onRejectDiff,
   onOpenHelpAI,
   onOpenCitation,
-  onOpenCustomInstructionDialog
+  onOpenCustomInstructionDialog,
+  onConnectionStatusChange
 }) => {
   const [hardwareAdvice, setHardwareAdvice] = useState<HardwareTierAdvice | null>(null)
   const [connectionState, setConnectionState] = useState<{
@@ -111,6 +113,7 @@ export const LocalAIPanel: React.FC<{
     if (res.models.length > 0) {
       setDiscoveredModels(res.models)
     }
+    onConnectionStatusChange?.(res.ok, res.models.length)
   }
 
   const handleRunRAG = async () => {
@@ -415,7 +418,7 @@ export const LocalAIPanel: React.FC<{
               <label className="text-[11px] text-muted">Active Local Model:</label>
               <select
                 data-testid="ai-model-select"
-                value={settings.ai.activeModel}
+                value={settings.ai.activeModel || ''}
                 onChange={(e) =>
                   onUpdateSettings({
                     ai: { ...settings.ai, activeModel: e.target.value }
@@ -423,6 +426,7 @@ export const LocalAIPanel: React.FC<{
                 }
                 className="w-full px-2 py-1 rounded bg-app border border-subtle text-primary"
               >
+                <option value="">None (No AI model configured)</option>
                 {discoveredModels.length > 0 ? (
                   discoveredModels.map((m) => (
                     <option key={m.name} value={m.name}>
