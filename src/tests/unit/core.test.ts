@@ -18,6 +18,13 @@ import {
   resolveAllConflictHunksInText
 } from '../../main/git/conflict-resolver'
 import { calculateHardwareTierAdvice } from '../../main/ai/hardware-advisor'
+import {
+  APP_METADATA,
+  UPDATE_CHECK_INTERVAL_OPTIONS,
+  compareSemverVersions,
+  shouldRunScheduledUpdateCheck
+} from '../../shared/constants'
+import { AppSettingsSchema } from '../../shared/schemas'
 
 describe('Unit Tests: Markdown Pipeline, Excalidraw SVG, Conflict Parser & Hardware Advisor', () => {
   it('extracts and updates YAML frontmatter losslessly', () => {
@@ -830,6 +837,52 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
 
     expect(matchesDynamicFilterRule(sampleDocs[0], secRule)).toBe(true)
     expect(matchesDynamicFilterRule(sampleDocs[1], secRule)).toBe(false)
+  })
+
+  it('validates About metadata, semver version comparison, and update check intervals (default weekly)', () => {
+    expect(APP_METADATA.name).toBe('Klartext')
+    expect(APP_METADATA.version).toBe('1.4.0')
+    expect(APP_METADATA.license).toBe('MIT License')
+    expect(APP_METADATA.author).toContain('Johan Zetterström')
+
+    expect(UPDATE_CHECK_INTERVAL_OPTIONS.map((o) => o.value)).toEqual([
+      'startup',
+      'daily',
+      'weekly',
+      'monthly'
+    ])
+
+    const parsedDefaultSettings = AppSettingsSchema.parse({})
+    expect(parsedDefaultSettings.updateCheckInterval).toBe('weekly')
+
+    expect(compareSemverVersions('1.4.0', '1.4.0')).toBe(0)
+    expect(compareSemverVersions('v1.5.0', '1.4.0')).toBe(1)
+    expect(compareSemverVersions('1.3.9', 'v1.4.0')).toBe(-1)
+    expect(compareSemverVersions('2.0.0', '1.9.9')).toBe(1)
+
+    const now = 1_700_000_000_000
+    const oneHourAgo = now - 60 * 60 * 1000
+    const twoDaysAgo = now - 2 * 24 * 60 * 60 * 1000
+    const eightDaysAgo = now - 8 * 24 * 60 * 60 * 1000
+    const fortyDaysAgo = now - 40 * 24 * 60 * 60 * 1000
+
+    // Never checked before -> always true
+    expect(shouldRunScheduledUpdateCheck('weekly', undefined, now)).toBe(true)
+
+    // Startup -> always true
+    expect(shouldRunScheduledUpdateCheck('startup', oneHourAgo, now)).toBe(true)
+
+    // Daily (24h)
+    expect(shouldRunScheduledUpdateCheck('daily', oneHourAgo, now)).toBe(false)
+    expect(shouldRunScheduledUpdateCheck('daily', twoDaysAgo, now)).toBe(true)
+
+    // Weekly (7d default)
+    expect(shouldRunScheduledUpdateCheck('weekly', twoDaysAgo, now)).toBe(false)
+    expect(shouldRunScheduledUpdateCheck('weekly', eightDaysAgo, now)).toBe(true)
+
+    // Monthly (30d)
+    expect(shouldRunScheduledUpdateCheck('monthly', eightDaysAgo, now)).toBe(false)
+    expect(shouldRunScheduledUpdateCheck('monthly', fortyDaysAgo, now)).toBe(true)
   })
 })
 

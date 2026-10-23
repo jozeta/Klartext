@@ -549,6 +549,18 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
         `)
         return
       }
+      if (req.url === '/mock-release-latest') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            tag_name: 'v1.5.0',
+            html_url: 'https://github.com/jozeta/Klartext/releases/tag/v1.5.0',
+            body: 'Release notes for Klartext v1.5.0',
+            published_at: '2026-10-23T12:00:00Z'
+          })
+        )
+        return
+      }
       res.writeHead(404)
       res.end()
     })
@@ -1122,8 +1134,51 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('slide-close-btn').click()
       await expect(page.getByTestId('slide-deck-modal')).toHaveCount(0)
 
-      // Verify all settings, panel visibility, sidebar tab, workspace order, saved themes, and open tabs are persisted
+      // Verify Help -> About Klartext modal (Name, Version, License, Author)
+      await page.getByTestId('help-menu-btn').click()
+      await expect(page.getByTestId('help-menu-about')).toBeVisible()
+      await page.getByTestId('help-menu-about').click()
+      await expect(page.getByTestId('about-klartext-modal')).toBeVisible()
+      await expect(page.getByTestId('about-field-name')).toHaveText('Klartext')
+      await expect(page.getByTestId('about-field-version')).toHaveText('1.4.0')
+      await expect(page.getByTestId('about-field-license')).toHaveText('MIT License')
+      await expect(page.getByTestId('about-field-author')).toContainText('Johan Zetterström')
+      await page.getByTestId('about-modal-close-btn').click()
+      await expect(page.getByTestId('about-klartext-modal')).toHaveCount(0)
+
+      // Verify Settings -> Application Updates (default weekly interval, startup/daily/weekly/monthly selector, and checkForUpdates)
+      await page.getByTestId('file-menu-btn').click()
+      await page.getByTestId('open-settings-btn').click()
+      await expect(page.getByTestId('settings-modal')).toBeVisible()
+      await expect(page.getByTestId('settings-updates-section')).toBeVisible()
+      await expect(page.getByTestId('settings-update-interval-select')).toHaveValue('weekly')
+      await page.getByTestId('settings-update-interval-select').selectOption('daily')
+      await expect(page.getByTestId('settings-update-interval-select')).toHaveValue('daily')
+      await page.getByTestId('settings-update-interval-select').selectOption('startup')
+      await expect(page.getByTestId('settings-update-interval-select')).toHaveValue('startup')
+      await page.getByTestId('settings-update-interval-select').selectOption('monthly')
+      await expect(page.getByTestId('settings-update-interval-select')).toHaveValue('monthly')
+      await page.getByTestId('settings-update-interval-select').selectOption('weekly')
+      await expect(page.getByTestId('settings-update-interval-select')).toHaveValue('weekly')
+      await page.getByTestId('close-settings-btn').click()
+      await expect(page.getByTestId('settings-modal')).toHaveCount(0)
+
+      const mockUpdateRes = await page.evaluate(
+        (port) =>
+          window.klartext.checkForUpdates({
+            feedUrl: `http://127.0.0.1:${port}/mock-release-latest`
+          }),
+        ollamaPort
+      )
+      expect(mockUpdateRes.ok).toBe(true)
+      expect(mockUpdateRes.currentVersion).toBe('1.4.0')
+      expect(mockUpdateRes.latestVersion).toBe('1.5.0')
+      expect(mockUpdateRes.updateAvailable).toBe(true)
+
+      // Verify all settings, panel visibility, sidebar tab, workspace order, saved themes, update interval, and open tabs are persisted
       const persistedSettings = await page.evaluate(() => window.klartext.getSettings())
+      expect(persistedSettings.updateCheckInterval).toBe('weekly')
+      expect(typeof persistedSettings.lastUpdateCheckAt).toBe('number')
       expect(persistedSettings.frontmatterPanelVisible).toBe(true)
       expect(persistedSettings.lastActiveRightPanel).toBe('frontmatter')
       expect(persistedSettings.leftSidebarTab).toBe('git')

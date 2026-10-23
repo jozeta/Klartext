@@ -26,7 +26,8 @@ import {
   Keyboard,
   Trash2,
   Calendar,
-  CheckSquare
+  CheckSquare,
+  Info
 } from '../components/icons/untitled-icons'
 import type {
   AppSettings,
@@ -39,7 +40,10 @@ import type {
   RecoverySnapshot,
   WorkspaceRoot
 } from '../../shared/types'
-import { DEFAULT_NORDIC_SAVED_THEMES } from '../../shared/constants'
+import {
+  DEFAULT_NORDIC_SAVED_THEMES,
+  shouldRunScheduledUpdateCheck
+} from '../../shared/constants'
 import { DEFAULT_FRONTMATTER_PROPERTIES } from '../../shared/schemas'
 import {
   parseTagListInput,
@@ -80,7 +84,7 @@ import {
   DailyNotesCalendarPanel,
   GlobalTasksRightPanel
 } from '../features/productivity/RightProductivityPanels'
-import { HelpModal, type HelpModalTab } from '../components/help/HelpModal'
+import { AboutModal, HelpModal, type HelpModalTab } from '../components/help/HelpModal'
 import { ExcalidrawCanvasModal } from '../features/diagrams/DiagramWidgets'
 import {
   CommandPaletteModal,
@@ -252,6 +256,7 @@ export const App: React.FC = () => {
   // Modals & Overlays
   const [paletteMode, setPaletteMode] = useState<'commands' | 'files' | 'icons' | null>(null)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showAboutModal, setShowAboutModal] = useState(false)
   const [showSlideDeckModal, setShowSlideDeckModal] = useState(false)
   const [showWebClipperModal, setShowWebClipperModal] = useState(false)
   const [excalidrawTarget, setExcalidrawTarget] = useState<{
@@ -1231,6 +1236,10 @@ export const App: React.FC = () => {
         openRightHelpPanel('ai')
       } else if (action === 'help:shortcuts') {
         openRightHelpPanel('shortcuts')
+      } else if (action === 'help:about') {
+        setShowAboutModal(true)
+      } else if (action === 'help:check-updates') {
+        setShowSettingsModal(true)
       } else if (action.startsWith('editor:')) {
         dispatchEditorCommand(action.slice('editor:'.length) as EditorDispatchedCommand)
       }
@@ -1288,11 +1297,37 @@ export const App: React.FC = () => {
           : DEFAULT_NORDIC_SAVED_THEMES
       const normalizedSettings: AppSettings = {
         ...loadedSettings,
+        updateCheckInterval: loadedSettings.updateCheckInterval || 'weekly',
         customTemplates: mergedCustomTemplates,
         savedThemes: mergedSavedThemes,
         ...(loadedSettings.frontmatterPanelVisible && loadedSettings.rightSidebarOpen
           ? { rightSidebarOpen: false }
           : {})
+      }
+
+      // Run scheduled update check based on interval (default: once a week)
+      const isAutomatedTest = typeof navigator !== 'undefined' && navigator.webdriver === true
+      if (
+        !isAutomatedTest &&
+        window.klartext.checkForUpdates &&
+        shouldRunScheduledUpdateCheck(
+          normalizedSettings.updateCheckInterval || 'weekly',
+          normalizedSettings.lastUpdateCheckAt
+        )
+      ) {
+        window.klartext
+          .checkForUpdates()
+          .then((res) => {
+            setSettings((prev) =>
+              prev ? { ...prev, lastUpdateCheckAt: res.checkedAt } : prev
+            )
+            if (res.updateAvailable) {
+              setExportStatusBanner(
+                `Update available: Klartext v${res.latestVersion} is ready on GitHub Releases.`
+              )
+            }
+          })
+          .catch(() => {})
       }
       if (normalizedSettings.frontmatterPanelVisible) {
         setLastActiveRightPanel('frontmatter')
@@ -2247,6 +2282,12 @@ export const App: React.FC = () => {
         category: 'Help',
         label: 'Open Help: Dynamic Variables (<% %>) & Formatting Reference',
         run: () => openRightHelpPanel('variables')
+      },
+      {
+        id: 'help-about',
+        category: 'Help',
+        label: 'About Klartext (Name, Version, License, Author)',
+        run: () => setShowAboutModal(true)
       },
       {
         id: 'spellcheck-toggle',
@@ -3912,6 +3953,23 @@ export const App: React.FC = () => {
                       <span>Smart Editing &amp; Shortcuts...</span>
                     </span>
                     <kbd className="text-[10px] font-mono text-muted">Keys</kbd>
+                  </button>
+                  <div className="my-1 border-t border-subtle" />
+                  <button
+                    type="button"
+                    data-testid="help-menu-about"
+                    onClick={() => {
+                      setShowHelpMenu(false)
+                      setHelpModalTab('about')
+                      setShowAboutModal(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-secondary text-primary flex items-center justify-between font-medium"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-accent shrink-0" />
+                      <span>About Klartext...</span>
+                    </span>
+                    <kbd className="text-[10px] font-mono text-accent">v1.4.0</kbd>
                   </button>
                 </div>
               )}
@@ -6032,6 +6090,14 @@ export const App: React.FC = () => {
             dispatchTextInsert(`\n${markdownContent}\n`, null)
           }}
           onClose={() => setShowWebClipperModal(false)}
+        />
+      )}
+
+      {/* About Klartext Modal */}
+      {showAboutModal && (
+        <AboutModal
+          onClose={() => setShowAboutModal(false)}
+          onOpenSettings={() => setShowSettingsModal(true)}
         />
       )}
 

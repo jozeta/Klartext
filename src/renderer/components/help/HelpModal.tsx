@@ -8,15 +8,20 @@ import {
   Check,
   X,
   Search,
-  Server
+  Server,
+  Info,
+  RefreshCw,
+  ExternalLink
 } from '../icons/untitled-icons'
+import { APP_METADATA } from '../../../shared/constants'
+import type { UpdateCheckResult } from '../../../shared/types'
 import {
   TEMPLATE_VARIABLES_DOCS,
   evaluateTemplateVariables,
   type TemplateEvaluationContext
 } from '../../../shared/templates/template-engine'
 
-export type HelpModalTab = 'formatting' | 'variables' | 'shortcuts' | 'ai'
+export type HelpModalTab = 'formatting' | 'variables' | 'shortcuts' | 'ai' | 'about'
 
 const FORMATTING_REFERENCE_SECTIONS = [
   {
@@ -169,7 +174,7 @@ export const HelpModal: React.FC<{
 
         {/* Navigation Tabs */}
         <div className="px-2.5 py-2 bg-secondary/40 border-b border-subtle space-y-2 shrink-0">
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             <button
               type="button"
               data-testid="help-tab-formatting"
@@ -221,6 +226,19 @@ export const HelpModal: React.FC<{
             >
               <Keyboard className="w-3 h-3 shrink-0" />
               <span className="truncate">Shortcuts</span>
+            </button>
+            <button
+              type="button"
+              data-testid="help-tab-about"
+              onClick={() => setActiveTab('about')}
+              className={`flex items-center justify-center gap-1 px-1.5 py-1 rounded font-medium text-[11px] truncate ${
+                activeTab === 'about'
+                  ? 'bg-accent text-white'
+                  : 'bg-panel text-muted hover:text-primary border border-subtle'
+              }`}
+            >
+              <Info className="w-3 h-3 shrink-0" />
+              <span className="truncate">About</span>
             </button>
           </div>
 
@@ -506,8 +524,245 @@ export const HelpModal: React.FC<{
               </div>
             </div>
           )}
+
+          {activeTab === 'about' && (
+            <div className="space-y-3" data-testid="help-about-section">
+              <div className="p-3.5 rounded-lg bg-panel border border-subtle space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-primary">{APP_METADATA.name}</div>
+                    <div className="text-[11px] text-muted">
+                      Technical Nordic Multi-Root Markdown Studio
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md bg-accent/15 border border-accent/30 text-accent font-mono font-semibold text-xs">
+                    v{(evaluationContext.appVersion || APP_METADATA.version).replace(/^v/i, '')}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-muted leading-relaxed">
+                  {APP_METADATA.description}
+                </p>
+
+                <div className="border border-subtle rounded-md overflow-hidden bg-app divide-y divide-subtle text-[11px]">
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted font-medium">Name</span>
+                    <span className="font-semibold text-primary">{APP_METADATA.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted font-medium">Version</span>
+                    <span className="font-mono text-primary">
+                      {(evaluationContext.appVersion || APP_METADATA.version).replace(/^v/i, '')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted font-medium">License</span>
+                    <span className="font-semibold text-primary">{APP_METADATA.license}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted font-medium">Author</span>
+                    <span className="font-medium text-primary text-right">
+                      {APP_METADATA.author}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </aside>
+  )
+}
+
+export const AboutModal: React.FC<{
+  appVersion?: string
+  onClose: () => void
+  onOpenSettings?: () => void
+}> = ({ appVersion, onClose, onOpenSettings }) => {
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
+  const displayVersion = (appVersion || APP_METADATA.version).replace(/^v/i, '')
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdate(true)
+    try {
+      const res = await window.klartext.checkForUpdates()
+      setUpdateResult(res)
+    } catch (err: any) {
+      setUpdateResult({
+        ok: false,
+        currentVersion: displayVersion,
+        latestVersion: displayVersion,
+        updateAvailable: false,
+        releaseUrl: APP_METADATA.releasesUrl,
+        checkedAt: Date.now(),
+        error: err?.message || 'Unable to check for updates'
+      })
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-6"
+      data-testid="about-klartext-modal"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md bg-panel border border-subtle rounded-xl shadow-2xl overflow-hidden text-xs"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Top Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-secondary border-b border-subtle">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-accent" />
+            <span className="font-semibold text-sm text-primary">About {APP_METADATA.name}</span>
+          </div>
+          <button
+            type="button"
+            data-testid="about-modal-close-btn"
+            onClick={onClose}
+            className="p-1 rounded hover:bg-app text-muted hover:text-primary transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2
+                className="text-lg font-bold text-primary tracking-tight"
+                data-testid="about-app-name"
+              >
+                {APP_METADATA.name}
+              </h2>
+              <p className="text-[11px] text-muted">
+                Technical Nordic Multi-Root Markdown Studio
+              </p>
+            </div>
+            <span
+              data-testid="about-app-version"
+              className="px-2.5 py-1 rounded-md bg-accent/15 border border-accent/30 text-accent font-mono font-semibold text-xs shrink-0"
+            >
+              v{displayVersion}
+            </span>
+          </div>
+
+          <p className="text-xs text-muted leading-relaxed">{APP_METADATA.description}</p>
+
+          {/* Standard About Metadata Table */}
+          <div className="rounded-lg border border-subtle bg-app divide-y divide-subtle/70">
+            <div className="flex items-center justify-between px-3.5 py-2.5">
+              <span className="text-muted font-medium">Name</span>
+              <span className="font-semibold text-primary" data-testid="about-field-name">
+                {APP_METADATA.name}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3.5 py-2.5">
+              <span className="text-muted font-medium">Version</span>
+              <span className="font-mono font-semibold text-primary" data-testid="about-field-version">
+                {displayVersion}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3.5 py-2.5">
+              <span className="text-muted font-medium">License</span>
+              <span className="font-semibold text-primary" data-testid="about-field-license">
+                {APP_METADATA.license}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3.5 py-2.5">
+              <span className="text-muted font-medium">Author</span>
+              <span className="font-medium text-primary text-right" data-testid="about-field-author">
+                {APP_METADATA.author}
+              </span>
+            </div>
+          </div>
+
+          {updateResult && (
+            <div
+              data-testid="about-update-status"
+              className={`p-2.5 rounded-lg border text-[11px] flex items-center justify-between gap-2 ${
+                updateResult.updateAvailable
+                  ? 'bg-accent/10 border-accent/40 text-primary'
+                  : 'bg-app border-subtle text-muted'
+              }`}
+            >
+              <div>
+                {updateResult.updateAvailable ? (
+                  <span>
+                    New version available:{' '}
+                    <strong className="text-accent font-mono">v{updateResult.latestVersion}</strong>
+                  </span>
+                ) : (
+                  <span>
+                    Klartext is up to date (<code className="font-mono">v{updateResult.currentVersion}</code>).
+                  </span>
+                )}
+              </div>
+              {updateResult.updateAvailable && (
+                <button
+                  type="button"
+                  onClick={() => window.klartext.openExternalUrl(updateResult.releaseUrl)}
+                  className="px-2 py-1 rounded bg-accent text-white font-medium text-[10px] inline-flex items-center gap-1 shrink-0"
+                >
+                  <span>Download</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="about-check-updates-btn"
+                onClick={handleCheckUpdates}
+                disabled={checkingUpdate}
+                className="h-8 px-3 rounded-md bg-app border border-subtle hover:border-accent text-primary font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-accent ${checkingUpdate ? 'animate-spin' : ''}`} />
+                <span>{checkingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+              </button>
+              <button
+                type="button"
+                data-testid="about-github-link-btn"
+                onClick={() => window.klartext.openExternalUrl(APP_METADATA.repositoryUrl)}
+                className="h-8 px-2.5 rounded-md bg-app border border-subtle hover:border-accent text-muted hover:text-primary inline-flex items-center gap-1 transition-colors"
+              >
+                <span>GitHub</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              {onOpenSettings && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose()
+                    onOpenSettings()
+                  }}
+                  className="h-8 px-2.5 rounded-md bg-app border border-subtle text-muted hover:text-primary"
+                >
+                  Settings
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-8 px-3.5 rounded-md bg-accent text-white font-semibold hover:opacity-90"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

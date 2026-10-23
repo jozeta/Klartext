@@ -210,6 +210,9 @@ export const DEFAULT_FRONTMATTER_PROPERTIES: DefaultFrontmatterPropertyDef[] = [
   }
 ]
 
+export const UpdateCheckIntervalSchema = z.enum(['startup', 'daily', 'weekly', 'monthly'])
+export type UpdateCheckInterval = z.infer<typeof UpdateCheckIntervalSchema>
+
 export const AppSettingsSchema = z.object({
   theme: ThemeModeSchema.default('system'),
   accentColorOverride: z.string().optional(),
@@ -236,7 +239,9 @@ export const AppSettingsSchema = z.object({
   lightPaperInDarkMode: z.boolean().default(false),
   autosaveDelayMs: z.number().min(200).max(60000).default(1000),
   allowRawHtml: z.boolean().default(false),
-  autoUpdateCheck: z.boolean().default(false),
+  autoUpdateCheck: z.boolean().default(true),
+  updateCheckInterval: UpdateCheckIntervalSchema.default('weekly'),
+  lastUpdateCheckAt: z.number().optional(),
   leftSidebarOpen: z.boolean().default(true),
   leftSidebarWidth: z.number().min(160).max(600).default(260),
   leftSidebarTab: z

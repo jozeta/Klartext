@@ -105,6 +105,8 @@ export const Pin: UntitledIconComponent = UntitledIcons.Pin01
 export const ArrowUp: UntitledIconComponent = UntitledIcons.ArrowUp
 export const ArrowDown: UntitledIconComponent = UntitledIcons.ArrowDown
 export const ArrowUpDown: UntitledIconComponent = UntitledIcons.SwitchVertical01
+export const Info: UntitledIconComponent = UntitledIcons.InfoCircle
+export const ExternalLink: UntitledIconComponent = UntitledIcons.LinkExternal01
 
 export interface UntitledCatalogIconItem {
   id: string

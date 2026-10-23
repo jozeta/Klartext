@@ -82,11 +82,12 @@ export const IPC_CHANNELS = {
   WEB_FETCH_METADATA: 'web:fetch-metadata',
   WEB_CLIP_URL: 'web:clip-url',
 
-  // Window & Shell
+  // Window, Updates & Shell
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE: 'window:maximize',
   WINDOW_CLOSE: 'window:close',
   SHELL_OPEN_EXTERNAL: 'shell:open-external',
+  APP_CHECK_FOR_UPDATES: 'app:check-for-updates',
 
   // Events pushed from Main -> Renderer
   EVENT_WATCHER_CHANGE: 'event:watcher-change',
@@ -94,6 +95,59 @@ export const IPC_CHANNELS = {
   EVENT_GIT_STATUS_CHANGED: 'event:git-status-changed',
   EVENT_MENU_ACTION: 'event:menu-action'
 } as const
+
+export const APP_METADATA = {
+  name: 'Klartext',
+  version: '1.4.0',
+  license: 'MIT License',
+  author: 'Johan Zetterström & Klartext Contributors',
+  repositoryUrl: 'https://github.com/jozeta/Klartext',
+  releasesUrl: 'https://github.com/jozeta/Klartext/releases',
+  latestReleaseApiUrl: 'https://api.github.com/repos/jozeta/Klartext/releases/latest',
+  description:
+    'Fast, local-first, multi-root & multi-repo Markdown studio with Technical Nordic design, Visio-style Mermaid diagram builder, Slide Deck presentation mode, and optional local AI.'
+} as const
+
+export const UPDATE_CHECK_INTERVAL_OPTIONS: Array<{
+  value: 'startup' | 'daily' | 'weekly' | 'monthly'
+  label: string
+  description: string
+}> = [
+  { value: 'startup', label: 'Every Startup', description: 'Check for updates every time Klartext starts' },
+  { value: 'daily', label: 'Once per Day', description: 'Check for updates once every 24 hours' },
+  { value: 'weekly', label: 'Every Week (Default)', description: 'Check for updates once every 7 days (default)' },
+  { value: 'monthly', label: 'Every Month', description: 'Check for updates once every 30 days' }
+]
+
+export function compareSemverVersions(versionA: string, versionB: string): number {
+  const clean = (v: string) =>
+    String(v || '0.0.0')
+      .trim()
+      .replace(/^v/i, '')
+      .split('-')[0]
+      .split('.')
+      .map((n) => parseInt(n, 10) || 0)
+  const [aMaj = 0, aMin = 0, aPatch = 0] = clean(versionA)
+  const [bMaj = 0, bMin = 0, bPatch = 0] = clean(versionB)
+  if (aMaj !== bMaj) return aMaj > bMaj ? 1 : -1
+  if (aMin !== bMin) return aMin > bMin ? 1 : -1
+  if (aPatch !== bPatch) return aPatch > bPatch ? 1 : -1
+  return 0
+}
+
+export function shouldRunScheduledUpdateCheck(
+  interval: 'startup' | 'daily' | 'weekly' | 'monthly' = 'weekly',
+  lastCheckAt?: number,
+  nowMs: number = Date.now()
+): boolean {
+  if (interval === 'startup') return true
+  if (!lastCheckAt || lastCheckAt <= 0) return true
+  const elapsedMs = nowMs - lastCheckAt
+  const DAY_MS = 24 * 60 * 60 * 1000
+  if (interval === 'daily') return elapsedMs >= DAY_MS
+  if (interval === 'monthly') return elapsedMs >= 30 * DAY_MS
+  return elapsedMs >= 7 * DAY_MS
+}
 
 export const PRESET_HIGHLIGHT_COLORS: Array<{
   id: string

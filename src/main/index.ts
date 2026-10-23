@@ -496,6 +496,15 @@ app.whenReady().then(() => {
         {
           label: 'Smart Editing & Shortcuts...',
           click: () => sendMenuAction('help:shortcuts')
+        },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates...',
+          click: () => sendMenuAction('help:check-updates')
+        },
+        {
+          label: 'About Klartext...',
+          click: () => sendMenuAction('help:about')
         }
       ]
     }

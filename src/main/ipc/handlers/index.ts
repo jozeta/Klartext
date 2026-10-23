@@ -8,7 +8,7 @@ import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron'
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
 import { z } from 'zod'
-import { IPC_CHANNELS } from '../../../shared/constants'
+import { IPC_CHANNELS, APP_METADATA, compareSemverVersions } from '../../../shared/constants'
 import {
   AIStreamRequestSchema,
   AIRagQueryRequestSchema,
@@ -324,7 +324,7 @@ export function registerAllIpcHandlers(
       memoryFree: `${freeGb} GB`,
       uptime: formatSystemUptime(),
       ipLocal: getLocalIpAddress(),
-      appVersion: app.getVersion() || '1.1.0',
+      appVersion: app.getVersion() || APP_METADATA.version,
       envVars: {
         USER: userName,
         SHELL: process.env.SHELL || '/bin/zsh',
@@ -898,5 +898,92 @@ export function registerAllIpcHandlers(
     }
     await shell.openExternal(url)
     return { ok: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.APP_CHECK_FOR_UPDATES, async (_e, rawInput) => {
+    const parsedInput = z
+      .object({
+        feedUrl: z.string().url().optional()
+      })
+      .optional()
+      .parse(rawInput)
+
+    const currentVersion = APP_METADATA.version.replace(/^v/i, '')
+    const checkedAt = Date.now()
+    const targetUrl =
+      parsedInput?.feedUrl ||
+      process.env.KLARTEXT_UPDATE_FEED_URL ||
+      APP_METADATA.latestReleaseApiUrl
+
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 8000)
+      const response = await fetch(targetUrl, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': `Klartext/${currentVersion}`
+        },
+        signal: controller.signal
+      })
+      clearTimeout(timer)
+
+      if (!response.ok) {
+        settingsService.updateSettings({ lastUpdateCheckAt: checkedAt })
+        return {
+          ok: true,
+          currentVersion,
+          latestVersion: currentVersion,
+          updateAvailable: false,
+          releaseUrl: APP_METADATA.releasesUrl,
+          checkedAt
+        }
+      }
+
+      const data = (await response.json()) as {
+        tag_name?: string
+        name?: string
+        html_url?: string
+        body?: string
+        published_at?: string
+        assets?: Array<{ name?: string; browser_download_url?: string }>
+      }
+
+      const latestVersion = String(data.tag_name || data.name || currentVersion)
+        .trim()
+        .replace(/^v/i, '')
+      const updateAvailable = compareSemverVersions(latestVersion, currentVersion) > 0
+      const macAsset = Array.isArray(data.assets)
+        ? data.assets.find(
+            (a) =>
+              typeof a.browser_download_url === 'string' &&
+              /\.(zip|dmg)$/i.test(a.name || a.browser_download_url)
+          )
+        : undefined
+
+      settingsService.updateSettings({ lastUpdateCheckAt: checkedAt })
+
+      return {
+        ok: true,
+        currentVersion,
+        latestVersion,
+        updateAvailable,
+        releaseUrl: data.html_url || APP_METADATA.releasesUrl,
+        downloadUrl: macAsset?.browser_download_url || data.html_url || APP_METADATA.releasesUrl,
+        releaseNotes: typeof data.body === 'string' ? data.body : undefined,
+        publishedAt: typeof data.published_at === 'string' ? data.published_at : undefined,
+        checkedAt
+      }
+    } catch (err: any) {
+      settingsService.updateSettings({ lastUpdateCheckAt: checkedAt })
+      return {
+        ok: true,
+        currentVersion,
+        latestVersion: currentVersion,
+        updateAvailable: false,
+        releaseUrl: APP_METADATA.releasesUrl,
+        checkedAt,
+        error: err?.message ? String(err.message) : undefined
+      }
+    }
   })
 }

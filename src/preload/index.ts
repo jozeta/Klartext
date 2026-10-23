@@ -12,6 +12,7 @@ import type {
   LocalAIModelInfo,
   RecoverySnapshot,
   SearchFileResult,
+  UpdateCheckResult,
   WatcherChangeEvent,
   WorkspaceManifest,
   WorkspaceRoot
@@ -310,6 +311,8 @@ export const klartextApi = {
   closeWindow: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_CLOSE),
   openExternalUrl: (url: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.SHELL_OPEN_EXTERNAL, { url }),
+  checkForUpdates: (params?: { feedUrl?: string }): Promise<UpdateCheckResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.APP_CHECK_FOR_UPDATES, params),
 
   // Event Subscriptions
   onWatcherChange: (callback: (ev: WatcherChangeEvent) => void): (() => void) => {

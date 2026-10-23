@@ -12,10 +12,16 @@ import {
   Upload,
   Check,
   Sparkles,
-  Folder
+  Folder,
+  RefreshCw,
+  Info
 } from '../icons/untitled-icons'
 import { searchUntitledIcons } from '../icons/untitled-icons'
-import { PRESET_HIGHLIGHT_COLORS } from '../../../shared/constants'
+import {
+  APP_METADATA,
+  PRESET_HIGHLIGHT_COLORS,
+  UPDATE_CHECK_INTERVAL_OPTIONS
+} from '../../../shared/constants'
 import { DEFAULT_FRONTMATTER_PROPERTIES } from '../../../shared/schemas'
 import { evaluateTemplateVariables } from '../../../shared/templates/template-engine'
 import type {
@@ -23,6 +29,8 @@ import type {
   DefaultFrontmatterPropertyDef,
   FrontmatterFieldType,
   SavedTheme,
+  UpdateCheckInterval,
+  UpdateCheckResult,
   WorkspaceRoot
 } from '../../../shared/types'
 import {
@@ -314,6 +322,29 @@ export const SettingsModal: React.FC<{
   const [manifestPath, setManifestPath] = useState('')
   const [patInput, setPatInput] = useState('')
   const [hasGithubPat, setHasGithubPat] = useState(false)
+  const [checkingForUpdates, setCheckingForUpdates] = useState(false)
+  const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null)
+
+  const handleCheckForUpdatesNow = async () => {
+    setCheckingForUpdates(true)
+    try {
+      const res = await window.klartext.checkForUpdates()
+      setUpdateCheckResult(res)
+      onUpdateSettings({ lastUpdateCheckAt: res.checkedAt })
+    } catch (err) {
+      setUpdateCheckResult({
+        ok: false,
+        checkedAt: Date.now(),
+        currentVersion: APP_METADATA.version,
+        latestVersion: APP_METADATA.version,
+        updateAvailable: false,
+        releaseUrl: APP_METADATA.releasesUrl,
+        error: err instanceof Error ? err.message : 'Unable to check for updates'
+      })
+    } finally {
+      setCheckingForUpdates(false)
+    }
+  }
 
   // Saved Themes & Highlight Palette state
   const [newThemeName, setNewThemeName] = useState('')
@@ -1736,6 +1767,138 @@ export const SettingsModal: React.FC<{
             </div>
           ) : (
             <>
+              {/* Application Updates & Version Check */}
+              <div
+                data-testid="settings-updates-section"
+                className="p-3.5 rounded-lg bg-app/70 border border-subtle space-y-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-primary uppercase tracking-wider text-[11px]">
+                        Application Updates
+                      </span>
+                      <span
+                        data-testid="settings-current-version-badge"
+                        className="px-2 py-0.5 rounded bg-panel border border-subtle font-mono text-[10px] text-accent font-semibold"
+                      >
+                        v{APP_METADATA.version}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-muted mt-0.5">
+                      Automatically check GitHub Releases for new versions of {APP_METADATA.name} on your preferred schedule, or check manually anytime.
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label
+                      htmlFor="settings-update-interval-select"
+                      className="text-[11px] font-medium text-muted"
+                    >
+                      Check Interval:
+                    </label>
+                    <select
+                      id="settings-update-interval-select"
+                      data-testid="settings-update-interval-select"
+                      value={settings.updateCheckInterval || 'weekly'}
+                      onChange={(e) =>
+                        onUpdateSettings({
+                          updateCheckInterval: e.target.value as UpdateCheckInterval
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary text-xs font-medium"
+                    >
+                      {UPDATE_CHECK_INTERVAL_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      data-testid="settings-check-updates-btn"
+                      disabled={checkingForUpdates}
+                      onClick={handleCheckForUpdatesNow}
+                      className="px-3 py-1.5 rounded bg-accent text-white text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60 transition-opacity"
+                    >
+                      <RefreshCw
+                        className={`w-3.5 h-3.5 ${checkingForUpdates ? 'animate-spin' : ''}`}
+                      />
+                      <span>
+                        {checkingForUpdates ? 'Checking...' : 'Check for Updates'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-subtle/60 text-[11px]">
+                  <div className="text-muted">
+                    <span>Schedule: </span>
+                    <span className="text-primary font-medium">
+                      {UPDATE_CHECK_INTERVAL_OPTIONS.find(
+                        (o) => o.value === (settings.updateCheckInterval || 'weekly')
+                      )?.description || 'Check once every 7 days (default)'}
+                    </span>
+                    {settings.lastUpdateCheckAt ? (
+                      <span className="ml-2 text-muted">
+                        • Last checked:{' '}
+                        <span data-testid="settings-last-update-check-time" className="font-mono">
+                          {new Date(settings.lastUpdateCheckAt).toLocaleString()}
+                        </span>
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {updateCheckResult && (
+                  <div
+                    data-testid="settings-update-status-banner"
+                    className={`p-2.5 rounded-md border flex items-center justify-between gap-3 text-xs ${
+                      updateCheckResult.error
+                        ? 'bg-amber-500/10 border-amber-500/30 text-primary'
+                        : updateCheckResult.updateAvailable
+                          ? 'bg-accent/15 border-accent/40 text-primary'
+                          : 'bg-emerald-500/10 border-emerald-500/30 text-primary'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {updateCheckResult.updateAvailable ? (
+                        <Info className="w-4 h-4 text-accent shrink-0" />
+                      ) : (
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        {updateCheckResult.error ? (
+                          <span>
+                            Could not reach release server ({updateCheckResult.error}). Installed version: <strong>v{updateCheckResult.currentVersion}</strong>.
+                          </span>
+                        ) : updateCheckResult.updateAvailable ? (
+                          <span>
+                            New version available: <strong>v{updateCheckResult.latestVersion}</strong> (installed: v{updateCheckResult.currentVersion}).
+                          </span>
+                        ) : (
+                          <span>
+                            You are up to date! <strong>{APP_METADATA.name} v{updateCheckResult.currentVersion}</strong> is the latest version.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {updateCheckResult.releaseUrl && (
+                      <a
+                        href={updateCheckResult.releaseUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        data-testid="settings-update-release-link"
+                        className="px-2.5 py-1 rounded bg-panel border border-subtle text-[11px] font-medium text-accent hover:bg-secondary shrink-0"
+                      >
+                        View Releases
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Page Tabs Position */}
               <div className="flex items-center justify-between pb-3 border-b border-subtle">
                 <div>

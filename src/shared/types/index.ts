@@ -13,6 +13,7 @@ import type {
   GitPullStrategy,
   SavedTheme,
   ThemeMode,
+  UpdateCheckInterval,
   WorkspaceManifest,
   WorkspaceRoot,
   WorkspaceSortOrder
@@ -33,9 +34,23 @@ export type {
   GitPullStrategy,
   SavedTheme,
   ThemeMode,
+  UpdateCheckInterval,
   WorkspaceManifest,
   WorkspaceRoot,
   WorkspaceSortOrder
+}
+
+export interface UpdateCheckResult {
+  ok: boolean
+  currentVersion: string
+  latestVersion: string
+  updateAvailable: boolean
+  releaseUrl: string
+  downloadUrl?: string
+  releaseNotes?: string
+  publishedAt?: string
+  checkedAt: number
+  error?: string
 }
 
 export interface FileTreeNode {
