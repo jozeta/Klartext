@@ -18,3 +18,13 @@ Thumbs.db
 *.tsbuildinfo
 .env
 .env.*
+
+# --- Baseline: macOS, Claude Code and secrets ---
+._*
+.claude/settings.local.json
+.remember/
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
