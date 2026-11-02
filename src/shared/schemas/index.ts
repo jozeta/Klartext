@@ -87,7 +87,7 @@ export const TypographySettingsSchema = z.object({
       h5: HeadingStyleOverrideSchema.default({ fontSizeEm: 1.0 }),
       h6: HeadingStyleOverrideSchema.default({ fontSizeEm: 0.92 })
     })
-    .default({})
+    .prefault({})
 })
 export type TypographySettings = z.infer<typeof TypographySettingsSchema>
 
@@ -150,7 +150,7 @@ export const DynamicFolderDefSchema = z.object({
   name: z.string().min(1),
   icon: z.string().optional(),
   color: z.string().optional(),
-  rules: DynamicFilterRuleSchema.default({})
+  rules: DynamicFilterRuleSchema.prefault({})
 })
 export type DynamicFolderDef = z.infer<typeof DynamicFolderDefSchema>
 
@@ -158,7 +158,7 @@ export const DynamicWorkspaceDefSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   mode: z.enum(['root-content', 'dynamic-folders']).default('dynamic-folders'),
-  rootRules: DynamicFilterRuleSchema.default({}),
+  rootRules: DynamicFilterRuleSchema.prefault({}),
   folders: z.array(DynamicFolderDefSchema).default([])
 })
 export type DynamicWorkspaceDef = z.infer<typeof DynamicWorkspaceDefSchema>
@@ -263,12 +263,12 @@ export const AppSettingsSchema = z.object({
   workspaceOrder: z.array(z.string()).default([]),
   workspaceSortOrder: WorkspaceSortOrderSchema.default('name-asc'),
   workspaceFoldersOnTop: z.boolean().default(true),
-  workspaceCustomOrder: z.record(z.string(), z.array(z.string())).default({}),
-  stickyItems: z.record(z.string(), z.boolean()).default({}),
-  folderIcons: z.record(z.string(), z.string()).default({}),
-  folderColors: z.record(z.string(), z.string()).default({}),
-  collapsedDirs: z.record(z.string(), z.boolean()).default({}),
-  collapsedRoots: z.record(z.string(), z.boolean()).default({}),
+  workspaceCustomOrder: z.record(z.string(), z.array(z.string())).prefault({}),
+  stickyItems: z.record(z.string(), z.boolean()).prefault({}),
+  folderIcons: z.record(z.string(), z.string()).prefault({}),
+  folderColors: z.record(z.string(), z.string()).prefault({}),
+  collapsedDirs: z.record(z.string(), z.boolean()).prefault({}),
+  collapsedRoots: z.record(z.string(), z.boolean()).prefault({}),
   selectedFolder: z
     .object({
       rootId: z.string(),
@@ -325,7 +325,7 @@ export const AppSettingsSchema = z.object({
         options: z.array(z.string()).default([])
       })
     )
-    .default({}),
+    .prefault({}),
   splitViewPercent: z.number().min(20).max(80).default(50),
   statusBarVisible: z.boolean().default(true),
   sidebarControlBarVisible: z.boolean().default(true),
@@ -350,9 +350,9 @@ export const AppSettingsSchema = z.object({
       isFullScreen: z.boolean().default(false)
     })
     .optional(),
-  typography: TypographySettingsSchema.default({}),
-  ai: AISettingsSchema.default({}),
-  keybindings: z.record(z.string(), z.string()).default({})
+  typography: TypographySettingsSchema.prefault({}),
+  ai: AISettingsSchema.prefault({}),
+  keybindings: z.record(z.string(), z.string()).prefault({})
 })
 export type FrontmatterFieldType = 'text' | 'date' | 'dropdown' | 'tags' | 'number' | 'checkbox'
 export interface CustomFrontmatterPropertyDef {
