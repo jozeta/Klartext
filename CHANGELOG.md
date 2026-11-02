@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-02
+
 ### Changed
 - React 19 (react, react-dom and their type packages upgraded together).
 - Tailwind CSS 4. The theme moved from `tailwind.config.cjs` into `@theme` in `src/renderer/styles/index.css`; the UI looks the same (screenshots of 36 views compared pixel by pixel in light and dark mode). The background blur behind the Web Clipper and workspace wizard dialogs now works as intended.

@@ -570,9 +570,9 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(
           JSON.stringify({
-            tag_name: 'v1.5.0',
-            html_url: 'https://github.com/jozeta/Klartext/releases/tag/v1.5.0',
-            body: 'Release notes for Klartext v1.5.0',
+            tag_name: 'v1.6.0',
+            html_url: 'https://github.com/jozeta/Klartext/releases/tag/v1.6.0',
+            body: 'Release notes for Klartext v1.6.0',
             published_at: '2026-10-23T12:00:00Z'
           })
         )
@@ -1197,7 +1197,7 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('help-menu-about').click()
       await expect(page.getByTestId('about-klartext-modal')).toBeVisible()
       await expect(page.getByTestId('about-field-name')).toHaveText('Klartext')
-      await expect(page.getByTestId('about-field-version')).toHaveText('1.4.0')
+      await expect(page.getByTestId('about-field-version')).toHaveText('1.5.0')
       await expect(page.getByTestId('about-field-license')).toHaveText('MIT License')
       await expect(page.getByTestId('about-field-author')).toContainText('Johan Zetterström')
       await page.getByTestId('about-modal-close-btn').click()
@@ -1228,8 +1228,8 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
         ollamaPort
       )
       expect(mockUpdateRes.ok).toBe(true)
-      expect(mockUpdateRes.currentVersion).toBe('1.4.0')
-      expect(mockUpdateRes.latestVersion).toBe('1.5.0')
+      expect(mockUpdateRes.currentVersion).toBe('1.5.0')
+      expect(mockUpdateRes.latestVersion).toBe('1.6.0')
       expect(mockUpdateRes.updateAvailable).toBe(true)
 
       // Verify all settings, panel visibility, sidebar tab, workspace order, saved themes, update interval, and open tabs are persisted
