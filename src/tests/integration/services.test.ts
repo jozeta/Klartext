@@ -136,8 +136,8 @@ describe('Integration Tests: Multi-Root Assets, Cross-Root Migration, Concurrent
     // Set up bare remotes for Repo Alpha and Repo Beta
     const remoteAlpha = path.join(tmpDir, 'remote-alpha.git')
     const remoteBeta = path.join(tmpDir, 'remote-beta.git')
-    await simpleGit().init(true, [remoteAlpha])
-    await simpleGit().init(true, [remoteBeta])
+    await simpleGit().init(true, ['--initial-branch=main', remoteAlpha])
+    await simpleGit().init(true, ['--initial-branch=main', remoteBeta])
 
     const configureRepo = async (dir: string, remote: string) => {
       const g = simpleGit(dir)
