@@ -841,7 +841,7 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
 
   it('validates About metadata, semver version comparison, and update check intervals (default weekly)', () => {
     expect(APP_METADATA.name).toBe('Klartext')
-    expect(APP_METADATA.version).toBe('1.4.0')
+    expect(APP_METADATA.version).toBe('1.5.0')
     expect(APP_METADATA.license).toBe('MIT License')
     expect(APP_METADATA.author).toContain('Johan Zetterström')
 

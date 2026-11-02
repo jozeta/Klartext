@@ -98,7 +98,7 @@ export const IPC_CHANNELS = {
 
 export const APP_METADATA = {
   name: 'Klartext',
-  version: '1.4.0',
+  version: '1.5.0',
   license: 'MIT License',
   author: 'Johan Zetterström & Klartext Contributors',
   repositoryUrl: 'https://github.com/jozeta/Klartext',
