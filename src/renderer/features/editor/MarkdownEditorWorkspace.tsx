@@ -396,16 +396,19 @@ export const MarkdownEditorWorkspace: React.FC<{
   const [selectionCoords, setSelectionCoords] = useState<{
     top: number
     left: number
+    width?: number
     selectedText: string
   } | null>(null)
   const [fadingOutCoords, setFadingOutCoords] = useState<{
     top: number
     left: number
+    width?: number
     selectedText: string
   } | null>(null)
   const lastActiveCoordsRef = useRef<{
     top: number
     left: number
+    width?: number
     selectedText: string
   } | null>(null)
   const [threeWayModalHunk, setThreeWayModalHunk] = useState<number | null>(null)
@@ -541,7 +544,7 @@ export const MarkdownEditorWorkspace: React.FC<{
   const floatingToolbarCoords = (
     from: { top: number; bottom: number; left: number },
     to: { top: number; bottom: number; left: number }
-  ): { top: number; left: number } => {
+  ): { top: number; left: number; width: number } => {
     const paneRect = (editorScrollWrapperRef.current || splitContainerRef.current)?.getBoundingClientRect()
     const pane: Box = paneRect
       ? { top: paneRect.top, bottom: paneRect.bottom, left: paneRect.left, right: paneRect.right }
@@ -1265,8 +1268,8 @@ export const MarkdownEditorWorkspace: React.FC<{
             const fromCoords = view.coordsAtPos(sel.from)
             const toCoords = view.coordsAtPos(sel.to) || fromCoords
             if (fromCoords && toCoords) {
-              const { top, left } = floatingToolbarCoords(fromCoords, toCoords)
-              setSelectionCoords({ top, left, selectedText: selectedStr })
+              const { top, left, width } = floatingToolbarCoords(fromCoords, toCoords)
+              setSelectionCoords({ top, left, width, selectedText: selectedStr })
             }
           } else {
             setSelectionCoords(null)
@@ -1900,10 +1903,11 @@ export const MarkdownEditorWorkspace: React.FC<{
                 const fromCoords = update.view.coordsAtPos(sel.from)
                 const toCoords = update.view.coordsAtPos(sel.to) || fromCoords
                 if (fromCoords && toCoords) {
-                  const { top, left } = floatingToolbarCoords(fromCoords, toCoords)
+                  const { top, left, width } = floatingToolbarCoords(fromCoords, toCoords)
                   setSelectionCoords({
                     top,
                     left,
+                    width,
                     selectedText: selectedStr
                   })
                 }
@@ -3247,7 +3251,10 @@ export const MarkdownEditorWorkspace: React.FC<{
           style={{
             position: 'fixed',
             top: `${(activeFloatingCoords || fadingOutCoords)!.top}px`,
-            left: `${(activeFloatingCoords || fadingOutCoords)!.left}px`
+            left: `${(activeFloatingCoords || fadingOutCoords)!.left}px`,
+            width: (activeFloatingCoords || fadingOutCoords)!.width
+              ? `${(activeFloatingCoords || fadingOutCoords)!.width}px`
+              : undefined
           }}
           className={`z-40 flex flex-col gap-1 px-2 py-1.5 rounded-md bg-panel border border-subtle shadow-lg text-xs transition-opacity duration-150 ease-out ${
             activeFloatingCoords
@@ -3259,7 +3266,7 @@ export const MarkdownEditorWorkspace: React.FC<{
           <div
             data-testid="floating-toolbar-row-1"
             style={{
-              gridTemplateColumns: 'repeat(16, minmax(26px, 1fr))'
+              gridTemplateColumns: 'repeat(16, minmax(22px, 1fr))'
             }}
             className="w-full grid gap-0.5 items-center"
           >
@@ -3502,7 +3509,7 @@ export const MarkdownEditorWorkspace: React.FC<{
           <div
             data-testid="floating-toolbar-row-2"
             style={{
-              gridTemplateColumns: 'repeat(15, minmax(26px, 1fr))',
+              gridTemplateColumns: 'repeat(15, minmax(22px, 1fr))',
               borderColor: 'color-mix(in srgb, var(--border-subtle) 15%, transparent)'
             }}
             className="w-full grid gap-0.5 items-center border-t border-subtle/15 pt-1"

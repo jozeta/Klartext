@@ -714,7 +714,8 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('ai-test-connection-btn').click()
       await expect(page.getByTestId('ai-connection-badge')).toContainText('Connected')
       await page.getByTestId('ai-model-select').selectOption('gemma4:12b')
-      await page.locator('.cm-content').first().click()
+      // Focus (not click): the floating toolbar from the previous select-all may sit over the text.
+      await page.locator('.cm-content').first().focus()
       await page.keyboard.press('ControlOrMeta+a')
       await expect(page.getByTestId('floating-selection-toolbar')).toBeVisible()
       await expect(page.getByTestId('floating-ai-improve')).toBeEnabled()
