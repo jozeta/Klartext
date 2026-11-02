@@ -6,12 +6,49 @@ import { MultiRootPathGuard, isSensitiveSystemPath } from '../security/path-guar
 
 const IGNORED_DIRS = new Set(['.git', 'node_modules', '.DS_Store', 'dist', 'out'])
 
+// On Windows, renaming over a file fails with EPERM/EBUSY/EACCES while another handle has it open
+// (our own file watcher reading a change, an antivirus scanner, the search indexer). The lock is
+// released within milliseconds, so retry with a short backoff instead of failing the save. This is
+// the same workaround graceful-fs uses. On other platforms these errors are real, so fail at once.
+const TRANSIENT_RENAME_ERRORS = new Set(['EPERM', 'EBUSY', 'EACCES'])
+
+export async function renameWithRetry(
+  from: string,
+  to: string,
+  options: {
+    platform?: NodeJS.Platform
+    rename?: (from: string, to: string) => Promise<void>
+    delaysMs?: number[]
+  } = {}
+): Promise<void> {
+  const platform = options.platform ?? process.platform
+  const rename = options.rename ?? fs.promises.rename
+  const delaysMs = options.delaysMs ?? [10, 25, 50, 100, 200, 400, 800]
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to)
+      return
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? ''
+      const retryable = platform === 'win32' && TRANSIENT_RENAME_ERRORS.has(code)
+      if (!retryable || attempt >= delaysMs.length) throw err
+      await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]))
+    }
+  }
+}
+
 export async function atomicWriteFile(filePath: string, content: string | Buffer): Promise<void> {
   const dir = path.dirname(filePath)
   await fs.promises.mkdir(dir, { recursive: true })
   const tmpPath = `${filePath}.klartext-${process.pid}-${Date.now()}.tmp`
   await fs.promises.writeFile(tmpPath, content)
-  await fs.promises.rename(tmpPath, filePath)
+  try {
+    await renameWithRetry(tmpPath, filePath)
+  } catch (err) {
+    // Don't leave a stray .tmp file next to the user's document.
+    await fs.promises.rm(tmpPath, { force: true }).catch(() => undefined)
+    throw err
+  }
 }
 
 export class MultiRootRegistry {

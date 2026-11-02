@@ -511,6 +511,7 @@ export const MultiRootSidebar: React.FC<{
   const [searchResults, setSearchResults] = useState<SearchFileResult[]>([])
   const [checkedReplaceFiles, setCheckedReplaceFiles] = useState<Record<string, boolean>>({})
   const [replaceSummary, setReplaceSummary] = useState<string>('')
+  const [replaceError, setReplaceError] = useState<string>('')
 
   // Git commit messages per root
   const [commitMessages, setCommitMessages] = useState<Record<string, string>>({})
@@ -579,17 +580,24 @@ export const MultiRootSidebar: React.FC<{
       .map((r) => ({ rootId: r.rootId, relativePath: r.relativePath }))
     if (confirmedFiles.length === 0) return
 
-    const res = await window.klartext.replaceInWorkspace({
-      search: {
-        query: searchQuery,
-        rootIds: selectedSearchRoot === 'ALL' ? undefined : [selectedSearchRoot]
-      },
-      replacement: replaceText,
-      confirmedFiles
-    })
-    setReplaceSummary(
-      `Replaced ${res.totalReplacements} occurrence(s) across ${res.replacedFilesCount} file(s).`
-    )
+    try {
+      const res = await window.klartext.replaceInWorkspace({
+        search: {
+          query: searchQuery,
+          rootIds: selectedSearchRoot === 'ALL' ? undefined : [selectedSearchRoot]
+        },
+        replacement: replaceText,
+        confirmedFiles
+      })
+      setReplaceError('')
+      setReplaceSummary(
+        `Replaced ${res.totalReplacements} occurrence(s) across ${res.replacedFilesCount} file(s).`
+      )
+    } catch (err) {
+      // Files before the failing one may already have been replaced, so refresh results either way.
+      setReplaceSummary('')
+      setReplaceError(`Replace failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
     await runSearchQuery(searchQuery, selectedSearchRoot)
   }
 
@@ -2570,6 +2578,16 @@ export const MultiRootSidebar: React.FC<{
               className="p-2 rounded bg-secondary border border-subtle text-success font-medium"
             >
               {replaceSummary}
+            </div>
+          )}
+
+          {replaceError && (
+            <div
+              role="alert"
+              data-testid="search-replace-error"
+              className="p-2 rounded bg-secondary border border-danger text-danger font-medium"
+            >
+              {replaceError}
             </div>
           )}
 
