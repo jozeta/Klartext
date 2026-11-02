@@ -263,13 +263,13 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
       {/* Top Studio Controls Bar */}
       <div className="h-12 px-4 bg-panel border-b border-subtle flex items-center justify-between gap-3 shrink-0">
         {/* Left: Filmstrip Toggle, Grid Toggle, Title & Slide Counter */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           <button
             type="button"
             data-testid="slide-filmstrip-toggle-btn"
             onClick={() => setShowFilmstrip((v) => !v)}
             title="Toggle Slide Filmstrip Sidebar (O)"
-            className={`px-2 py-1 rounded border text-xs flex items-center gap-1.5 transition-colors ${
+            className={`px-2 py-1 rounded border text-xs flex shrink-0 items-center gap-1.5 whitespace-nowrap transition-colors ${
               showFilmstrip
                 ? 'bg-accent/15 border-accent text-accent font-medium'
                 : 'bg-secondary border-subtle text-muted hover:text-primary'
@@ -284,7 +284,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
             data-testid="slide-grid-overview-btn"
             onClick={() => setShowGridOverview((v) => !v)}
             title="Toggle Slide Grid Overview (G)"
-            className={`px-2 py-1 rounded border text-xs flex items-center gap-1.5 transition-colors ${
+            className={`px-2 py-1 rounded border text-xs flex shrink-0 items-center gap-1.5 whitespace-nowrap transition-colors ${
               showGridOverview
                 ? 'bg-accent text-white border-accent font-medium'
                 : 'bg-secondary border-subtle text-muted hover:text-primary'
@@ -297,7 +297,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
           <span className="h-4 w-px bg-subtle mx-0.5" />
 
           <Presentation className="w-4 h-4 text-accent shrink-0" />
-          <span className="font-semibold text-xs text-primary truncate max-w-[180px]">
+          <span className="font-semibold text-xs text-primary truncate min-w-0 max-w-[180px]">
             {cleanDocTitle}
           </span>
           <span
@@ -309,8 +309,8 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
         </div>
 
         {/* Center: Split Mode Selector, Theme Selector & Scale */}
-        <div className="hidden lg:flex items-center gap-2">
-          <div className="flex items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
+        <div className="hidden lg:flex items-center gap-2 min-w-0 shrink-[10] overflow-x-auto [scrollbar-width:thin]">
+          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
             <span className="px-2 text-[10px] uppercase tracking-wider text-muted font-semibold">
               Split:
             </span>
@@ -342,7 +342,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
           </div>
 
           {/* Theme Selector */}
-          <div className="flex items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
+          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
             {(Object.values(PRESENTATION_THEMES) as PresentationThemeConfig[]).map((t) => (
               <button
                 key={t.id}
@@ -361,7 +361,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
           </div>
 
           {/* Font Scale & Stage Fit */}
-          <div className="flex items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
+          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
             <button
               type="button"
               title="Decrease Slide Text Scale"
