@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import http from 'http'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import { test, expect, _electron as electron } from '@playwright/test'
 
 const VALID_PNG_BASE64 =
@@ -489,8 +489,8 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
     // Prepare two Git repositories for Scenario 14
     const remote1 = path.join(tmpBase, 'remote1.git')
     const remote2 = path.join(tmpBase, 'remote2.git')
-    await simpleGit().init(true, [remote1])
-    await simpleGit().init(true, [remote2])
+    await simpleGit().init(true, ['--initial-branch=main', remote1])
+    await simpleGit().init(true, ['--initial-branch=main', remote2])
 
     const initGitRoot = async (dir: string, remote: string, docName: string) => {
       const g = simpleGit(dir)

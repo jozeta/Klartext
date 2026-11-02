@@ -79,7 +79,8 @@ describe('Security Controls & Threat Model Verification', () => {
   })
 
   it('4. rejects malformed .klartext-workspace manifests attempting to mount sensitive system directories', async () => {
-    expect(isSensitiveSystemPath('/etc')).toBe(true)
+    // isSensitiveSystemPath checks the current platform's system folders, so use one that exists here.
+    expect(isSensitiveSystemPath(process.platform === 'win32' ? 'C:\\Windows' : '/etc')).toBe(true)
     expect(isSensitiveSystemPath(path.join(os.homedir(), '.ssh'))).toBe(true)
 
     const registry = new MultiRootRegistry(tmpBase)

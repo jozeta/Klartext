@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import simpleGit, { type SimpleGit } from 'simple-git'
+import { simpleGit, type SimpleGit } from 'simple-git'
 import type {
   GitCommitLogEntry,
   GitFileStatus,
