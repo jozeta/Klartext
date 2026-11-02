@@ -504,7 +504,7 @@ Test every inline style both in paragraphs and inside GFM table cells:
 | Strikethrough | \`~~ ~~\` | \`~~Striked out text~~\` | ~~Striked out text~~ |
 | Highlight | \`== ==\` | \`==Highlighted text==\` | ==Highlighted text== |
 | Underline | \`<u> </u>\` | \`<u>Underlined</u>\` | <u>Underlined</u> |
-| Escaped Pipe | \`\\|\` | \`A \\| B\` | Cell A \| Cell B |
+| Escaped Pipe | \`\\|\` | \`A \\| B\` | Cell A \\| Cell B |
 
 ---
 

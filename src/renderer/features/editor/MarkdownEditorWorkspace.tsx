@@ -1905,7 +1905,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               }
             } else {
               if (update.view.hasFocus) {
-                ;(window as any).__klartextSelectedText = ''
+                (window as any).__klartextSelectedText = ''
               }
               setSelectionCoords(null)
               if (editMode === 'split' && previewContainerRef.current) {

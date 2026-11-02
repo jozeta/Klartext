@@ -282,7 +282,7 @@ export function buildKanbanCode(cols: KanbanColItem[]): string {
       if (c.assigned.trim()) metaParts.push(`assigned: "${c.assigned.trim()}"`)
       if (c.priority) metaParts.push(`priority: "${c.priority}"`)
       const metaSuffix = metaParts.length > 0 ? `@{ ${metaParts.join(', ')} }` : ''
-      lines.push(`    [${c.title.replace(/[\[\]]/g, '') || 'Task'}]${metaSuffix}`)
+      lines.push(`    [${c.title.replace(/[[\]]/g, '') || 'Task'}]${metaSuffix}`)
     }
   }
   return lines.join('\n')
@@ -442,7 +442,7 @@ export function parsePieCode(code: string): {
   slices: PieSliceItem[]
 } {
   let title = 'Distribution Breakdown'
-  let showData = /pie\s+showData/i.test(code)
+  const showData = /pie\s+showData/i.test(code)
   const slices: PieSliceItem[] = []
   for (const rawLine of code.split(/\r?\n/)) {
     const line = rawLine.trim()
