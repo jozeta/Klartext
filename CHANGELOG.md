@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- React 19 (react, react-dom and their type packages upgraded together).
+
 ### Fixed
 - Slide deck: in windows narrower than about 1400 px, the presentation toolbar pushed Laser Pointer and Exit off-screen (only the L and Esc shortcuts still worked). The display settings in the middle now give way first, and the buttons no longer overlap.
 - Windows: `sh:` / `bash:` template variables now run in Git for Windows' bash when it's installed, instead of silently falling back to cmd.exe (which kept quotes and didn't expand `$VAR`).
