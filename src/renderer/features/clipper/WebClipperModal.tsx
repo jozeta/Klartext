@@ -57,7 +57,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
             type="button"
             data-testid="close-web-clipper-btn"
             onClick={onClose}
-            className="p-1 rounded hover:bg-panel text-muted hover:text-primary"
+            className="p-1 rounded-sm hover:bg-panel text-muted hover:text-primary"
           >
             <X className="w-4 h-4" />
           </button>
@@ -82,14 +82,14 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                     handleFetchUrl()
                   }
                 }}
-                className="flex-1 px-3 py-1.5 rounded bg-app border border-subtle text-primary font-mono text-xs focus:outline-none focus:border-accent"
+                className="flex-1 px-3 py-1.5 rounded-sm bg-app border border-subtle text-primary font-mono text-xs focus:outline-hidden focus:border-accent"
               />
               <button
                 type="button"
                 data-testid="web-clipper-fetch-btn"
                 disabled={loading || !urlInput.trim()}
                 onClick={handleFetchUrl}
-                className="px-3 py-1.5 rounded bg-accent text-white font-medium flex items-center gap-1.5 disabled:opacity-40"
+                className="px-3 py-1.5 rounded-sm bg-accent text-white font-medium flex items-center gap-1.5 disabled:opacity-40"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>{loading ? 'Fetching...' : 'Fetch & Convert'}</span>
@@ -100,7 +100,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
           {error && (
             <div
               data-testid="web-clipper-error"
-              className="p-2.5 rounded bg-danger/10 border border-danger text-danger text-xs"
+              className="p-2.5 rounded-sm bg-danger/10 border border-danger text-danger text-xs"
             >
               {error}
             </div>
@@ -117,7 +117,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                   data-testid="web-clipper-title-input"
                   value={clippedTitle}
                   onChange={(e) => setClippedTitle(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded bg-app border border-subtle text-primary text-xs"
+                  className="w-full px-3 py-1.5 rounded-sm bg-app border border-subtle text-primary text-xs"
                 />
               </div>
 
@@ -130,7 +130,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                   value={clippedMarkdown}
                   onChange={(e) => setClippedMarkdown(e.target.value)}
                   rows={11}
-                  className="w-full p-3 rounded bg-app border border-subtle text-primary font-mono text-xs leading-relaxed resize-y"
+                  className="w-full p-3 rounded-sm bg-app border border-subtle text-primary font-mono text-xs leading-relaxed resize-y"
                 />
               </div>
             </div>
@@ -151,7 +151,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                 onInsertIntoCurrentDocument(clippedMarkdown)
                 onClose()
               }}
-              className="px-3 py-1.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1.5 disabled:opacity-40"
+              className="px-3 py-1.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1.5 disabled:opacity-40"
             >
               <CornerDownLeft className="w-3.5 h-3.5" />
               <span>Insert into Current Note</span>
@@ -164,7 +164,7 @@ export const WebClipperModal: React.FC<WebClipperModalProps> = ({
                 await onCreateNoteFromClip(clippedTitle || 'Clipped-Page', clippedMarkdown)
                 onClose()
               }}
-              className="px-3 py-1.5 rounded bg-accent text-white font-medium flex items-center gap-1.5 disabled:opacity-40"
+              className="px-3 py-1.5 rounded-sm bg-accent text-white font-medium flex items-center gap-1.5 disabled:opacity-40"
             >
               <FilePlus className="w-3.5 h-3.5" />
               <span>Save as New Note</span>

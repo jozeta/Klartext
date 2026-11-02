@@ -380,7 +380,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                   : { year: prev.year, month: prev.month - 1 }
               )
             }
-            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+            className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
@@ -397,7 +397,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                   : { year: prev.year, month: prev.month + 1 }
               )
             }
-            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+            className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
           >
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -450,7 +450,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               onUpdateFrontmatterField(key, todayStr)
               setOpenCalendarKey(null)
             }}
-            className="px-2 py-0.5 rounded bg-secondary text-primary hover:bg-accent hover:text-white font-medium"
+            className="px-2 py-0.5 rounded-sm bg-secondary text-primary hover:bg-accent hover:text-white font-medium"
           >
             Today ({todayStr})
           </button>
@@ -461,7 +461,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               onUpdateFrontmatterField(key, '')
               setOpenCalendarKey(null)
             }}
-            className="px-2 py-0.5 rounded text-muted hover:text-danger"
+            className="px-2 py-0.5 rounded-sm text-muted hover:text-danger"
           >
             Clear
           </button>
@@ -501,7 +501,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               setOpenTagsKey(null)
             }}
             onChange={(e) => onUpdateFrontmatterField(key, e.target.value)}
-            className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 h-8 px-2.5 rounded-sm bg-panel border border-subtle text-primary focus:outline-hidden focus:border-accent"
           />
           <button
             type="button"
@@ -572,7 +572,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                               setEditingDropdownOption(null)
                             }
                           }}
-                          className="flex-1 min-w-0 px-1.5 py-0.5 rounded bg-panel border border-accent text-primary text-xs"
+                          className="flex-1 min-w-0 px-1.5 py-0.5 rounded-sm bg-panel border border-accent text-primary text-xs"
                           autoFocus
                         />
                         <button
@@ -592,7 +592,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                             }
                             setEditingDropdownOption(null)
                           }}
-                          className="p-1 rounded bg-accent text-white"
+                          className="p-1 rounded-sm bg-accent text-white"
                         >
                           <Check className="w-3 h-3" />
                         </button>
@@ -631,7 +631,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                               draftValue: opt
                             })
                           }}
-                          className="p-0.5 rounded text-muted hover:text-primary hover:bg-secondary"
+                          className="p-0.5 rounded-sm text-muted hover:text-primary hover:bg-secondary"
                         >
                           <Edit3 className="w-3 h-3" />
                         </button>
@@ -647,7 +647,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                               onUpdateFrontmatterField(key, '')
                             }
                           }}
-                          className="p-0.5 rounded text-muted hover:text-danger hover:bg-secondary"
+                          className="p-0.5 rounded-sm text-muted hover:text-danger hover:bg-secondary"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -674,14 +674,14 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                     handleAddOption()
                   }
                 }}
-                className="flex-1 min-w-0 h-7 px-2 rounded bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent"
+                className="flex-1 min-w-0 h-7 px-2 rounded-sm bg-panel border border-subtle text-primary text-xs focus:outline-hidden focus:border-accent"
               />
               <button
                 type="button"
                 title="Add new option"
                 data-testid={`frontmatter-option-add-btn-${key}`}
                 onClick={handleAddOption}
-                className="w-7 h-7 rounded bg-accent text-white hover:opacity-90 shrink-0 flex items-center justify-center"
+                className="w-7 h-7 rounded-sm bg-accent text-white hover:opacity-90 shrink-0 flex items-center justify-center"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -751,7 +751,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               <span
                 key={tag}
                 data-testid={`frontmatter-tag-chip-${key}-${stripTagHash(tag)}`}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent/15 text-accent text-[11px] font-medium font-mono"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-accent/15 text-accent text-[11px] font-medium font-mono"
               >
                 <span>{formatTagWithHash(tag)}</span>
                 <button
@@ -795,7 +795,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               setTagInputDrafts((prev) => ({ ...prev, [key]: currentTags.join(', ') }))
               currentTags.forEach(rememberTag)
             }}
-            className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary font-mono focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 h-8 px-2.5 rounded-sm bg-panel border border-subtle text-primary font-mono focus:outline-hidden focus:border-accent"
           />
           <button
             type="button"
@@ -930,7 +930,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
           title="Hide Frontmatter Window"
           data-testid="close-frontmatter-window-btn"
           onClick={onClose}
-          className="p-0.5 rounded hover:bg-secondary text-muted hover:text-primary"
+          className="p-0.5 rounded-sm hover:bg-secondary text-muted hover:text-primary"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -938,7 +938,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
         {!frontmatter && (
-          <div className="text-[11px] text-muted bg-panel border border-subtle rounded p-2">
+          <div className="text-[11px] text-muted bg-panel border border-subtle rounded-sm p-2">
             No YAML frontmatter in this document yet. Type in any field below to create it automatically.
           </div>
         )}
@@ -975,14 +975,14 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                   {isGlobalCustom && (
                     <span
                       title="Global Custom Property (shown on all pages)"
-                      className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-accent/15 text-accent text-[9px] uppercase font-semibold"
+                      className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded-sm bg-accent/15 text-accent text-[9px] uppercase font-semibold"
                     >
                       <Globe className="w-2.5 h-2.5" />
                       Global
                     </span>
                   )}
                   {!isBuiltIn && propDef.type !== 'text' && (
-                    <span className="px-1 py-0.2 rounded bg-secondary text-muted text-[9px] uppercase">
+                    <span className="px-1 py-0.2 rounded-sm bg-secondary text-muted text-[9px] uppercase">
                       {propDef.type}
                     </span>
                   )}
@@ -1017,7 +1017,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                       placeholder="YYYY-MM-DD"
                       value={strVal}
                       onChange={(e) => onUpdateFrontmatterField(key, e.target.value)}
-                      className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                      className="flex-1 min-w-0 h-8 px-2.5 rounded-sm bg-panel border border-subtle text-primary focus:outline-hidden focus:border-accent"
                     />
                     <button
                       type="button"
@@ -1040,13 +1040,13 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               ) : propDef.type === 'tags' ? (
                 renderTagsField(key, rawVal, strVal)
               ) : propDef.type === 'checkbox' ? (
-                <label className="inline-flex items-center gap-2 h-8 px-2.5 rounded bg-panel border border-subtle cursor-pointer w-full">
+                <label className="inline-flex items-center gap-2 h-8 px-2.5 rounded-sm bg-panel border border-subtle cursor-pointer w-full">
                   <input
                     type="checkbox"
                     data-testid={`frontmatter-input-${key}`}
                     checked={rawVal === true || strVal.toLowerCase() === 'true'}
                     onChange={(e) => onUpdateFrontmatterField(key, e.target.checked)}
-                    className="rounded border-subtle accent-accent"
+                    className="rounded-sm border-subtle accent-accent"
                   />
                   <span className="text-xs text-primary">
                     {rawVal === true || strVal.toLowerCase() === 'true' ? 'Enabled (true)' : 'Disabled (false)'}
@@ -1062,7 +1062,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                     const num = e.target.value === '' ? '' : Number(e.target.value)
                     onUpdateFrontmatterField(key, Number.isNaN(num) ? e.target.value : num)
                   }}
-                  className="w-full h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                  className="w-full h-8 px-2.5 rounded-sm bg-panel border border-subtle text-primary focus:outline-hidden focus:border-accent"
                 />
               ) : (
                 <input
@@ -1071,7 +1071,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                   placeholder={`Enter ${key}...`}
                   value={strVal}
                   onChange={(e) => onUpdateFrontmatterField(key, e.target.value)}
-                  className="w-full h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                  className="w-full h-8 px-2.5 rounded-sm bg-panel border border-subtle text-primary focus:outline-hidden focus:border-accent"
                 />
               )}
             </div>
@@ -1097,14 +1097,14 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
                   handleAddCustomProperty()
                 }
               }}
-              className="flex-1 min-w-0 h-8 px-2.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+              className="flex-1 min-w-0 h-8 px-2.5 rounded-sm bg-panel border border-subtle text-primary focus:outline-hidden focus:border-accent"
             />
             <button
               type="button"
               title="Add Custom Property"
               data-testid="frontmatter-custom-add-btn"
               onClick={handleAddCustomProperty}
-              className="w-8 h-8 rounded bg-accent text-white hover:opacity-90 flex items-center justify-center shrink-0"
+              className="w-8 h-8 rounded-sm bg-accent text-white hover:opacity-90 flex items-center justify-center shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -1116,7 +1116,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               data-testid="frontmatter-custom-type-select"
               value={customType}
               onChange={(e) => setCustomType(e.target.value as FrontmatterFieldType)}
-              className="flex-1 min-w-0 h-8 px-2 rounded bg-panel border border-subtle text-primary text-[11px] focus:outline-none focus:border-accent"
+              className="flex-1 min-w-0 h-8 px-2 rounded-sm bg-panel border border-subtle text-primary text-[11px] focus:outline-hidden focus:border-accent"
             >
               <option value="text">Text</option>
               <option value="date">Date (Calendar Picker)</option>
@@ -1133,7 +1133,7 @@ export const FrontmatterPropertiesPanel: React.FC<FrontmatterPropertiesPanelProp
               data-testid="frontmatter-custom-global-checkbox"
               checked={customIsGlobal}
               onChange={(e) => setCustomIsGlobal(e.target.checked)}
-              className="rounded border-subtle accent-accent"
+              className="rounded-sm border-subtle accent-accent"
             />
             <Globe className="w-3 h-3 text-accent shrink-0" />
             <span>Global custom property (add to all frontmatter pages)</span>

@@ -1462,7 +1462,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
         data-testid="mermaid-visual-sequence-builder"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDropZoneFromPalette}
-        className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded space-y-3 min-h-0"
+        className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded-sm space-y-3 min-h-0"
       >
         {/* Participants Bar */}
         <div className="space-y-1.5">
@@ -1497,7 +1497,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                   setDragIndex(null)
                   onChangeCode(buildSequenceCode(autonumber, next, steps))
                 }}
-                className="flex items-center gap-1.5 px-2 py-1 rounded bg-secondary border border-subtle text-xs cursor-grab active:cursor-grabbing"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-sm bg-secondary border border-subtle text-xs cursor-grab active:cursor-grabbing"
               >
                 <span className="text-muted select-none">⋮⋮</span>
                 <select
@@ -1508,7 +1508,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildSequenceCode(autonumber, next, steps))
                   }}
-                  className="bg-panel border border-subtle rounded px-1 py-0.5 text-[11px] text-primary"
+                  className="bg-panel border border-subtle rounded-sm px-1 py-0.5 text-[11px] text-primary"
                 >
                   <option value="actor">🧑 Actor</option>
                   <option value="participant">🖥️ Service</option>
@@ -1522,7 +1522,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildSequenceCode(autonumber, next, steps))
                   }}
-                  className="w-28 px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary text-xs"
+                  className="w-28 px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary text-xs"
                   title={`ID: ${p.alias}`}
                 />
                 {participants.length > 1 && (
@@ -1566,7 +1566,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                   setDragIndex(null)
                   onChangeCode(buildSequenceCode(autonumber, participants, next))
                 }}
-                className="flex flex-wrap items-center gap-1.5 p-2 rounded bg-app border border-subtle text-xs cursor-grab active:cursor-grabbing hover:border-accent/60"
+                className="flex flex-wrap items-center gap-1.5 p-2 rounded-sm bg-app border border-subtle text-xs cursor-grab active:cursor-grabbing hover:border-accent/60"
               >
                 <span className="text-muted font-mono text-[11px] w-5">
                   ⋮⋮ {idx + 1}.
@@ -1579,7 +1579,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildSequenceCode(autonumber, participants, next))
                   }}
-                  className="px-1.5 py-1 rounded bg-panel border border-subtle text-primary"
+                  className="px-1.5 py-1 rounded-sm bg-panel border border-subtle text-primary"
                 >
                   <option value="message">Message</option>
                   <option value="note">Note</option>
@@ -1592,7 +1592,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildSequenceCode(autonumber, participants, next))
                   }}
-                  className="px-1.5 py-1 rounded bg-panel border border-subtle text-primary font-medium"
+                  className="px-1.5 py-1 rounded-sm bg-panel border border-subtle text-primary font-medium"
                 >
                   {participants.map((p) => (
                     <option key={p.id} value={p.alias}>
@@ -1611,7 +1611,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                       )
                       onChangeCode(buildSequenceCode(autonumber, participants, next))
                     }}
-                    className="px-1.5 py-1 rounded bg-panel border border-subtle text-accent font-mono"
+                    className="px-1.5 py-1 rounded-sm bg-panel border border-subtle text-accent font-mono"
                   >
                     <option value="->>">──▶ Solid Call (-&gt;&gt;)</option>
                     <option value="-->>">- -▶ Dashed Reply (--&gt;&gt;)</option>
@@ -1628,7 +1628,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildSequenceCode(autonumber, participants, next))
                   }}
-                  className="px-1.5 py-1 rounded bg-panel border border-subtle text-primary font-medium"
+                  className="px-1.5 py-1 rounded-sm bg-panel border border-subtle text-primary font-medium"
                 >
                   {participants.map((p) => (
                     <option key={p.id} value={p.alias}>
@@ -1646,7 +1646,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildSequenceCode(autonumber, participants, next))
                   }}
-                  className="flex-1 min-w-[140px] px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                  className="flex-1 min-w-[140px] px-2 py-1 rounded-sm bg-panel border border-subtle text-primary"
                 />
                 <button
                   type="button"
@@ -1654,7 +1654,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     const next = steps.filter((_, i) => i !== idx)
                     onChangeCode(buildSequenceCode(autonumber, participants, next))
                   }}
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger"
+                  className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-danger hover:border-danger"
                 >
                   ×
                 </button>
@@ -1676,7 +1676,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
         data-testid="mermaid-visual-kanban-builder"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDropZoneFromPalette}
-        className="flex-1 overflow-x-auto overflow-y-auto p-3 bg-panel border border-subtle rounded min-h-0"
+        className="flex-1 overflow-x-auto overflow-y-auto p-3 bg-panel border border-subtle rounded-sm min-h-0"
       >
         <div className="text-[11px] font-semibold uppercase text-muted mb-2">
           Interactive Kanban Board (Drag &amp; Drop Cards Across Columns or Click + to Add)
@@ -1712,7 +1712,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildKanbanCode(next))
                   }}
-                  className="font-semibold text-xs px-2 py-1 rounded bg-panel border border-subtle text-primary flex-1"
+                  className="font-semibold text-xs px-2 py-1 rounded-sm bg-panel border border-subtle text-primary flex-1"
                 />
                 {cols.length > 1 && (
                   <button
@@ -1750,7 +1750,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                         onChangeCode(buildKanbanCode(nextCols))
                       }
                     }}
-                    className="p-2 rounded bg-panel border border-subtle shadow-2xs space-y-1.5 cursor-grab active:cursor-grabbing hover:border-accent"
+                    className="p-2 rounded-sm bg-panel border border-subtle shadow-2xs space-y-1.5 cursor-grab active:cursor-grabbing hover:border-accent"
                   >
                     <div className="flex items-center gap-1">
                       <span className="text-muted text-[10px]">⋮⋮</span>
@@ -1770,7 +1770,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                           )
                           onChangeCode(buildKanbanCode(nextCols))
                         }}
-                        className="flex-1 text-xs font-medium px-1.5 py-0.5 rounded bg-app border border-subtle text-primary"
+                        className="flex-1 text-xs font-medium px-1.5 py-0.5 rounded-sm bg-app border border-subtle text-primary"
                       />
                       <button
                         type="button"
@@ -1805,7 +1805,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                           )
                           onChangeCode(buildKanbanCode(nextCols))
                         }}
-                        className="w-24 px-1.5 py-0.5 rounded bg-app border border-subtle text-primary"
+                        className="w-24 px-1.5 py-0.5 rounded-sm bg-app border border-subtle text-primary"
                       />
                       <select
                         value={card.priority}
@@ -1827,7 +1827,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                           )
                           onChangeCode(buildKanbanCode(nextCols))
                         }}
-                        className="flex-1 px-1 py-0.5 rounded bg-app border border-subtle text-primary"
+                        className="flex-1 px-1 py-0.5 rounded-sm bg-app border border-subtle text-primary"
                       >
                         <option value="Very High">🔥 Very High</option>
                         <option value="High">⬆️ High</option>
@@ -1860,7 +1860,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                   )
                   onChangeCode(buildKanbanCode(nextCols))
                 }}
-                className="w-full py-1 rounded bg-panel border border-dashed border-subtle hover:border-accent text-xs text-accent font-medium"
+                className="w-full py-1 rounded-sm bg-panel border border-dashed border-subtle hover:border-accent text-xs text-accent font-medium"
               >
                 + Add Card to {col.name}
               </button>
@@ -1881,7 +1881,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
         data-testid="mermaid-visual-quadrant-builder"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDropZoneFromPalette}
-        className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded space-y-3 min-h-0"
+        className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded-sm space-y-3 min-h-0"
       >
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <label className="text-muted font-semibold">Matrix Title:</label>
@@ -1889,7 +1889,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
             type="text"
             value={model.title}
             onChange={(e) => onChangeCode(buildQuadrantCode({ ...model, title: e.target.value }))}
-            className="flex-1 px-2 py-1 rounded bg-app border border-subtle text-primary"
+            className="flex-1 px-2 py-1 rounded-sm bg-app border border-subtle text-primary"
           />
         </div>
 
@@ -1907,7 +1907,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
           }}
           onMouseUp={() => setDraggingQuadPointId(null)}
           onMouseLeave={() => setDraggingQuadPointId(null)}
-          className="relative w-full h-56 rounded border border-subtle bg-app overflow-hidden select-none"
+          className="relative w-full h-56 rounded-sm border border-subtle bg-app overflow-hidden select-none"
         >
           {/* 4 Quadrant Quadrants */}
           <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 pointer-events-none">
@@ -1938,7 +1938,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                 top: `${(1 - pt.y) * 100}%`,
                 transform: 'translate(-50%, -50%)'
               }}
-              className="absolute px-2 py-0.5 rounded-full bg-accent text-white text-[11px] font-medium shadow cursor-move whitespace-nowrap"
+              className="absolute px-2 py-0.5 rounded-full bg-accent text-white text-[11px] font-medium shadow-sm cursor-move whitespace-nowrap"
               title="Drag to position on 2x2 Quadrant Matrix"
             >
               🎯 {pt.label}
@@ -1949,7 +1949,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
         {/* Point List Editor */}
         <div className="space-y-1.5">
           {model.points.map((pt, idx) => (
-            <div key={pt.id} className="flex items-center gap-2 text-xs bg-app p-1.5 rounded border border-subtle">
+            <div key={pt.id} className="flex items-center gap-2 text-xs bg-app p-1.5 rounded-sm border border-subtle">
               <input
                 type="text"
                 value={pt.label}
@@ -1959,7 +1959,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                   )
                   onChangeCode(buildQuadrantCode({ ...model, points: nextPts }))
                 }}
-                className="flex-1 px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
+                className="flex-1 px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary"
               />
               <span className="font-mono text-[11px] text-muted">
                 X: {Math.round(pt.x * 100)}% • Y: {Math.round(pt.y * 100)}%
@@ -1991,14 +1991,14 @@ export const StructuredMermaidVisualBuilder: React.FC<{
         data-testid="mermaid-visual-pie-builder"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDropZoneFromPalette}
-        className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded space-y-3 min-h-0"
+        className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded-sm space-y-3 min-h-0"
       >
         <div className="flex items-center justify-between gap-2 text-xs">
           <input
             type="text"
             value={title}
             onChange={(e) => onChangeCode(buildPieCode(e.target.value, showData, slices))}
-            className="flex-1 px-2 py-1 rounded bg-app border border-subtle text-primary font-medium"
+            className="flex-1 px-2 py-1 rounded-sm bg-app border border-subtle text-primary font-medium"
           />
           <label className="flex items-center gap-1.5 text-primary cursor-pointer">
             <input
@@ -2026,7 +2026,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                 setDragIndex(null)
                 onChangeCode(buildPieCode(title, showData, next))
               }}
-              className="flex items-center gap-2 p-2 rounded bg-app border border-subtle text-xs cursor-grab active:cursor-grabbing"
+              className="flex items-center gap-2 p-2 rounded-sm bg-app border border-subtle text-xs cursor-grab active:cursor-grabbing"
             >
               <span className="text-muted">⋮⋮</span>
               <input
@@ -2038,7 +2038,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                   )
                   onChangeCode(buildPieCode(title, showData, next))
                 }}
-                className="w-40 px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
+                className="w-40 px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary"
               />
               <input
                 type="range"
@@ -2062,7 +2062,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                   )
                   onChangeCode(buildPieCode(title, showData, next))
                 }}
-                className="w-16 px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary font-mono"
+                className="w-16 px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary font-mono"
               />
               <button
                 type="button"
@@ -2095,7 +2095,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
       data-testid={`mermaid-visual-${diagramType}-builder`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDropZoneFromPalette}
-      className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded space-y-2.5 min-h-0"
+      className="flex-1 overflow-y-auto p-3 bg-panel border border-subtle rounded-sm space-y-2.5 min-h-0"
     >
       <div className="flex items-center justify-between gap-2 text-[11px]">
         <span className="font-semibold uppercase text-muted">
@@ -2104,7 +2104,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
       </div>
 
       {showHeaderInput && (
-        <div className="flex items-center gap-2 text-xs bg-secondary/50 p-2 rounded border border-subtle">
+        <div className="flex items-center gap-2 text-xs bg-secondary/50 p-2 rounded-sm border border-subtle">
           <span className="text-muted font-medium">
             {diagramType === 'mindmap'
               ? 'Central Root Topic:'
@@ -2118,7 +2118,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
             onChange={(e) =>
               onChangeCode(buildMermaidFromVisualRows(diagramType, e.target.value, rows))
             }
-            className="flex-1 px-2 py-0.5 rounded bg-panel border border-subtle text-primary font-medium"
+            className="flex-1 px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary font-medium"
           />
         </div>
       )}
@@ -2139,10 +2139,10 @@ export const StructuredMermaidVisualBuilder: React.FC<{
               setDragIndex(null)
               onChangeCode(buildMermaidFromVisualRows(diagramType, headerTitle, next))
             }}
-            className="flex flex-wrap items-center gap-1.5 p-2 rounded bg-app border border-subtle hover:border-accent/60 text-xs cursor-grab active:cursor-grabbing"
+            className="flex flex-wrap items-center gap-1.5 p-2 rounded-sm bg-app border border-subtle hover:border-accent/60 text-xs cursor-grab active:cursor-grabbing"
           >
             <span className="text-muted font-mono text-[11px] select-none">⋮⋮</span>
-            <span className="px-1.5 py-0.5 rounded bg-secondary border border-subtle text-accent font-mono text-[10px] uppercase">
+            <span className="px-1.5 py-0.5 rounded-sm bg-secondary border border-subtle text-accent font-mono text-[10px] uppercase">
               {r.kind}
             </span>
 
@@ -2156,7 +2156,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildMermaidFromVisualRows(diagramType, headerTitle, next))
                   }}
-                  className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary"
+                  className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary"
                 >
                   <option value="1">Level 1 (Main Branch)</option>
                   <option value="2">↳ Level 2 (Sub-topic)</option>
@@ -2171,7 +2171,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildMermaidFromVisualRows(diagramType, headerTitle, next))
                   }}
-                  className="flex-1 px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
+                  className="flex-1 px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary"
                 />
               </>
             ) : (
@@ -2186,7 +2186,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                     )
                     onChangeCode(buildMermaidFromVisualRows(diagramType, headerTitle, next))
                   }}
-                  className="w-32 px-2 py-0.5 rounded bg-panel border border-subtle text-primary font-medium"
+                  className="w-32 px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary font-medium"
                 />
                 {(r.col2 !== '' ||
                   ['state', 'er', 'class', 'gitGraph', 'timeline', 'gantt', 'journey', 'sankey', 'c4', 'architecture', 'block'].includes(
@@ -2202,7 +2202,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                       )
                       onChangeCode(buildMermaidFromVisualRows(diagramType, headerTitle, next))
                     }}
-                    className="flex-1 min-w-[110px] px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
+                    className="flex-1 min-w-[110px] px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary"
                   />
                 )}
                 {(r.col3 !== '' ||
@@ -2219,7 +2219,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                       )
                       onChangeCode(buildMermaidFromVisualRows(diagramType, headerTitle, next))
                     }}
-                    className="w-32 px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
+                    className="w-32 px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary"
                   />
                 )}
                 {(r.col4 !== '' || ['er', 'class', 'gantt', 'journey', 'architecture'].includes(diagramType)) && (
@@ -2233,7 +2233,7 @@ export const StructuredMermaidVisualBuilder: React.FC<{
                       )
                       onChangeCode(buildMermaidFromVisualRows(diagramType, headerTitle, next))
                     }}
-                    className="w-24 px-2 py-0.5 rounded bg-panel border border-subtle text-primary"
+                    className="w-24 px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary"
                   />
                 )}
               </>

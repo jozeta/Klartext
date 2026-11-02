@@ -165,7 +165,7 @@ export const LocalAIPanel: React.FC<{
               data-testid="open-ai-help-btn"
               data-tooltip="Local AI & Workspace Q&A Guide"
               onClick={onOpenHelpAI}
-              className="p-1 rounded hover:bg-secondary text-muted hover:text-accent transition-colors"
+              className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-accent transition-colors"
             >
               <HelpCircle className="w-3.5 h-3.5" />
             </button>
@@ -176,7 +176,7 @@ export const LocalAIPanel: React.FC<{
       {/* Transparent Privacy & Context Indicator */}
       <div
         data-testid="ai-context-indicator"
-        className="p-2 rounded bg-panel border border-subtle text-[11px] text-muted space-y-0.5"
+        className="p-2 rounded-sm bg-panel border border-subtle text-[11px] text-muted space-y-0.5"
       >
         <div className="font-semibold text-primary">Local Privacy Context Boundary</div>
         <div>
@@ -192,7 +192,7 @@ export const LocalAIPanel: React.FC<{
       {pendingDiff && (
         <div
           data-testid="ai-diff-review-card"
-          className="p-3 rounded-md bg-panel border-2 border-accent space-y-2 shadow-sm select-text"
+          className="p-3 rounded-md bg-panel border-2 border-accent space-y-2 shadow-xs select-text"
         >
           <div className="flex items-center justify-between">
             <span className="font-semibold text-accent">
@@ -204,7 +204,7 @@ export const LocalAIPanel: React.FC<{
                   type="button"
                   data-testid="ai-diff-toggle-original-btn"
                   onClick={() => setShowOriginalInDiff((v) => !v)}
-                  className="px-2 py-0.5 rounded bg-secondary border border-subtle text-[10px] text-muted hover:text-primary"
+                  className="px-2 py-0.5 rounded-sm bg-secondary border border-subtle text-[10px] text-muted hover:text-primary"
                 >
                   {showOriginalInDiff ? 'Hide Original' : 'Compare Original'}
                 </button>
@@ -214,7 +214,7 @@ export const LocalAIPanel: React.FC<{
                   type="button"
                   data-testid="ai-stop-streaming-btn"
                   onClick={() => onCancelStream(pendingDiff.requestId)}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-danger text-white text-[11px]"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-sm bg-danger text-white text-[11px]"
                 >
                   <Square className="w-3 h-3" />
                   <span>Stop</span>
@@ -231,7 +231,7 @@ export const LocalAIPanel: React.FC<{
             {showOriginalInDiff && (
               <div
                 data-testid="ai-diff-original-text"
-                className="p-2 rounded bg-secondary/60 border border-subtle text-muted whitespace-pre-wrap"
+                className="p-2 rounded-sm bg-secondary/60 border border-subtle text-muted whitespace-pre-wrap"
               >
                 <div className="text-[9px] uppercase tracking-wider font-semibold text-muted mb-1">
                   Original Text
@@ -241,7 +241,7 @@ export const LocalAIPanel: React.FC<{
             )}
             <div
               data-testid="ai-diff-proposed-text"
-              className="p-2.5 rounded bg-success/10 border border-subtle text-primary whitespace-pre-wrap leading-relaxed"
+              className="p-2.5 rounded-sm bg-success/10 border border-subtle text-primary whitespace-pre-wrap leading-relaxed"
             >
               {pendingDiff.proposedText ||
                 (pendingDiff.isStreaming ? 'Generating rewrite…' : '')}
@@ -253,7 +253,7 @@ export const LocalAIPanel: React.FC<{
               type="button"
               data-testid="ai-diff-reject-btn"
               onClick={onRejectDiff}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-danger"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-danger"
             >
               <X className="w-3.5 h-3.5" />
               <span>Reject (Esc)</span>
@@ -263,7 +263,7 @@ export const LocalAIPanel: React.FC<{
               data-testid="ai-diff-accept-btn"
               disabled={pendingDiff.isStreaming || !pendingDiff.proposedText.trim()}
               onClick={() => onAcceptDiff(pendingDiff.proposedText)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-accent text-white font-medium disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-accent text-white font-medium disabled:opacity-50"
             >
               <Check className="w-3.5 h-3.5" />
               <span>Accept Edit (Enter)</span>
@@ -273,7 +273,7 @@ export const LocalAIPanel: React.FC<{
       )}
 
       {/* Bilingual Quick Actions & Custom Prompt */}
-      <div className="p-2.5 rounded bg-panel border border-subtle space-y-2">
+      <div className="p-2.5 rounded-sm bg-panel border border-subtle space-y-2">
         <div className="font-semibold text-primary">Create, Edit &amp; Rewrite (English &amp; Svenska)</div>
         <button
           type="button"
@@ -283,7 +283,7 @@ export const LocalAIPanel: React.FC<{
             e.preventDefault()
           }}
           onClick={() => onOpenCustomInstructionDialog?.()}
-          className="w-full px-2.5 py-1.5 rounded bg-accent text-white font-semibold hover:opacity-95 transition-opacity flex items-center justify-center gap-1.5 shadow-sm"
+          className="w-full px-2.5 py-1.5 rounded-sm bg-accent text-white font-semibold hover:opacity-95 transition-opacity flex items-center justify-center gap-1.5 shadow-xs"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>Ask AI / Custom Instruction...</span>
@@ -293,7 +293,7 @@ export const LocalAIPanel: React.FC<{
             type="button"
             data-testid="ai-action-improve"
             onClick={() => onStartAIAction('improve', 'Improve clarity and flow')}
-            className="px-2 py-1 rounded bg-secondary hover:border-accent border border-subtle text-left truncate"
+            className="px-2 py-1 rounded-sm bg-secondary hover:border-accent border border-subtle text-left truncate"
           >
             Improve / Förbättra text
           </button>
@@ -303,7 +303,7 @@ export const LocalAIPanel: React.FC<{
             onClick={() =>
               onStartAIAction('grammar', 'Fix grammar and Swedish compound words (särskrivningar)')
             }
-            className="px-2 py-1 rounded bg-secondary hover:border-accent border border-subtle text-left truncate"
+            className="px-2 py-1 rounded-sm bg-secondary hover:border-accent border border-subtle text-left truncate"
           >
             Fix Grammar / Särskrivning
           </button>
@@ -311,7 +311,7 @@ export const LocalAIPanel: React.FC<{
             type="button"
             data-testid="ai-action-translate-en-sv"
             onClick={() => onStartAIAction('translate-en-sv', 'Translate to idiomatic Swedish')}
-            className="px-2 py-1 rounded bg-secondary hover:border-accent border border-subtle text-left truncate"
+            className="px-2 py-1 rounded-sm bg-secondary hover:border-accent border border-subtle text-left truncate"
           >
             Translate EN → SV
           </button>
@@ -319,7 +319,7 @@ export const LocalAIPanel: React.FC<{
             type="button"
             data-testid="ai-action-translate-sv-en"
             onClick={() => onStartAIAction('translate-sv-en', 'Translate to idiomatic English')}
-            className="px-2 py-1 rounded bg-secondary hover:border-accent border border-subtle text-left truncate"
+            className="px-2 py-1 rounded-sm bg-secondary hover:border-accent border border-subtle text-left truncate"
           >
             Translate SV → EN
           </button>
@@ -337,7 +337,7 @@ export const LocalAIPanel: React.FC<{
                 onStartAIAction('custom', customPrompt.trim())
               }
             }}
-            className="flex-1 px-2 py-1 rounded bg-app border border-subtle text-primary"
+            className="flex-1 px-2 py-1 rounded-sm bg-app border border-subtle text-primary"
           />
           <button
             type="button"
@@ -347,7 +347,7 @@ export const LocalAIPanel: React.FC<{
                 onStartAIAction('custom', customPrompt.trim())
               }
             }}
-            className="px-2.5 py-1 rounded bg-accent text-white font-medium"
+            className="px-2.5 py-1 rounded-sm bg-accent text-white font-medium"
           >
             Run
           </button>
@@ -357,7 +357,7 @@ export const LocalAIPanel: React.FC<{
       {/* Collapsible Local AI Setup & Connection (Collapsed by default, contains Multi-Root Workspace Q&A) */}
       <div
         data-testid="local-ai-connection-guide"
-        className="rounded bg-panel border border-subtle overflow-hidden"
+        className="rounded-sm bg-panel border border-subtle overflow-hidden"
       >
         <button
           type="button"
@@ -386,7 +386,7 @@ export const LocalAIPanel: React.FC<{
             className="px-2.5 pb-2.5 pt-1 border-t border-subtle space-y-3"
           >
             <div className="space-y-1">
-              <label className="text-[11px] text-muted">
+              <label className="block text-[11px] text-muted">
                 Local Endpoint (Ollama / LM Studio):
               </label>
               <div className="flex gap-1">
@@ -395,13 +395,13 @@ export const LocalAIPanel: React.FC<{
                   data-testid="ai-endpoint-input"
                   value={endpointInput}
                   onChange={(e) => setEndpointInput(e.target.value)}
-                  className="flex-1 px-2 py-1 rounded bg-app border border-subtle text-primary font-mono text-[11px]"
+                  className="flex-1 px-2 py-1 rounded-sm bg-app border border-subtle text-primary font-mono text-[11px]"
                 />
                 <button
                   type="button"
                   data-testid="ai-test-connection-btn"
                   onClick={handleTestConnection}
-                  className="px-2 py-1 rounded bg-accent text-white font-medium flex items-center gap-1"
+                  className="px-2 py-1 rounded-sm bg-accent text-white font-medium flex items-center gap-1"
                 >
                   <RefreshCw className="w-3 h-3" />
                   <span>Test</span>
@@ -415,7 +415,7 @@ export const LocalAIPanel: React.FC<{
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] text-muted">Active Local Model:</label>
+              <label className="block text-[11px] text-muted">Active Local Model:</label>
               <select
                 data-testid="ai-model-select"
                 value={settings.ai.activeModel || ''}
@@ -424,7 +424,7 @@ export const LocalAIPanel: React.FC<{
                     ai: { ...settings.ai, activeModel: e.target.value }
                   })
                 }
-                className="w-full px-2 py-1 rounded bg-app border border-subtle text-primary"
+                className="w-full px-2 py-1 rounded-sm bg-app border border-subtle text-primary"
               >
                 <option value="">None (No AI model configured)</option>
                 {discoveredModels.length > 0 ? (
@@ -478,27 +478,27 @@ export const LocalAIPanel: React.FC<{
                       handleRunRAG()
                     }
                   }}
-                  className="flex-1 px-2 py-1 rounded bg-app border border-subtle text-primary"
+                  className="flex-1 px-2 py-1 rounded-sm bg-app border border-subtle text-primary"
                 />
                 <button
                   type="button"
                   data-testid="ai-rag-ask-btn"
                   disabled={ragLoading || !ragQuestion.trim()}
                   onClick={handleRunRAG}
-                  className="px-2.5 py-1 rounded bg-accent text-white font-medium disabled:opacity-50"
+                  className="px-2.5 py-1 rounded-sm bg-accent text-white font-medium disabled:opacity-50"
                 >
                   {ragLoading ? '...' : 'Ask'}
                 </button>
               </div>
               {ragError && (
-                <div className="p-2 rounded bg-danger/10 border border-danger/30 text-danger text-[11px]">
+                <div className="p-2 rounded-sm bg-danger/10 border border-danger/30 text-danger text-[11px]">
                   {ragError}
                 </div>
               )}
               {ragAnswer && (
                 <div
                   data-testid="ai-rag-answer-card"
-                  className="p-2 rounded bg-app border border-subtle space-y-1.5 text-[11px]"
+                  className="p-2 rounded-sm bg-app border border-subtle space-y-1.5 text-[11px]"
                 >
                   <div
                     data-testid="ai-rag-answer-text"
@@ -520,7 +520,7 @@ export const LocalAIPanel: React.FC<{
                             key={`${c.rootId}-${c.relativePath}-${idx}`}
                             type="button"
                             onClick={() => onOpenCitation?.(c.rootId, c.relativePath)}
-                            className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-accent hover:underline font-mono text-[10px]"
+                            className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-accent hover:underline font-mono text-[10px]"
                           >
                             [{c.rootName} / {c.relativePath}]
                           </button>
@@ -539,7 +539,7 @@ export const LocalAIPanel: React.FC<{
       {hardwareAdvice && (
         <div
           data-testid="hardware-advisor-card"
-          className="rounded bg-panel border border-subtle overflow-hidden"
+          className="rounded-sm bg-panel border border-subtle overflow-hidden"
         >
           <button
             type="button"
@@ -555,7 +555,7 @@ export const LocalAIPanel: React.FC<{
             <div className="flex items-center gap-1.5">
               <span
                 data-testid="detected-ram-badge"
-                className="px-1.5 py-0.5 rounded bg-secondary text-accent font-mono text-[10px]"
+                className="px-1.5 py-0.5 rounded-sm bg-secondary text-accent font-mono text-[10px]"
               >
                 {hardwareAdvice.detectedRamGb} GB RAM · Tier {hardwareAdvice.tierId}
               </span>
@@ -582,7 +582,7 @@ export const LocalAIPanel: React.FC<{
                     <div
                       key={rec.tag}
                       data-testid={`hw-rec-model-${rec.tag}`}
-                      className="p-2 rounded bg-app border border-subtle space-y-1"
+                      className="p-2 rounded-sm bg-app border border-subtle space-y-1"
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-primary">
@@ -598,7 +598,7 @@ export const LocalAIPanel: React.FC<{
                             setCopiedCmd(rec.tag)
                             setTimeout(() => setCopiedCmd(null), 1500)
                           }}
-                          className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] flex items-center gap-1 hover:border-accent"
+                          className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] flex items-center gap-1 hover:border-accent"
                         >
                           <Copy className="w-2.5 h-2.5" />
                           <span>{copiedCmd === rec.tag ? 'Copied' : pullCmd}</span>
@@ -716,7 +716,7 @@ export const AICustomInstructionDialogModal: React.FC<{
               <div className="font-semibold text-sm text-primary">
                 AI Custom Instruction
               </div>
-              <div className="text-[11px] text-secondary">
+              <div className="text-[11px] text-muted">
                 Tell the AI what to do with your selected text ({activeFilePath || 'Active Document'})
               </div>
             </div>
@@ -725,7 +725,7 @@ export const AICustomInstructionDialogModal: React.FC<{
             type="button"
             data-testid="ai-custom-dialog-close-btn"
             onClick={onClose}
-            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+            className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
           >
             <X className="w-4 h-4" />
           </button>
@@ -749,7 +749,7 @@ export const AICustomInstructionDialogModal: React.FC<{
               onChange={(e) => setTargetText(e.target.value)}
               rows={3}
               placeholder="Paste or select text from the document..."
-              className="w-full px-3 py-2 rounded-lg bg-app border border-subtle text-primary font-mono text-[11px] leading-relaxed focus:outline-none focus:border-accent resize-y"
+              className="w-full px-3 py-2 rounded-lg bg-app border border-subtle text-primary font-mono text-[11px] leading-relaxed focus:outline-hidden focus:border-accent resize-y"
             />
           </div>
 
@@ -788,14 +788,14 @@ export const AICustomInstructionDialogModal: React.FC<{
                 }}
                 rows={2}
                 placeholder="Write your instructions here (e.g. 'Summarize into 3 bullet points', 'Rewrite in formal Swedish', 'Convert into a checklist')..."
-                className="flex-1 px-3 py-2 rounded-lg bg-app border border-subtle text-primary text-xs leading-relaxed focus:outline-none focus:border-accent resize-none"
+                className="flex-1 px-3 py-2 rounded-lg bg-app border border-subtle text-primary text-xs leading-relaxed focus:outline-hidden focus:border-accent resize-none"
               />
               <button
                 type="button"
                 data-testid="ai-custom-dialog-submit-btn"
                 disabled={!instruction.trim() || Boolean(pendingDiff?.isStreaming)}
                 onClick={handleSubmit}
-                className="px-3.5 py-2 rounded-lg bg-accent text-white font-semibold hover:opacity-95 disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-sm"
+                className="px-3.5 py-2 rounded-lg bg-accent text-white font-semibold hover:opacity-95 disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-xs"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>{pendingDiff?.isStreaming ? 'Running...' : 'Run AI'}</span>
@@ -822,7 +822,7 @@ export const AICustomInstructionDialogModal: React.FC<{
                   <button
                     type="button"
                     onClick={() => onCancelStream(pendingDiff.requestId)}
-                    className="px-2 py-0.5 rounded bg-danger text-white text-[10px] flex items-center gap-1"
+                    className="px-2 py-0.5 rounded-sm bg-danger text-white text-[10px] flex items-center gap-1"
                   >
                     <Square className="w-2.5 h-2.5" />
                     <span>Stop</span>
@@ -852,7 +852,7 @@ export const AICustomInstructionDialogModal: React.FC<{
                     setCopiedResult(true)
                     setTimeout(() => setCopiedResult(false), 1500)
                   }}
-                  className="px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent flex items-center gap-1 disabled:opacity-50"
+                  className="px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent flex items-center gap-1 disabled:opacity-50"
                 >
                   <Copy className="w-3 h-3" />
                   <span>{copiedResult ? 'Copied!' : 'Copy Result'}</span>
@@ -864,7 +864,7 @@ export const AICustomInstructionDialogModal: React.FC<{
                     data-testid="ai-custom-dialog-insert-below-btn"
                     disabled={pendingDiff.isStreaming || !pendingDiff.proposedText.trim()}
                     onClick={() => onInsertBelowResult(pendingDiff.proposedText, targetText)}
-                    className="px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent font-medium disabled:opacity-50"
+                    className="px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent font-medium disabled:opacity-50"
                   >
                     Insert Below Selection
                   </button>
@@ -873,7 +873,7 @@ export const AICustomInstructionDialogModal: React.FC<{
                     data-testid="ai-custom-dialog-accept-btn"
                     disabled={pendingDiff.isStreaming || !pendingDiff.proposedText.trim()}
                     onClick={() => onAcceptResult(pendingDiff.proposedText, targetText)}
-                    className="px-3 py-1 rounded bg-accent text-white font-semibold hover:opacity-95 flex items-center gap-1 disabled:opacity-50 shadow-sm"
+                    className="px-3 py-1 rounded-sm bg-accent text-white font-semibold hover:opacity-95 flex items-center gap-1 disabled:opacity-50 shadow-xs"
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>Replace Selected Text</span>

@@ -166,7 +166,7 @@ export const HelpModal: React.FC<{
             title="Hide Help Panel"
             data-testid="close-help-modal-btn"
             onClick={onClose}
-            className="p-0.5 rounded hover:bg-secondary text-muted hover:text-primary shrink-0"
+            className="p-0.5 rounded-sm hover:bg-secondary text-muted hover:text-primary shrink-0"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -251,7 +251,7 @@ export const HelpModal: React.FC<{
                 placeholder="Filter variables (date, folder, git, random...)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-2.5 py-1 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent text-[11px]"
+                className="w-full pl-8 pr-2.5 py-1 rounded-sm bg-panel border border-subtle text-primary focus:outline-hidden focus:border-accent text-[11px]"
               />
             </div>
           )}
@@ -305,7 +305,7 @@ export const HelpModal: React.FC<{
                 </div>
                 <p className="text-muted leading-relaxed">
                   Use{' '}
-                  <code className="font-mono text-accent px-1 py-0.5 rounded bg-panel border border-subtle">
+                  <code className="font-mono text-accent px-1 py-0.5 rounded-sm bg-panel border border-subtle">
                     &lt;% variable %&gt;
                   </code>{' '}
                   inside template content or template filenames (e.g.{' '}
@@ -333,13 +333,13 @@ export const HelpModal: React.FC<{
                           {v.token}
                         </code>
                         <div className="inline-flex items-center gap-1 shrink-0">
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-secondary text-muted">
                             {v.category}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleCopyToken(v.token)}
-                            className="px-1.5 py-0.5 rounded bg-secondary border border-subtle hover:border-accent text-primary inline-flex items-center gap-1 text-[10px]"
+                            className="px-1.5 py-0.5 rounded-sm bg-secondary border border-subtle hover:border-accent text-primary inline-flex items-center gap-1 text-[10px]"
                           >
                             {isCopied ? (
                               <>
@@ -357,7 +357,7 @@ export const HelpModal: React.FC<{
                             <button
                               type="button"
                               onClick={() => handleInsert(v.token)}
-                              className="px-1.5 py-0.5 rounded bg-accent text-white font-medium text-[10px]"
+                              className="px-1.5 py-0.5 rounded-sm bg-accent text-white font-medium text-[10px]"
                             >
                               Insert
                             </button>
@@ -440,7 +440,7 @@ export const HelpModal: React.FC<{
                       return (
                         <div
                           key={item.cmd}
-                          className="p-2 rounded bg-app border border-subtle space-y-1"
+                          className="p-2 rounded-sm bg-app border border-subtle space-y-1"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-primary text-[11px]">
@@ -449,7 +449,7 @@ export const HelpModal: React.FC<{
                             <button
                               type="button"
                               onClick={() => handleCopyToken(item.cmd)}
-                              className="px-1.5 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary inline-flex items-center gap-1 text-[10px] font-mono shrink-0"
+                              className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle hover:border-accent text-primary inline-flex items-center gap-1 text-[10px] font-mono shrink-0"
                             >
                               {isCopied ? (
                                 <>
@@ -624,7 +624,7 @@ export const AboutModal: React.FC<{
             type="button"
             data-testid="about-modal-close-btn"
             onClick={onClose}
-            className="p-1 rounded hover:bg-app text-muted hover:text-primary transition-colors"
+            className="p-1 rounded-sm hover:bg-app text-muted hover:text-primary transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -707,7 +707,7 @@ export const AboutModal: React.FC<{
                 <button
                   type="button"
                   onClick={() => window.klartext.openExternalUrl(updateResult.releaseUrl)}
-                  className="px-2 py-1 rounded bg-accent text-white font-medium text-[10px] inline-flex items-center gap-1 shrink-0"
+                  className="px-2 py-1 rounded-sm bg-accent text-white font-medium text-[10px] inline-flex items-center gap-1 shrink-0"
                 >
                   <span>Download</span>
                   <ExternalLink className="w-3 h-3" />

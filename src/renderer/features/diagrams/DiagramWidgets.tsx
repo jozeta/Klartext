@@ -154,7 +154,7 @@ export const MermaidDiagramWidget: React.FC<{
               type="button"
               data-testid="mermaid-open-visual-builder"
               onClick={() => onOpenVisualBuilder(code)}
-              className="px-2 py-0.5 rounded bg-accent text-white font-medium hover:opacity-90"
+              className="px-2 py-0.5 rounded-sm bg-accent text-white font-medium hover:opacity-90"
             >
               Visual Builder
             </button>
@@ -163,14 +163,14 @@ export const MermaidDiagramWidget: React.FC<{
             type="button"
             data-testid="mermaid-toggle-source"
             onClick={() => setEditingSource((v) => !v)}
-            className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary"
+            className="px-2 py-0.5 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
           >
             {editingSource ? 'Hide Source' : 'Edit Source'}
           </button>
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary"
+            className="px-2 py-0.5 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
           >
             {expanded ? 'Minimize' : 'Expand'}
           </button>
@@ -187,7 +187,7 @@ export const MermaidDiagramWidget: React.FC<{
               onUpdateCode?.(e.target.value)
             }}
             rows={4}
-            className="w-full p-2 text-xs font-mono bg-panel text-primary border border-subtle rounded focus:outline-none focus:border-accent"
+            className="w-full p-2 text-xs font-mono bg-panel text-primary border border-subtle rounded-sm focus:outline-hidden focus:border-accent"
           />
         </div>
       )}
@@ -1564,7 +1564,7 @@ export const VisualMermaidBuilderModal: React.FC<{
         {/* Top Professional Studio Header */}
         <div className="flex items-center justify-between px-4 py-2 bg-secondary border-b border-subtle shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded bg-accent/15 border border-accent/30 flex items-center justify-center text-accent">
+            <div className="w-6 h-6 rounded-sm bg-accent/15 border border-accent/30 flex items-center justify-center text-accent">
               <GitCommit className="w-3.5 h-3.5" />
             </div>
             <div>
@@ -1580,7 +1580,7 @@ export const VisualMermaidBuilderModal: React.FC<{
           </div>
 
           {/* Center Layout Split Presets */}
-          <div className="hidden md:flex items-center gap-1 bg-panel border border-subtle rounded p-0.5 text-[11px]">
+          <div className="hidden md:flex items-center gap-1 bg-panel border border-subtle rounded-sm p-0.5 text-[11px]">
             <span className="px-2 text-muted font-medium">Layout:</span>
             <button
               type="button"
@@ -1637,7 +1637,7 @@ export const VisualMermaidBuilderModal: React.FC<{
               type="button"
               data-testid="mermaid-maximize-btn"
               onClick={() => setIsMaximized((v) => !v)}
-              className="px-2.5 py-1 text-xs rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2.5 py-1 text-xs rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
               title={isMaximized ? 'Restore Window Size' : 'Maximize Diagram Studio Window'}
             >
               {isMaximized ? 'Restore Size' : 'Maximize'}
@@ -1650,7 +1650,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                 setCopiedFeedback(true)
                 setTimeout(() => setCopiedFeedback(false), 1500)
               }}
-              className="px-2.5 py-1 text-xs rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2.5 py-1 text-xs rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
             >
               {copiedFeedback ? 'Copied Code!' : 'Copy Code'}
             </button>
@@ -1661,7 +1661,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                 onInsertOrUpdateMermaid(effectiveMermaidCode)
                 onClose()
               }}
-              className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded bg-accent text-white hover:opacity-90 shadow-2xs"
+              className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-sm bg-accent text-white hover:opacity-90 shadow-2xs"
             >
               <Check className="w-3.5 h-3.5" />
               <span>Insert / Update Diagram</span>
@@ -1670,7 +1670,7 @@ export const VisualMermaidBuilderModal: React.FC<{
               type="button"
               data-testid="mermaid-builder-close-btn"
               onClick={onClose}
-              className="px-2.5 py-1 text-xs rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2.5 py-1 text-xs rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
             >
               Close
             </button>
@@ -1729,7 +1729,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     }}
                     onClick={() => addNode(item.shape)}
                     title={`${item.hint} — Click to add or drag onto canvas`}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent hover:bg-secondary/50 text-primary font-medium cursor-grab active:cursor-grabbing shadow-2xs transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-panel border border-subtle hover:border-accent hover:bg-secondary/50 text-primary font-medium cursor-grab active:cursor-grabbing shadow-2xs transition-colors"
                   >
                     <ShapeStencilIcon shape={item.shape} className="w-4 h-3.5 text-accent" />
                     <span>{item.label}</span>
@@ -1742,7 +1742,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted mr-0.5">
                   Connectors:
                 </span>
-                <div className="flex items-center bg-panel border border-subtle rounded p-0.5 gap-0.5">
+                <div className="flex items-center bg-panel border border-subtle rounded-sm p-0.5 gap-0.5">
                   {arrowStyleButtons.map((arr) => {
                     const isActive =
                       (selectedEdge ? selectedEdge.style : edgeStyleToCreate) === arr.style
@@ -1806,7 +1806,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     setIsCodeManuallyEdited(false)
                     setDirection(nextDir)
                   }}
-                  className="px-2 py-1 rounded bg-panel border border-subtle text-primary font-medium"
+                  className="px-2 py-1 rounded-sm bg-panel border border-subtle text-primary font-medium"
                   title="Flowchart Orientation"
                 >
                   <option value="LR">⇄ Left → Right (LR)</option>
@@ -1817,7 +1817,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                   type="button"
                   data-testid="mermaid-auto-layout-btn"
                   onClick={() => autoLayoutNodes(direction)}
-                  className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
+                  className="px-2 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
                   title="Auto-arrange nodes into a clean grid"
                 >
                   Auto-Layout
@@ -1857,7 +1857,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                         targetEl.dispatchEvent(dropEvt)
                       }
                     }}
-                    className="px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary font-medium flex items-center gap-1.5 cursor-grab active:cursor-grabbing shadow-2xs"
+                    className="px-2.5 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary font-medium flex items-center gap-1.5 cursor-grab active:cursor-grabbing shadow-2xs"
                     title="Drag and drop onto the visual builder below, or click to add"
                   >
                     <span>{pal.badge}</span>
@@ -1875,7 +1875,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     key={idx}
                     type="button"
                     onClick={() => appendSnippetToCode(s.snippet)}
-                    className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary"
+                    className="px-2 py-0.5 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
                   >
                     {s.label}
                   </button>
@@ -1907,7 +1907,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                       )
                     )
                   }}
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary font-medium w-44 focus:outline-none focus:border-accent"
+                  className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary font-medium w-44 focus:outline-hidden focus:border-accent"
                 />
                 <label className="text-muted">Change Shape:</label>
                 <div className="flex items-center gap-1">
@@ -1945,7 +1945,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     const offsetY = direction === 'TD' ? selectedNode.y + 105 : selectedNode.y
                     addNode(selectedNode.shape, offsetX, offsetY, selectedNode.id)
                   }}
-                  className="px-2.5 py-0.5 rounded bg-accent/15 border border-accent/40 text-accent hover:bg-accent hover:text-white font-medium transition-colors"
+                  className="px-2.5 py-0.5 rounded-sm bg-accent/15 border border-accent/40 text-accent hover:bg-accent hover:text-white font-medium transition-colors"
                   title="Add a new connected node directly after this shape (Visio Quick-Connect)"
                 >
                   + Add Connected Shape
@@ -1962,7 +1962,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     )
                     setSelectedNodeId(null)
                   }}
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger"
+                  className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-danger hover:border-danger"
                 >
                   Delete Shape
                 </button>
@@ -1991,7 +1991,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                       )
                     )
                   }}
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary w-44 focus:outline-none focus:border-accent"
+                  className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary w-44 focus:outline-hidden focus:border-accent"
                 />
                 <button
                   type="button"
@@ -2005,7 +2005,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                       )
                     )
                   }}
-                  className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                  className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
                   title="Reverse arrow direction"
                 >
                   ⇄ Reverse Direction
@@ -2018,7 +2018,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                   setEdges((prev) => prev.filter((ed) => ed.id !== selectedEdge.id))
                   setSelectedEdgeId(null)
                 }}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger"
+                className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-danger hover:border-danger"
               >
                 Delete Connector
               </button>
@@ -2050,7 +2050,7 @@ export const VisualMermaidBuilderModal: React.FC<{
             className="flex flex-col min-w-[260px] min-h-0 h-full p-3 pr-1.5 gap-2"
           >
             {isFlowchartMode ? (
-              <div className="flex flex-col flex-1 min-h-[160px] bg-panel border border-subtle rounded-md overflow-hidden shadow-xs">
+              <div className="flex flex-col flex-1 min-h-[160px] bg-panel border border-subtle rounded-md overflow-hidden shadow-2xs">
                 {/* 2D Visual Canvas Viewport Toolbar (Select/Pan Tools, Zoom Controls, Snap Grid) */}
                 <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-secondary/60 border-b border-subtle text-[11px] shrink-0">
                   <div className="flex items-center gap-1">
@@ -2103,7 +2103,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                       onClick={() =>
                         setCanvasZoom((z) => Math.max(0.4, Number((z - 0.15).toFixed(2))))
                       }
-                      className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+                      className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent font-mono"
                       title="Zoom Out Visual Canvas"
                     >
                       −
@@ -2120,7 +2120,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                       onClick={() =>
                         setCanvasZoom((z) => Math.min(2.5, Number((z + 0.15).toFixed(2))))
                       }
-                      className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+                      className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent font-mono"
                       title="Zoom In Visual Canvas"
                     >
                       +
@@ -2132,7 +2132,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                         setCanvasZoom(1)
                         setCanvasPan({ x: 0, y: 0 })
                       }}
-                      className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                      className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
                       title="Reset Canvas Pan & Zoom to 100%"
                     >
                       Reset
@@ -2584,7 +2584,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                               top: `${target.y + 13}px`,
                               width: '120px'
                             }}
-                            className="absolute px-2 py-0.5 text-xs text-center rounded bg-panel border-2 border-accent text-primary shadow-md focus:outline-none"
+                            className="absolute px-2 py-0.5 text-xs text-center rounded-sm bg-panel border-2 border-accent text-primary shadow-md focus:outline-hidden"
                           />
                         )
                       })()}
@@ -2623,7 +2623,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                               top: `${my - 14}px`,
                               width: '110px'
                             }}
-                            className="absolute px-2 py-0.5 text-xs text-center rounded bg-panel border-2 border-accent text-primary shadow-md focus:outline-none"
+                            className="absolute px-2 py-0.5 text-xs text-center rounded-sm bg-panel border-2 border-accent text-primary shadow-md focus:outline-hidden"
                           />
                         )
                       })()}
@@ -2651,10 +2651,10 @@ export const VisualMermaidBuilderModal: React.FC<{
                     startHeight: codeDrawerHeight
                   }
                 }}
-                className="h-1.5 w-full cursor-row-resize rounded bg-subtle/60 hover:bg-accent/60 transition-colors shrink-0 flex items-center justify-center"
+                className="h-1.5 w-full cursor-row-resize rounded-sm bg-subtle/60 hover:bg-accent/60 transition-colors shrink-0 flex items-center justify-center"
                 title="Drag up or down to resize Mermaid Code Editor height"
               >
-                <div className="w-8 h-0.5 rounded bg-muted/50" />
+                <div className="w-8 h-0.5 rounded-sm bg-muted/50" />
               </div>
             )}
 
@@ -2687,7 +2687,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                 onChange={(e) => handleCodeEditorChange(e.target.value)}
                 spellCheck={false}
                 placeholder="Write or paste any Mermaid diagram syntax here..."
-                className="flex-1 w-full p-2 rounded bg-panel border border-subtle font-mono text-xs text-primary focus:outline-none focus:border-accent resize-none leading-relaxed"
+                className="flex-1 w-full p-2 rounded-sm bg-panel border border-subtle font-mono text-xs text-primary focus:outline-hidden focus:border-accent resize-none leading-relaxed"
               />
             </div>
 
@@ -2715,7 +2715,7 @@ export const VisualMermaidBuilderModal: React.FC<{
             className="w-2 h-full cursor-col-resize bg-subtle/50 hover:bg-accent/60 active:bg-accent transition-colors flex flex-col items-center justify-center shrink-0 group"
             title="Drag left or right to resize Visual Canvas vs. Live Output Preview (Double-click to reset 50/50)"
           >
-            <div className="h-10 w-0.5 rounded bg-muted/60 group-hover:bg-white" />
+            <div className="h-10 w-0.5 rounded-sm bg-muted/60 group-hover:bg-white" />
           </div>
 
           {/* RIGHT PANE: Resizable Interactive Pan & Zoom Live Output Preview */}
@@ -2723,7 +2723,7 @@ export const VisualMermaidBuilderModal: React.FC<{
             style={{ width: `${100 - leftPanePercent}%` }}
             className="flex flex-col min-w-[260px] min-h-0 h-full p-3 pl-1.5 gap-2"
           >
-            <div className="flex flex-col flex-1 min-h-0 bg-panel border border-subtle rounded-md overflow-hidden shadow-xs">
+            <div className="flex flex-col flex-1 min-h-0 bg-panel border border-subtle rounded-md overflow-hidden shadow-2xs">
               {/* Live Output Preview Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-secondary/60 border-b border-subtle text-[11px] shrink-0">
                 <span className="font-semibold uppercase text-muted">
@@ -2737,7 +2737,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     onChange={(e) =>
                       setPreviewMermaidTheme(e.target.value as MermaidPreviewTheme)
                     }
-                    className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary text-xs"
+                    className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary text-xs"
                   >
                     <option value="auto">Auto ({theme})</option>
                     <option value="default">Default</option>
@@ -2764,7 +2764,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     onClick={() =>
                       setPreviewZoom((z) => Math.max(0.35, Number((z - 0.15).toFixed(2))))
                     }
-                    className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
+                    className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
                     title="Zoom Out Output Preview"
                   >
                     −
@@ -2781,7 +2781,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     onClick={() =>
                       setPreviewZoom((z) => Math.min(3.0, Number((z + 0.15).toFixed(2))))
                     }
-                    className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
+                    className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent text-xs font-mono"
                     title="Zoom In Output Preview"
                   >
                     +
@@ -2793,7 +2793,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                       setPreviewZoom(1)
                       setPreviewPan({ x: 0, y: 0 })
                     }}
-                    className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent text-xs"
+                    className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent text-xs"
                     title="Reset Output Pan & Zoom"
                   >
                     Reset
@@ -3162,7 +3162,7 @@ export const ExcalidrawCanvasModal: React.FC<{
             <span className="font-semibold text-sm text-primary">
               Excalidraw Vector Studio ({relativePath})
             </span>
-            <span className="text-xs px-2 py-0.5 rounded bg-panel border border-subtle text-muted">
+            <span className="text-xs px-2 py-0.5 rounded-sm bg-panel border border-subtle text-muted">
               Click & drag on canvas to draw, move, or resize shapes
             </span>
           </div>
@@ -3176,7 +3176,7 @@ export const ExcalidrawCanvasModal: React.FC<{
               type="button"
               data-testid="excalidraw-save-btn"
               onClick={handleSave}
-              className="px-3 py-1 text-xs font-medium rounded bg-accent text-white hover:opacity-90"
+              className="px-3 py-1 text-xs font-medium rounded-sm bg-accent text-white hover:opacity-90"
             >
               Save .excalidraw.svg
             </button>
@@ -3184,7 +3184,7 @@ export const ExcalidrawCanvasModal: React.FC<{
               type="button"
               data-testid="excalidraw-close-btn"
               onClick={onClose}
-              className="px-3 py-1 text-xs rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-3 py-1 text-xs rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
             >
               Close
             </button>
@@ -3226,7 +3226,7 @@ export const ExcalidrawCanvasModal: React.FC<{
               type="button"
               data-testid="excalidraw-add-rect"
               onClick={() => addShape('rectangle')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
             >
               <Square className="w-3.5 h-3.5" />
               <span>Rectangle</span>
@@ -3235,7 +3235,7 @@ export const ExcalidrawCanvasModal: React.FC<{
               type="button"
               data-testid="excalidraw-add-ellipse"
               onClick={() => addShape('ellipse')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
             >
               <Circle className="w-3.5 h-3.5" />
               <span>Ellipse</span>
@@ -3244,7 +3244,7 @@ export const ExcalidrawCanvasModal: React.FC<{
               type="button"
               data-testid="excalidraw-add-diamond"
               onClick={() => addShape('diamond')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
             >
               <Diamond className="w-3.5 h-3.5" />
               <span>Diamond</span>
@@ -3253,7 +3253,7 @@ export const ExcalidrawCanvasModal: React.FC<{
               type="button"
               data-testid="excalidraw-add-arrow"
               onClick={() => addShape('arrow')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
             >
               <ArrowRight className="w-3.5 h-3.5" />
               <span>Arrow</span>
@@ -3261,7 +3261,7 @@ export const ExcalidrawCanvasModal: React.FC<{
             <button
               type="button"
               onClick={() => addShape('text')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary"
             >
               <Type className="w-3.5 h-3.5" />
               <span>Text</span>
@@ -3284,7 +3284,7 @@ export const ExcalidrawCanvasModal: React.FC<{
                     )
                   }))
                 }}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary text-xs w-40"
+                className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary text-xs w-40"
               />
               <label className="text-muted">Stroke:</label>
               <input
@@ -3295,7 +3295,7 @@ export const ExcalidrawCanvasModal: React.FC<{
                   setSelectedId(selectedEl.id)
                   updateSelectedElement({ strokeColor: e.target.value })
                 }}
-                className="w-6 h-5 rounded cursor-pointer border border-subtle"
+                className="w-6 h-5 rounded-sm cursor-pointer border border-subtle"
               />
               <label className="text-muted">Fill:</label>
               <input
@@ -3306,13 +3306,13 @@ export const ExcalidrawCanvasModal: React.FC<{
                   setSelectedId(selectedEl.id)
                   updateSelectedElement({ backgroundColor: e.target.value })
                 }}
-                className="w-6 h-5 rounded cursor-pointer border border-subtle"
+                className="w-6 h-5 rounded-sm cursor-pointer border border-subtle"
               />
               <button
                 type="button"
                 title="Delete Selected Shape"
                 onClick={deleteSelectedElement}
-                className="p-1 rounded bg-panel border border-subtle text-danger hover:border-danger"
+                className="p-1 rounded-sm bg-panel border border-subtle text-danger hover:border-danger"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -3328,7 +3328,7 @@ export const ExcalidrawCanvasModal: React.FC<{
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
-            className="w-full h-[380px] bg-panel border border-subtle rounded-md shadow-sm select-none"
+            className="w-full h-[380px] bg-panel border border-subtle rounded-md shadow-xs select-none"
             style={{
               backgroundImage:
                 theme === 'dark'

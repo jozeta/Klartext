@@ -200,7 +200,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
             aria-label="Add new template"
             data-testid="add-new-template-btn"
             onClick={handleAddNewTemplateMdFile}
-            className="p-1 rounded hover:bg-secondary text-accent hover:text-primary flex items-center gap-1"
+            className="p-1 rounded-sm hover:bg-secondary text-accent hover:text-primary flex items-center gap-1"
           >
             <FilePlus className="w-3.5 h-3.5" />
           </button>
@@ -210,7 +210,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
             aria-label="Dynamic Variables & Formatting Help"
             data-testid="templates-open-help-btn"
             onClick={onOpenHelpVariables}
-            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+            className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
           >
             <HelpCircle className="w-3.5 h-3.5" />
           </button>
@@ -220,7 +220,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
             aria-label="Close Templates Panel"
             data-testid="close-templates-window-btn"
             onClick={onClose}
-            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+            className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -240,7 +240,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
             onEvaluateActiveDocument?.()
             onEvaluateActiveNoteVariables?.()
           }}
-          className="px-2 py-1 rounded bg-panel border border-subtle hover:border-accent text-primary font-medium shrink-0 flex items-center gap-1"
+          className="px-2 py-1 rounded-sm bg-panel border border-subtle hover:border-accent text-primary font-medium shrink-0 flex items-center gap-1"
         >
           <Sparkles className="w-3 h-3 text-accent" />
           <span>Run &lt;% %&gt;</span>
@@ -284,7 +284,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                         return { ...prev, name: `${stem}-${tok}.md` }
                       })
                     }
-                    className="px-1 py-0.5 rounded bg-secondary hover:bg-accent hover:text-white font-mono text-[9px] text-muted"
+                    className="px-1 py-0.5 rounded-sm bg-secondary hover:bg-accent hover:text-white font-mono text-[9px] text-muted"
                   >
                     +{tok}
                   </button>
@@ -299,7 +299,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
               onChange={(e) =>
                 setEditingTemplate((prev) => (prev ? { ...prev, name: e.target.value } : null))
               }
-              className="w-full px-2 py-1 rounded bg-panel border border-subtle text-primary font-mono text-[11px]"
+              className="w-full px-2 py-1 rounded-sm bg-panel border border-subtle text-primary font-mono text-[11px]"
             />
             {editingTemplate.name.includes('<%') && (
               <div
@@ -324,7 +324,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
             {previewEvaluated ? (
               <pre
                 data-testid="template-live-preview"
-                className="flex-1 p-2.5 rounded bg-panel border border-subtle font-mono text-[11px] text-primary whitespace-pre-wrap overflow-y-auto select-text"
+                className="flex-1 p-2.5 rounded-sm bg-panel border border-subtle font-mono text-[11px] text-primary whitespace-pre-wrap overflow-y-auto select-text"
               >
                 {livePreviewOutput}
               </pre>
@@ -338,7 +338,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                   )
                 }
                 rows={10}
-                className="flex-1 w-full p-2 rounded bg-panel border border-subtle font-mono text-[11px] text-primary focus:outline-none focus:border-accent resize-y"
+                className="flex-1 w-full p-2 rounded-sm bg-panel border border-subtle font-mono text-[11px] text-primary focus:outline-hidden focus:border-accent resize-y"
               />
             )}
           </div>
@@ -352,7 +352,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value as any)}
-                className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] text-primary"
+                className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] text-primary"
               >
                 <option value="All">All Categories</option>
                 <option value="Date & Time">Date &amp; Time</option>
@@ -363,7 +363,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                 <option value="Power User & Automation">Power User &amp; Automation</option>
               </select>
             </div>
-            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-1 rounded bg-panel border border-subtle">
+            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-1 rounded-sm bg-panel border border-subtle">
               {filteredVarDocs.map((v) => (
                 <button
                   key={v.token}
@@ -374,7 +374,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                       prev ? { ...prev, content: `${prev.content}${v.token}` } : null
                     )
                   }}
-                  className="px-1.5 py-0.5 rounded bg-secondary hover:bg-accent hover:text-white font-mono text-[10px] text-primary transition-colors"
+                  className="px-1.5 py-0.5 rounded-sm bg-secondary hover:bg-accent hover:text-white font-mono text-[10px] text-primary transition-colors"
                 >
                   {v.token}
                 </button>
@@ -386,7 +386,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
             <button
               type="button"
               onClick={() => setEditingTemplate(null)}
-              className="px-2.5 py-1 rounded bg-secondary border border-subtle text-primary"
+              className="px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-primary"
             >
               Done
             </button>
@@ -394,7 +394,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
               type="button"
               data-testid="save-template-btn"
               onClick={handleSaveEditingTemplate}
-              className="flex items-center gap-1 px-3 py-1 rounded bg-accent text-white font-medium"
+              className="flex items-center gap-1 px-3 py-1 rounded-sm bg-accent text-white font-medium"
             >
               <Check className="w-3.5 h-3.5" />
               <span>Save Template</span>
@@ -434,7 +434,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                     <button
                       type="button"
                       onClick={() => handleApplyTemplate(wf.content, 'new-note', wf.name)}
-                      className="flex-1 py-1 px-2 rounded bg-accent text-white font-medium flex items-center justify-center gap-1"
+                      className="flex-1 py-1 px-2 rounded-sm bg-accent text-white font-medium flex items-center justify-center gap-1"
                     >
                       <FilePlus className="w-3 h-3" />
                       <span>Create File</span>
@@ -442,7 +442,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                     <button
                       type="button"
                       onClick={() => handleApplyTemplate(wf.content, 'insert', wf.name)}
-                      className="py-1 px-2 rounded bg-secondary border border-subtle text-primary hover:border-accent flex items-center gap-1"
+                      className="py-1 px-2 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent flex items-center gap-1"
                     >
                       <Play className="w-3 h-3" />
                       <span>Insert</span>
@@ -510,7 +510,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                         setEditingTemplate(tpl)
                         setPreviewEvaluated(false)
                       }}
-                      className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+                      className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
                     >
                       <Edit3 className="w-3 h-3" />
                     </button>
@@ -519,7 +519,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                       title="Delete Template"
                       data-testid={`delete-template-btn-${tpl.id}`}
                       onClick={() => handleDeleteTemplate(tpl.id)}
-                      className="p-1 rounded hover:bg-secondary text-muted hover:text-danger"
+                      className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-danger"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -531,7 +531,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                     type="button"
                     data-testid={`new-note-from-template-btn-${tpl.id}`}
                     onClick={() => handleApplyTemplate(tpl.content, 'new-note', tpl.name)}
-                    className="flex-1 py-1 px-2 rounded bg-accent text-white font-medium flex items-center justify-center gap-1"
+                    className="flex-1 py-1 px-2 rounded-sm bg-accent text-white font-medium flex items-center justify-center gap-1"
                   >
                     <FilePlus className="w-3 h-3" />
                     <span>New Note</span>
@@ -540,7 +540,7 @@ Created on **<% weekday %>, <% date %>** at **<% time %>** in folder \`<% folder
                     type="button"
                     data-testid={`insert-template-btn-${tpl.id}`}
                     onClick={() => handleApplyTemplate(tpl.content, 'insert', tpl.name)}
-                    className="py-1 px-2 rounded bg-secondary border border-subtle text-primary hover:border-accent flex items-center gap-1"
+                    className="py-1 px-2 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent flex items-center gap-1"
                   >
                     <Play className="w-3 h-3" />
                     <span>Insert in Note</span>
