@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+- Dependency upgrades fixing 77 Dependabot alerts: Electron 45, electron-builder 26, electron-vite 4, Vite 6.4, Vitest 4, simple-git 4, zod 4, KaTeX 0.18.
+- Force every bundled copy of KaTeX (used by Mermaid, rehype-katex and remark-math) to the patched top-level version.
+
 ## [1.0.0] - 2026-10-14
 
 ### Added
