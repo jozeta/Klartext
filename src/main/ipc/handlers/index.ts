@@ -7,6 +7,26 @@ import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
+
+/**
+ * Shell for the `sh:` / `bash:` / `zsh:` power-template variables. macOS/Linux use /bin/<name>.
+ * Windows has no /bin/sh, and falling back to cmd.exe silently changes the meaning of the command
+ * (quotes are kept, `$VAR` doesn't expand), so prefer Git for Windows' bash.exe when it's installed.
+ * Returns undefined to use the platform default shell (cmd.exe on Windows).
+ */
+function resolvePosixShell(kind: string): string | undefined {
+  if (process.platform !== 'win32') {
+    const bin = kind === 'zsh' ? '/bin/zsh' : kind === 'bash' ? '/bin/bash' : '/bin/sh'
+    return fs.existsSync(bin) ? bin : undefined
+  }
+  const candidates = [process.env.ProgramW6432, process.env.ProgramFiles, process.env['ProgramFiles(x86)']]
+    .filter((dir): dir is string => Boolean(dir))
+    .map((dir) => path.join(dir, 'Git', 'bin', 'bash.exe'))
+  if (process.env.LOCALAPPDATA) {
+    candidates.push(path.join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe'))
+  }
+  return candidates.find((candidate) => fs.existsSync(candidate))
+}
 import { z } from 'zod'
 import { IPC_CHANNELS, APP_METADATA, compareSemverVersions } from '../../../shared/constants'
 import {
@@ -415,7 +435,6 @@ export function registerAllIpcHandlers(
           }
 
           if (kind === 'sh' || kind === 'bash' || kind === 'zsh' || kind === 'script') {
-            const shellBin = kind === 'zsh' ? '/bin/zsh' : kind === 'bash' ? '/bin/bash' : '/bin/sh'
             let cmdToRun = payload
             if (payload.startsWith('~/')) {
               cmdToRun = path.join(os.homedir(), payload.slice(2))
@@ -428,7 +447,7 @@ export function registerAllIpcHandlers(
             }
             const { stdout } = await execAsync(cmdToRun, {
               cwd: execCwd,
-              shell: fs.existsSync(shellBin) ? shellBin : undefined,
+              shell: resolvePosixShell(kind),
               timeout: 5000,
               maxBuffer: 512 * 1024
             })

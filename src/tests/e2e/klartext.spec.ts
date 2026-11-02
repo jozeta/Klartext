@@ -3,7 +3,27 @@ import os from 'os'
 import path from 'path'
 import http from 'http'
 import { simpleGit } from 'simple-git'
-import { test, expect, _electron as electron } from '@playwright/test'
+import { test, expect, _electron as electron, type Page } from '@playwright/test'
+
+// CodeMirror only renders the lines near the visible viewport, so in a small window (CI screens are
+// about 1024x768) a widget further down the document doesn't exist in the DOM yet. Scroll the
+// editor the way a user would until it has been rendered.
+async function scrollEditorUntilRendered(page: Page, testId: string): Promise<void> {
+  const editor = page.locator('.cm-scroller').first()
+  for (let i = 0; i < 30 && (await page.getByTestId(testId).count()) === 0; i++) {
+    // .cm-scroller is as tall as the document; the element that actually scrolls is an ancestor.
+    await editor.evaluate((el) => {
+      let s: HTMLElement | null = el as HTMLElement
+      while (s && !(s.scrollHeight > s.clientHeight && /auto|scroll/.test(getComputedStyle(s).overflowY))) {
+        s = s.parentElement
+      }
+      const target = s ?? (el as HTMLElement)
+      target.scrollBy(0, target.clientHeight * 0.8)
+    })
+    await page.waitForTimeout(100)
+  }
+  await page.getByTestId(testId).first().scrollIntoViewIfNeeded()
+}
 
 const VALID_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
@@ -254,17 +274,13 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
         .getByTestId('inline-rename-input-root-starter')
         .fill('Architecture-Overview.md')
       await page.getByTestId('inline-rename-input-root-starter').press('Enter')
+      // The app renames the file first and rewrites its "# Untitled" heading in a second write, so
+      // wait for the content, not just for the file to exist (Windows CI lost that race).
+      const renamedPath = path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md')
       await expect
-        .poll(() =>
-          fs.existsSync(
-            path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md')
-          )
-        )
-        .toBe(true)
-      const renamedContent = fs.readFileSync(
-        path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md'),
-        'utf-8'
-      )
+        .poll(() => (fs.existsSync(renamedPath) ? fs.readFileSync(renamedPath, 'utf-8') : ''))
+        .toContain('# Architecture-Overview')
+      const renamedContent = fs.readFileSync(renamedPath, 'utf-8')
       expect(renamedContent).toContain('# Architecture-Overview')
       expect(renamedContent).not.toContain('# Architecture-Overview.md')
       expect(renamedContent).not.toContain('# Untitled')
@@ -428,6 +444,7 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
 
       // Scenario 8 & 9: Mermaid diagram live SVG rendering, Visio-style Visual Diagram Studio (17 diagram types, Packet & C4 removed), & graceful diagnostic on invalid syntax
       await page.getByTestId(`doc-tab-root-starter-Welcome.md`).click()
+      await scrollEditorUntilRendered(page, 'mermaid-widget')
       await expect(page.getByTestId('mermaid-widget').first()).toBeVisible()
       await page.getByTestId('mermaid-open-visual-builder').first().click()
       await expect(page.getByTestId('visual-mermaid-builder-modal')).toBeVisible()
@@ -684,7 +701,7 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       // Select "None (No AI model configured)" and select text in editor -> verify all 5 AI buttons in floating menu are greyed out (disabled)
       await page.getByTestId('ai-model-select').selectOption('')
       await page.locator('.cm-content').first().click()
-      await page.keyboard.press('Meta+a')
+      await page.keyboard.press('ControlOrMeta+a')
       await expect(page.getByTestId('floating-selection-toolbar')).toBeVisible()
       await expect(page.getByTestId('floating-ai-improve')).toBeDisabled()
       await expect(page.getByTestId('floating-ai-grammar')).toBeDisabled()
@@ -697,8 +714,9 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('ai-test-connection-btn').click()
       await expect(page.getByTestId('ai-connection-badge')).toContainText('Connected')
       await page.getByTestId('ai-model-select').selectOption('gemma4:12b')
-      await page.locator('.cm-content').first().click()
-      await page.keyboard.press('Meta+a')
+      // Focus (not click): the floating toolbar from the previous select-all may sit over the text.
+      await page.locator('.cm-content').first().focus()
+      await page.keyboard.press('ControlOrMeta+a')
       await expect(page.getByTestId('floating-selection-toolbar')).toBeVisible()
       await expect(page.getByTestId('floating-ai-improve')).toBeEnabled()
       await expect(page.getByTestId('floating-ai-grammar')).toBeEnabled()

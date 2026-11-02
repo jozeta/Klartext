@@ -47,7 +47,9 @@ jobs:
 
       - name: Run Playwright Electron E2E Tests (Linux Xvfb)
         if: matrix.os == 'ubuntu-latest'
-        run: xvfb-run --auto-servernum npm run test:e2e
+        # xvfb-run defaults to a 640x480 screen, below the app's 760x500 minimum window; match the
+        # ~1024x768 screens of the macOS/Windows runners instead.
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" npm run test:e2e
 
       - name: Package Platform Deliverable
         run: npm run package
