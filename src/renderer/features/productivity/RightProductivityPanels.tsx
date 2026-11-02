@@ -93,7 +93,7 @@ export const DailyNotesCalendarPanel: React.FC<DailyNotesCalendarPanelProps> = (
             type="button"
             data-testid="calendar-open-today-note-btn"
             onClick={() => onOpenDailyNote()}
-            className="px-2 py-0.5 rounded bg-accent text-white text-[11px] font-medium hover:opacity-90 flex items-center gap-1"
+            className="px-2 py-0.5 rounded-sm bg-accent text-white text-[11px] font-medium hover:opacity-90 flex items-center gap-1"
           >
             <Calendar className="w-3 h-3" />
             <span>Today&apos;s Note</span>
@@ -102,7 +102,7 @@ export const DailyNotesCalendarPanel: React.FC<DailyNotesCalendarPanelProps> = (
             type="button"
             title="Close Daily Notes Panel"
             onClick={onClose}
-            className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+            className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -122,7 +122,7 @@ export const DailyNotesCalendarPanel: React.FC<DailyNotesCalendarPanelProps> = (
                     : { year: prev.year, month: prev.month - 1 }
                 )
               }
-              className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+              className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
@@ -138,7 +138,7 @@ export const DailyNotesCalendarPanel: React.FC<DailyNotesCalendarPanelProps> = (
                     : { year: prev.year, month: prev.month + 1 }
                 )
               }
-              className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+              className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -209,7 +209,7 @@ export const DailyNotesCalendarPanel: React.FC<DailyNotesCalendarPanelProps> = (
                 key={`${doc.rootId}::${doc.relativePath}`}
                 type="button"
                 onClick={() => onOpenDocument(doc.rootId, doc.relativePath)}
-                className="w-full text-left p-2 rounded bg-panel border border-subtle hover:border-accent flex items-center justify-between"
+                className="w-full text-left p-2 rounded-sm bg-panel border border-subtle hover:border-accent flex items-center justify-between"
               >
                 <span className="truncate font-medium text-primary">{doc.name}</span>
                 <span className="text-[10px] font-mono text-muted shrink-0">
@@ -271,7 +271,7 @@ export const GlobalTasksRightPanel: React.FC<GlobalTasksRightPanelProps> = ({
           type="button"
           title="Close Global Tasks Panel"
           onClick={onClose}
-          className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+          className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -281,7 +281,7 @@ export const GlobalTasksRightPanel: React.FC<GlobalTasksRightPanelProps> = ({
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5 text-xs">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold uppercase text-muted">Status Filter</span>
-          <div className="inline-flex rounded bg-panel border border-subtle p-0.5 text-[10px]">
+          <div className="inline-flex rounded-sm bg-panel border border-subtle p-0.5 text-[10px]">
             {(['open', 'completed', 'all'] as const).map((status) => (
               <button
                 key={status}
@@ -306,7 +306,7 @@ export const GlobalTasksRightPanel: React.FC<GlobalTasksRightPanelProps> = ({
           value={taskSearchQuery}
           onChange={(e) => setTaskSearchQuery(e.target.value)}
           placeholder="Filter tasks by text, note, or #tag..."
-          className="w-full px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent"
+          className="w-full px-2.5 py-1.5 rounded-sm bg-panel border border-subtle text-primary text-xs focus:outline-hidden focus:border-accent"
         />
 
         {filteredTasks.length === 0 ? (
@@ -319,7 +319,7 @@ export const GlobalTasksRightPanel: React.FC<GlobalTasksRightPanelProps> = ({
               <div
                 key={task.id}
                 data-testid={`global-task-card-${task.rootId}-${task.relativePath}-${task.lineNumber}`}
-                className="p-2 rounded bg-panel border border-subtle hover:border-accent space-y-1"
+                className="p-2 rounded-sm bg-panel border border-subtle hover:border-accent space-y-1"
               >
                 <div className="flex items-start gap-2">
                   <input
@@ -327,7 +327,7 @@ export const GlobalTasksRightPanel: React.FC<GlobalTasksRightPanelProps> = ({
                     data-testid={`global-task-toggle-${task.rootId}-${task.relativePath}-${task.lineNumber}`}
                     checked={task.checked}
                     onChange={() => onToggleGlobalTask(task)}
-                    className="mt-0.5 rounded border-subtle accent-accent cursor-pointer"
+                    className="mt-0.5 rounded-sm border-subtle accent-accent cursor-pointer"
                   />
                   <span
                     onClick={() =>

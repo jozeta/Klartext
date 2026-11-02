@@ -2201,7 +2201,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 key={h.index}
                 type="button"
                 onClick={() => jumpToLine(h.startLine)}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent"
+                className="px-2 py-0.5 rounded-sm bg-panel border border-subtle hover:border-accent"
               >
                 Jump to Conflict #{idx + 1} (L{h.startLine})
               </button>
@@ -2210,7 +2210,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               type="button"
               data-testid="resolve-all-current-btn"
               onClick={() => onResolveConflictHunk(0, 'current')}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
             >
               Accept Current
             </button>
@@ -2218,7 +2218,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               type="button"
               data-testid="resolve-all-incoming-btn"
               onClick={() => onResolveConflictHunk(0, 'incoming')}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
             >
               Accept Incoming
             </button>
@@ -2226,7 +2226,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               type="button"
               data-testid="resolve-all-both-btn"
               onClick={() => onResolveConflictHunk(0, 'both')}
-              className="px-2 py-0.5 rounded bg-accent text-white"
+              className="px-2 py-0.5 rounded-sm bg-accent text-white"
             >
               Accept Both
             </button>
@@ -2259,7 +2259,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   type="button"
                   data-tooltip="Zoom Out"
                   onClick={() => setAssetZoom((z) => Math.max(25, z - 25))}
-                  className="p-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                  className="p-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
@@ -2270,7 +2270,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   type="button"
                   data-tooltip="Zoom In"
                   onClick={() => setAssetZoom((z) => Math.min(300, z + 25))}
-                  className="p-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                  className="p-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent"
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
                 </button>
@@ -2278,7 +2278,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   type="button"
                   data-tooltip="Reset Zoom (100%)"
                   onClick={() => setAssetZoom(100)}
-                  className="p-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                  className="p-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -2289,7 +2289,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 type="button"
                 data-testid="toggle-svg-raw-source-btn"
                 onClick={() => setShowRawSvgSource((v) => !v)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent"
               >
                 {showRawSvgSource ? (
                   <>
@@ -2323,7 +2323,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('bold')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Bold className="w-3.5 h-3.5" />
               </button>
@@ -2336,7 +2336,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('italic')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Italic className="w-3.5 h-3.5" />
               </button>
@@ -2349,7 +2349,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('strikethrough')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Strikethrough className="w-3.5 h-3.5" />
               </button>
@@ -2362,7 +2362,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('highlight')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Highlighter className="w-3.5 h-3.5" />
               </button>
@@ -2375,7 +2375,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('underline')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Underline className="w-3.5 h-3.5" />
               </button>
@@ -2388,7 +2388,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('code')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Code className="w-3.5 h-3.5" />
               </button>
@@ -2401,7 +2401,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('kbd')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Keyboard className="w-3.5 h-3.5" />
               </button>
@@ -2414,7 +2414,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('spoiler')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <EyeOff className="w-3.5 h-3.5" />
               </button>
@@ -2428,7 +2428,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('h1')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Heading1 className="w-3.5 h-3.5" />
               </button>
@@ -2441,7 +2441,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('h2')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Heading2 className="w-3.5 h-3.5" />
               </button>
@@ -2454,7 +2454,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('h3')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Heading3 className="w-3.5 h-3.5" />
               </button>
@@ -2468,7 +2468,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('task')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <CheckSquare className="w-3.5 h-3.5" />
               </button>
@@ -2481,7 +2481,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('bullet')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <List className="w-3.5 h-3.5" />
               </button>
@@ -2494,7 +2494,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('numbered')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <ListOrdered className="w-3.5 h-3.5" />
               </button>
@@ -2507,7 +2507,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('quote')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Quote className="w-3.5 h-3.5" />
               </button>
@@ -2520,7 +2520,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('callout-note')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <AlertCircle className="w-3.5 h-3.5" />
               </button>
@@ -2534,7 +2534,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('table')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <TableIcon className="w-3.5 h-3.5" />
               </button>
@@ -2547,7 +2547,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('codeblock')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <FileCode2 className="w-3.5 h-3.5" />
               </button>
@@ -2560,7 +2560,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('math-inline')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Sigma className="w-3.5 h-3.5" />
               </button>
@@ -2573,7 +2573,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('details')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <ChevronRightSquare className="w-3.5 h-3.5" />
               </button>
@@ -2586,7 +2586,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('hr')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -2599,7 +2599,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('link')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
               </button>
@@ -2612,7 +2612,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('image')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <ImageIcon className="w-3.5 h-3.5" />
               </button>
@@ -2623,7 +2623,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 aria-label="Visual Mermaid Diagram Builder"
                 data-testid="open-visual-mermaid-builder-btn"
                 onClick={() => setMermaidBuilderTarget({})}
-                className="p-1.5 rounded hover:bg-secondary text-accent"
+                className="p-1.5 rounded-sm hover:bg-secondary text-accent"
               >
                 <Workflow className="w-3.5 h-3.5" />
               </button>
@@ -2637,7 +2637,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('format-doc')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Wand2 className="w-3.5 h-3.5" />
               </button>
@@ -2650,7 +2650,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   e.preventDefault()
                   executeFormat('clear-format')
                 }}
-                className="p-1.5 rounded hover:bg-secondary text-primary"
+                className="p-1.5 rounded-sm hover:bg-secondary text-primary"
               >
                 <Eraser className="w-3.5 h-3.5" />
               </button>
@@ -2689,7 +2689,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   )
                 }
               }}
-              className="w-44 px-2 py-1 rounded bg-panel border border-subtle text-primary text-xs"
+              className="w-44 px-2 py-1 rounded-sm bg-panel border border-subtle text-primary text-xs"
             />
             <button
               type="button"
@@ -2706,7 +2706,7 @@ export const MarkdownEditorWorkspace: React.FC<{
             </button>
             <span
               data-testid="in-doc-find-count"
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-[11px] font-mono text-muted min-w-[68px] text-center"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-[11px] font-mono text-muted min-w-[68px] text-center"
             >
               {inDocFindQuery
                 ? inDocMatches.length > 0
@@ -2720,7 +2720,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               title="Previous Match (Shift+Enter)"
               disabled={inDocMatches.length === 0}
               onClick={() => selectInDocMatchAt(inDocActiveMatchIdx - 1, true)}
-              className="p-1 rounded bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
+              className="p-1 rounded-sm bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
             >
               <ArrowUp className="w-3.5 h-3.5" />
             </button>
@@ -2730,7 +2730,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               title="Next Match (Enter)"
               disabled={inDocMatches.length === 0}
               onClick={() => selectInDocMatchAt(inDocActiveMatchIdx + 1, true)}
-              className="p-1 rounded bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
+              className="p-1 rounded-sm bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
             >
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
@@ -2752,14 +2752,14 @@ export const MarkdownEditorWorkspace: React.FC<{
                   handleInDocReplaceOne()
                 }
               }}
-              className="w-40 px-2 py-1 rounded bg-panel border border-subtle text-primary text-xs"
+              className="w-40 px-2 py-1 rounded-sm bg-panel border border-subtle text-primary text-xs"
             />
             <button
               type="button"
               data-testid="in-doc-replace-one"
               disabled={inDocMatches.length === 0}
               onClick={handleInDocReplaceOne}
-              className="px-2 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
+              className="px-2 py-1 rounded-sm bg-panel border border-subtle text-primary hover:border-accent disabled:opacity-40"
             >
               Replace
             </button>
@@ -2768,7 +2768,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               data-testid="in-doc-replace-all"
               disabled={inDocMatches.length === 0}
               onClick={handleInDocReplaceAll}
-              className="px-2 py-1 rounded bg-accent text-white font-medium disabled:opacity-40"
+              className="px-2 py-1 rounded-sm bg-accent text-white font-medium disabled:opacity-40"
             >
               Replace All
             </button>
@@ -2780,7 +2780,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 setShowInDocFindBar(false)
                 viewRef.current?.focus()
               }}
-              className="p-1 rounded hover:bg-panel text-muted hover:text-primary"
+              className="p-1 rounded-sm hover:bg-panel text-muted hover:text-primary"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -2809,7 +2809,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('add-row-above')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               <span>Row Above</span>
@@ -2821,7 +2821,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('add-row-below')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               <span>Row Below</span>
@@ -2833,7 +2833,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('delete-row')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger flex items-center gap-1"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-danger hover:border-danger flex items-center gap-1"
             >
               <Trash2 className="w-3 h-3" />
               <span>Del Row</span>
@@ -2846,7 +2846,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('add-col-left')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               <span>Col Left</span>
@@ -2858,7 +2858,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('add-col-right')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
               <span>Col Right</span>
@@ -2870,7 +2870,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('delete-col')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-danger hover:border-danger flex items-center gap-1"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-danger hover:border-danger flex items-center gap-1"
             >
               <Trash2 className="w-3 h-3" />
               <span>Del Col</span>
@@ -2884,7 +2884,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('align-left')
               }}
-              className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+              className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent font-mono"
             >
               ⇤
             </button>
@@ -2896,7 +2896,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('align-center')
               }}
-              className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+              className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent font-mono"
             >
               ↔
             </button>
@@ -2908,7 +2908,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('align-right')
               }}
-              className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent font-mono"
+              className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent font-mono"
             >
               ⇥
             </button>
@@ -2921,7 +2921,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('sort-asc')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
             >
               Sort A→Z
             </button>
@@ -2933,7 +2933,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 handleManipulateTable('sort-desc')
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
             >
               Sort Z→A
             </button>
@@ -2963,7 +2963,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 setShowInlineAIPrompt(false)
               }
             }}
-            className="flex-1 px-2.5 py-1 rounded bg-panel border border-subtle text-primary"
+            className="flex-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle text-primary"
           />
           <button
             type="button"
@@ -2975,7 +2975,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 setShowInlineAIPrompt(false)
               }
             }}
-            className="px-3 py-1 rounded bg-accent text-white font-medium"
+            className="px-3 py-1 rounded-sm bg-accent text-white font-medium"
           >
             Generate
           </button>
@@ -3018,7 +3018,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                     : 'hover:bg-secondary text-primary'
                 }`}
               >
-                <span className="w-7 h-6 rounded bg-secondary border border-subtle flex items-center justify-center font-mono text-[10px] font-bold text-accent shrink-0">
+                <span className="w-7 h-6 rounded-sm bg-secondary border border-subtle flex items-center justify-center font-mono text-[10px] font-bold text-accent shrink-0">
                   {item.badge}
                 </span>
                 <div className="flex flex-col min-w-0">
@@ -3069,7 +3069,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 setWikiHoverPreview(null)
                 onNavigateLink(target, true)
               }}
-              className="px-2 py-0.5 rounded bg-accent text-white text-[10px] font-medium shrink-0"
+              className="px-2 py-0.5 rounded-sm bg-accent text-white text-[10px] font-medium shrink-0"
             >
               Open Note
             </button>
@@ -3086,7 +3086,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               ))}
             </div>
           )}
-          <div className="text-[11px] text-primary whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto bg-secondary/40 rounded p-2 border border-subtle/60">
+          <div className="text-[11px] text-primary whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto bg-secondary/40 rounded-sm p-2 border border-subtle/60">
             {wikiHoverPreview.excerpt}
           </div>
         </div>
@@ -3278,7 +3278,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('bold')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Bold className="w-3.5 h-3.5" />
             </button>
@@ -3290,7 +3290,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('italic')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Italic className="w-3.5 h-3.5" />
             </button>
@@ -3302,7 +3302,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('strikethrough')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Strikethrough className="w-3.5 h-3.5" />
             </button>
@@ -3314,7 +3314,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('highlight')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Highlighter className="w-3.5 h-3.5" />
             </button>
@@ -3326,7 +3326,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('underline')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Underline className="w-3.5 h-3.5" />
             </button>
@@ -3338,7 +3338,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('code')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Code className="w-3.5 h-3.5" />
             </button>
@@ -3350,7 +3350,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('kbd')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Keyboard className="w-3.5 h-3.5" />
             </button>
@@ -3362,7 +3362,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('spoiler')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <EyeOff className="w-3.5 h-3.5" />
             </button>
@@ -3374,7 +3374,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('h1')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Heading1 className="w-3.5 h-3.5" />
             </button>
@@ -3386,7 +3386,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('h2')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Heading2 className="w-3.5 h-3.5" />
             </button>
@@ -3398,7 +3398,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('h3')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Heading3 className="w-3.5 h-3.5" />
             </button>
@@ -3410,7 +3410,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('quote')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Quote className="w-3.5 h-3.5" />
             </button>
@@ -3422,7 +3422,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('collapsible')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <ChevronRightSquare className="w-3.5 h-3.5" />
             </button>
@@ -3522,7 +3522,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('callout-note')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <AlertCircle className="w-3.5 h-3.5" />
             </button>
@@ -3534,7 +3534,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('task')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <CheckSquare className="w-3.5 h-3.5" />
             </button>
@@ -3546,7 +3546,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('bullet')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <List className="w-3.5 h-3.5" />
             </button>
@@ -3558,7 +3558,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('numbered')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <ListOrdered className="w-3.5 h-3.5" />
             </button>
@@ -3570,7 +3570,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('table')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <TableIcon className="w-3.5 h-3.5" />
             </button>
@@ -3582,7 +3582,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('codeblock')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <FileCode2 className="w-3.5 h-3.5" />
             </button>
@@ -3594,7 +3594,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('math-inline')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Sigma className="w-3.5 h-3.5" />
             </button>
@@ -3606,7 +3606,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('link')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <LinkIcon className="w-3.5 h-3.5" />
             </button>
@@ -3618,7 +3618,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('image')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <ImageIcon className="w-3.5 h-3.5" />
             </button>
@@ -3631,7 +3631,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 onOpenIconPicker?.()
               }}
-              className="p-1 rounded hover:bg-secondary text-accent flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-accent flex items-center justify-center"
             >
               <Smile className="w-3.5 h-3.5" />
             </button>
@@ -3643,7 +3643,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('hr')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
@@ -3655,7 +3655,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 executeFormat('clear-format')
               }}
-              className="p-1 rounded hover:bg-secondary text-primary flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-primary flex items-center justify-center"
             >
               <Eraser className="w-3.5 h-3.5" />
             </button>
@@ -3668,7 +3668,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 e.preventDefault()
                 setMermaidBuilderTarget({})
               }}
-              className="p-1 rounded hover:bg-secondary text-accent flex items-center justify-center"
+              className="p-1 rounded-sm hover:bg-secondary text-accent flex items-center justify-center"
             >
               <Workflow className="w-3.5 h-3.5" />
             </button>
@@ -3766,7 +3766,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 }
                 setSmartPastedUrlBanner(null)
               }}
-              className="px-2.5 py-0.5 rounded bg-accent text-white font-semibold hover:opacity-90"
+              className="px-2.5 py-0.5 rounded-sm bg-accent text-white font-semibold hover:opacity-90"
             >
               Convert to Bookmark Card
             </button>
@@ -3774,7 +3774,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               type="button"
               data-testid="dismiss-smart-url-banner-btn"
               onClick={() => setSmartPastedUrlBanner(null)}
-              className="p-1 rounded hover:bg-panel text-muted hover:text-primary"
+              className="p-1 rounded-sm hover:bg-panel text-muted hover:text-primary"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -3816,7 +3816,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                     setFootnotePopover(null)
                     if (targetLine) jumpToLine(targetLine)
                   }}
-                  className="px-2 py-0.5 rounded bg-secondary border border-subtle text-primary hover:border-accent text-[10px]"
+                  className="px-2 py-0.5 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent text-[10px]"
                 >
                   Jump to L{footnotePopover.definitionLineNumber}
                 </button>
@@ -3824,7 +3824,7 @@ export const MarkdownEditorWorkspace: React.FC<{
               <button
                 type="button"
                 onClick={() => setFootnotePopover(null)}
-                className="p-0.5 rounded text-muted hover:text-primary"
+                className="p-0.5 rounded-sm text-muted hover:text-primary"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -3851,14 +3851,14 @@ export const MarkdownEditorWorkspace: React.FC<{
                   handleSaveFootnoteInlineEdit()
                 }
               }}
-              className="w-full px-2 py-1.5 rounded bg-app border border-subtle text-primary text-xs resize-none"
+              className="w-full px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary text-xs resize-none"
             />
             <div className="flex items-center justify-end gap-1.5">
               <button
                 type="button"
                 data-testid="footnote-inline-save-btn"
                 onClick={handleSaveFootnoteInlineEdit}
-                className="px-2.5 py-1 rounded bg-accent text-white font-semibold text-[11px]"
+                className="px-2.5 py-1 rounded-sm bg-accent text-white font-semibold text-[11px]"
               >
                 Save Footnote
               </button>
@@ -3876,7 +3876,7 @@ export const MarkdownEditorWorkspace: React.FC<{
           {isSvgFile ? (
             <div
               style={{ transform: `scale(${assetZoom / 100})`, transformOrigin: 'center center' }}
-              className="max-w-4xl w-full p-6 rounded-lg border border-subtle bg-white shadow-sm flex items-center justify-center overflow-auto transition-transform"
+              className="max-w-4xl w-full p-6 rounded-lg border border-subtle bg-white shadow-xs flex items-center justify-center overflow-auto transition-transform"
               dangerouslySetInnerHTML={{
                 __html: content.trim().startsWith('<')
                   ? sanitizeSvgContent(content)
@@ -3886,13 +3886,13 @@ export const MarkdownEditorWorkspace: React.FC<{
           ) : isRasterImageAsset ? (
             <div
               data-testid="raster-asset-preview-pane"
-              className="p-6 rounded-lg border border-subtle bg-panel shadow-sm flex flex-col items-center gap-3 overflow-auto max-w-full"
+              className="p-6 rounded-lg border border-subtle bg-panel shadow-xs flex flex-col items-center gap-3 overflow-auto max-w-full"
             >
               <img
                 src={content.startsWith('data:') ? content : assetProtocolUrl}
                 alt={relativePath}
                 style={{ width: `${assetZoom}%`, maxWidth: `${assetZoom * 7}px` }}
-                className="rounded border border-subtle object-contain"
+                className="rounded-sm border border-subtle object-contain"
               />
               <span className="text-xs font-mono text-muted">{relativePath}</span>
             </div>
@@ -4053,7 +4053,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                       }
                 )
               }}
-              className="z-30 w-5 h-6 rounded flex items-center justify-center text-muted hover:text-primary hover:bg-secondary/90 border border-transparent hover:border-subtle cursor-grab active:cursor-grabbing select-none font-mono text-xs transition-colors"
+              className="z-30 w-5 h-6 rounded-sm flex items-center justify-center text-muted hover:text-primary hover:bg-secondary/90 border border-transparent hover:border-subtle cursor-grab active:cursor-grabbing select-none font-mono text-xs transition-colors"
             >
               ⋮⋮
             </button>
@@ -4241,7 +4241,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   '--editor-max-width': marginConfig.maxWidthCss
                 } as React.CSSProperties
               }
-              className="flex-grow flex-shrink-0 flex flex-col min-h-full min-w-full editor-paper-surface"
+              className="grow shrink-0 flex flex-col min-h-full min-w-full editor-paper-surface"
             />
           </div>
 
@@ -4340,7 +4340,7 @@ export const MarkdownEditorWorkspace: React.FC<{
         <div
           data-testid="image-lightbox-modal"
           onClick={() => setLightboxImage(null)}
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-8"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex flex-col items-center justify-center p-8"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -4354,7 +4354,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 type="button"
                 data-testid="image-lightbox-close-btn"
                 onClick={() => setLightboxImage(null)}
-                className="px-2.5 py-1 rounded bg-secondary border border-subtle text-primary hover:border-accent"
+                className="px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent"
               >
                 Close (Esc)
               </button>
@@ -4362,7 +4362,7 @@ export const MarkdownEditorWorkspace: React.FC<{
             <img
               src={lightboxImage.src}
               alt={lightboxImage.caption}
-              className="max-w-full max-h-[72vh] object-contain rounded"
+              className="max-w-full max-h-[72vh] object-contain rounded-sm"
             />
             {lightboxImage.caption && (
               <div className="text-xs text-muted italic text-center">
@@ -4420,13 +4420,13 @@ export const MarkdownEditorWorkspace: React.FC<{
               <button
                 type="button"
                 onClick={() => setThreeWayModalHunk(null)}
-                className="px-2 py-0.5 rounded bg-panel border border-subtle"
+                className="px-2 py-0.5 rounded-sm bg-panel border border-subtle"
               >
                 Close
               </button>
             </div>
             <div className="grid grid-cols-2 gap-4 p-4 bg-app text-xs font-mono">
-              <div className="p-3 bg-panel border border-subtle rounded">
+              <div className="p-3 bg-panel border border-subtle rounded-sm">
                 <div className="font-sans font-semibold text-success mb-2">
                   Current (Local — {conflictHunks[threeWayModalHunk].currentHeader})
                 </div>
@@ -4434,7 +4434,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   {conflictHunks[threeWayModalHunk].currentContent}
                 </pre>
               </div>
-              <div className="p-3 bg-panel border border-subtle rounded">
+              <div className="p-3 bg-panel border border-subtle rounded-sm">
                 <div className="font-sans font-semibold text-accent mb-2">
                   Incoming (Remote — {conflictHunks[threeWayModalHunk].incomingHeader})
                 </div>
@@ -4450,7 +4450,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   onResolveConflictHunk(threeWayModalHunk, 'current')
                   setThreeWayModalHunk(null)
                 }}
-                className="px-3 py-1 rounded bg-panel border border-subtle"
+                className="px-3 py-1 rounded-sm bg-panel border border-subtle"
               >
                 Accept Current
               </button>
@@ -4460,7 +4460,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   onResolveConflictHunk(threeWayModalHunk, 'incoming')
                   setThreeWayModalHunk(null)
                 }}
-                className="px-3 py-1 rounded bg-panel border border-subtle"
+                className="px-3 py-1 rounded-sm bg-panel border border-subtle"
               >
                 Accept Incoming
               </button>
@@ -4470,7 +4470,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                   onResolveConflictHunk(threeWayModalHunk, 'both')
                   setThreeWayModalHunk(null)
                 }}
-                className="px-3 py-1 rounded bg-accent text-white"
+                className="px-3 py-1 rounded-sm bg-accent text-white"
               >
                 Accept Both
               </button>

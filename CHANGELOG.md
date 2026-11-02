@@ -4,6 +4,7 @@
 
 ### Changed
 - React 19 (react, react-dom and their type packages upgraded together).
+- Tailwind CSS 4. The theme moved from `tailwind.config.cjs` into `@theme` in `src/renderer/styles/index.css`; the UI looks the same (screenshots of 36 views compared pixel by pixel in light and dark mode). The background blur behind the Web Clipper and workspace wizard dialogs now works as intended.
 
 ### Fixed
 - Windows: saving could fail with "operation not permitted" when another program (or Klartext's own file watcher) briefly had the file open. Saves now retry for up to about 1.5 seconds before giving up.

@@ -38,7 +38,7 @@ class InlineFootnoteRefWidget extends WidgetType {
   toDOM(): HTMLElement {
     const sup = document.createElement('sup')
     sup.className =
-      'cm-klartext-footnote-ref px-1 py-0.5 mx-0.5 rounded bg-accent/15 text-accent font-mono text-[10px] font-semibold cursor-pointer hover:bg-accent hover:text-white transition-colors'
+      'cm-klartext-footnote-ref px-1 py-0.5 mx-0.5 rounded-sm bg-accent/15 text-accent font-mono text-[10px] font-semibold cursor-pointer hover:bg-accent hover:text-white transition-colors'
     sup.setAttribute('data-footnote-id', this.footnoteId)
     sup.setAttribute('data-testid', `footnote-ref-${this.footnoteId}`)
     sup.textContent = `[${this.footnoteId}]`
@@ -105,7 +105,7 @@ class InlineBookmarkCardWidget extends WidgetType {
     const editBtn = document.createElement('button')
     editBtn.type = 'button'
     editBtn.className =
-      'px-2 py-0.5 rounded bg-panel border border-subtle text-[10px] text-muted hover:text-primary shrink-0'
+      'px-2 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] text-muted hover:text-primary shrink-0'
     editBtn.textContent = 'Edit Card'
     editBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -197,7 +197,7 @@ class InlineMathWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement(this.displayMode ? 'div' : 'span')
     wrapper.className = this.displayMode
-      ? 'my-2 py-2 px-3 rounded bg-secondary/40 text-center overflow-x-auto cursor-pointer'
+      ? 'my-2 py-2 px-3 rounded-sm bg-secondary/40 text-center overflow-x-auto cursor-pointer'
       : 'px-0.5 cursor-pointer'
     try {
       wrapper.innerHTML = katex.renderToString(this.latex, {
@@ -317,7 +317,7 @@ class InlineImageOrDrawingWidget extends WidgetType {
     const controlsBar = document.createElement('div')
     controlsBar.setAttribute('data-testid', 'image-widget-controls')
     controlsBar.className =
-      'hidden mb-2 px-2 py-1 rounded bg-secondary border border-subtle flex flex-wrap items-center gap-1.5 text-[11px] z-20'
+      'hidden mb-2 px-2 py-1 rounded-sm bg-secondary border border-subtle flex flex-wrap items-center gap-1.5 text-[11px] z-20'
 
     const dispatchMetaUpdate = (nextMeta: {
       caption: string
@@ -368,7 +368,7 @@ class InlineImageOrDrawingWidget extends WidgetType {
     captionInput.placeholder = 'Image caption...'
     captionInput.value = displayAlt
     captionInput.className =
-      'px-2 py-0.5 rounded bg-panel border border-subtle text-primary text-[11px] w-36'
+      'px-2 py-0.5 rounded-sm bg-panel border border-subtle text-primary text-[11px] w-36'
     captionInput.addEventListener('mousedown', (e) => e.stopPropagation())
     captionInput.addEventListener('keydown', (e) => {
       e.stopPropagation()
@@ -387,7 +387,7 @@ class InlineImageOrDrawingWidget extends WidgetType {
     saveCaptionBtn.type = 'button'
     saveCaptionBtn.setAttribute('data-testid', 'image-caption-save-btn')
     saveCaptionBtn.className =
-      'px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary hover:border-accent'
+      'px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent'
     saveCaptionBtn.textContent = 'Set Caption'
     saveCaptionBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -404,7 +404,7 @@ class InlineImageOrDrawingWidget extends WidgetType {
     zoomBtn.type = 'button'
     zoomBtn.setAttribute('data-testid', 'image-lightbox-zoom-btn')
     zoomBtn.className =
-      'px-2 py-0.5 rounded bg-accent text-white font-medium hover:opacity-90'
+      'px-2 py-0.5 rounded-sm bg-accent text-white font-medium hover:opacity-90'
     zoomBtn.textContent = '🔍 Lightbox Zoom'
     zoomBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -425,7 +425,7 @@ class InlineImageOrDrawingWidget extends WidgetType {
     const img = document.createElement('img')
     img.src = resolvedSrc
     img.alt = displayAlt
-    img.className = 'rounded mx-auto block max-w-full h-auto cursor-pointer'
+    img.className = 'rounded-sm mx-auto block max-w-full h-auto cursor-pointer'
     if (parsedWidth) {
       img.style.width = `${parsedWidth}px`
     } else {
@@ -445,7 +445,7 @@ class InlineImageOrDrawingWidget extends WidgetType {
     for (const c of corners) {
       const h = document.createElement('div')
       h.setAttribute('data-testid', `image-resize-handle-${c.pos}`)
-      h.className = `hidden absolute ${c.cls} w-3 h-3 rounded-full bg-accent border-2 border-white shadow z-20`
+      h.className = `hidden absolute ${c.cls} w-3 h-3 rounded-full bg-accent border-2 border-white shadow-sm z-20`
       h.addEventListener('mousedown', (e) => {
         e.preventDefault()
         e.stopPropagation()
@@ -587,7 +587,7 @@ function renderTableCellInlineHtml(rawCell: string): string {
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
-        return `<code class="cm-live-code px-1 py-0.5 rounded bg-secondary font-mono text-[11px]">${escaped}</code>`
+        return `<code class="cm-live-code px-1 py-0.5 rounded-sm bg-secondary font-mono text-[11px]">${escaped}</code>`
       }
       let html = part
         .replace(/&/g, '&amp;')
@@ -793,7 +793,7 @@ class InlineMermaidBlockWidget extends WidgetType {
       const visualBtn = document.createElement('button')
       visualBtn.type = 'button'
       visualBtn.className =
-        'px-2 py-0.5 rounded bg-accent text-white font-medium hover:opacity-90'
+        'px-2 py-0.5 rounded-sm bg-accent text-white font-medium hover:opacity-90'
       visualBtn.setAttribute('data-testid', 'mermaid-open-visual-builder')
       visualBtn.textContent = 'Visual Builder'
       visualBtn.addEventListener('mousedown', (e) => {
@@ -807,7 +807,7 @@ class InlineMermaidBlockWidget extends WidgetType {
     const toggleBtn = document.createElement('button')
     toggleBtn.type = 'button'
     toggleBtn.className =
-      'px-2 py-0.5 rounded bg-secondary border border-subtle text-primary hover:border-accent'
+      'px-2 py-0.5 rounded-sm bg-secondary border border-subtle text-primary hover:border-accent'
     toggleBtn.setAttribute('data-testid', 'mermaid-toggle-source')
     toggleBtn.textContent = 'Edit Source'
 
@@ -821,7 +821,7 @@ class InlineMermaidBlockWidget extends WidgetType {
     const textarea = document.createElement('textarea')
     textarea.setAttribute('data-testid', 'mermaid-source-textarea')
     textarea.className =
-      'w-full h-24 p-2 rounded bg-app border border-subtle font-mono text-xs text-primary'
+      'w-full h-24 p-2 rounded-sm bg-app border border-subtle font-mono text-xs text-primary'
     textarea.value = this.code
     sourceContainer.appendChild(textarea)
     wrapper.appendChild(sourceContainer)
@@ -845,7 +845,7 @@ class InlineMermaidBlockWidget extends WidgetType {
         .catch((err) => {
           const errDiv = document.createElement('div')
           errDiv.setAttribute('data-testid', 'mermaid-error-banner')
-          errDiv.className = 'text-xs text-danger font-mono p-2 bg-secondary rounded w-full'
+          errDiv.className = 'text-xs text-danger font-mono p-2 bg-secondary rounded-sm w-full'
           errDiv.textContent = `Mermaid Syntax Diagnostic: ${err?.message || 'Invalid syntax'}`
           body.innerHTML = ''
           body.appendChild(errDiv)
@@ -904,7 +904,7 @@ class ConflictActionLensWidget extends WidgetType {
   toDOM(): HTMLElement {
     const bar = document.createElement('div')
     bar.className =
-      'flex items-center gap-2 py-1 px-2.5 my-1 text-xs rounded bg-secondary border border-subtle select-none'
+      'flex items-center gap-2 py-1 px-2.5 my-1 text-xs rounded-sm bg-secondary border border-subtle select-none'
     bar.setAttribute('data-testid', `conflict-lens-${this.hunkIndex}`)
 
     const title = document.createElement('span')
@@ -927,7 +927,7 @@ class ConflictActionLensWidget extends WidgetType {
       const btn = document.createElement('button')
       btn.type = 'button'
       btn.className =
-        'px-2 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-primary font-medium transition-colors'
+        'px-2 py-0.5 rounded-sm bg-panel border border-subtle hover:border-accent text-primary font-medium transition-colors'
       btn.textContent = act.label
       btn.setAttribute('data-testid', `${act.testId}-${this.hunkIndex}`)
       btn.addEventListener('mousedown', (e) => {
@@ -989,7 +989,7 @@ class InlineTransclusionWidget extends WidgetType {
 
     const editBtn = document.createElement('button')
     editBtn.type = 'button'
-    editBtn.className = 'text-[10px] px-1.5 py-0.5 rounded bg-panel border border-subtle text-muted hover:text-primary'
+    editBtn.className = 'text-[10px] px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-muted hover:text-primary'
     editBtn.textContent = 'Edit ![[]]'
     editBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -1082,7 +1082,7 @@ class InlineDetailsBlockWidget extends WidgetType {
 
     const editBtn = document.createElement('button')
     editBtn.type = 'button'
-    editBtn.className = 'px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] text-muted hover:text-primary'
+    editBtn.className = 'px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] text-muted hover:text-primary'
     editBtn.textContent = 'Edit <details>'
     editBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -1133,7 +1133,7 @@ class InlineTocWidget extends WidgetType {
 
     const editBtn = document.createElement('button')
     editBtn.type = 'button'
-    editBtn.className = 'px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] text-muted hover:text-primary'
+    editBtn.className = 'px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] text-muted hover:text-primary'
     editBtn.textContent = 'Edit [[_TOC_]]'
     editBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()

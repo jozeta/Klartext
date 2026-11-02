@@ -2461,7 +2461,7 @@ export const App: React.FC = () => {
                   if (isAnyTopMenuOpen) openExclusiveTopMenu('file')
                 }}
                 onClick={() => openExclusiveTopMenu(showFileMenu ? null : 'file')}
-                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-sm hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <span>File</span>
                 <ChevronDown className="w-3 h-3" />
@@ -2623,7 +2623,7 @@ export const App: React.FC = () => {
                   if (isAnyTopMenuOpen) openExclusiveTopMenu('edit')
                 }}
                 onClick={() => openExclusiveTopMenu(showEditMenu ? null : 'edit')}
-                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-sm hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <span>Edit</span>
                 <ChevronDown className="w-3 h-3" />
@@ -3226,7 +3226,7 @@ export const App: React.FC = () => {
                   if (isAnyTopMenuOpen) openExclusiveTopMenu('format')
                 }}
                 onClick={() => openExclusiveTopMenu(showFormatMenu ? null : 'format')}
-                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-sm hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <span>Format</span>
                 <ChevronDown className="w-3 h-3" />
@@ -3479,7 +3479,7 @@ export const App: React.FC = () => {
                   if (isAnyTopMenuOpen) openExclusiveTopMenu('view')
                 }}
                 onClick={() => openExclusiveTopMenu(showViewMenu ? null : 'view')}
-                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-sm hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <span>View</span>
                 <ChevronDown className="w-3 h-3" />
@@ -3882,7 +3882,7 @@ export const App: React.FC = () => {
                   if (isAnyTopMenuOpen) openExclusiveTopMenu('help')
                 }}
                 onClick={() => openExclusiveTopMenu(showHelpMenu ? null : 'help')}
-                className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary text-muted hover:text-primary font-medium"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-sm hover:bg-secondary text-muted hover:text-primary font-medium"
               >
                 <HelpCircle className="w-3 h-3 text-accent" />
                 <span>Help</span>
@@ -4003,7 +4003,7 @@ export const App: React.FC = () => {
                   onClick={() => {
                     tabBarScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })
                   }}
-                  className="p-0.5 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                  className="p-0.5 rounded-sm bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
@@ -4105,7 +4105,7 @@ export const App: React.FC = () => {
                   onClick={() => {
                     tabBarScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })
                   }}
-                  className="p-0.5 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                  className="p-0.5 rounded-sm bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -4208,7 +4208,7 @@ export const App: React.FC = () => {
               aria-label="Toggle Zen Mode"
               data-testid="toggle-zen-mode-btn"
               onClick={() => handleUpdateSettings({ zenMode: !settings.zenMode })}
-              className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+              className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
             >
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -4223,7 +4223,7 @@ export const App: React.FC = () => {
             type="button"
             data-testid="exit-zen-mode-btn"
             onClick={() => handleUpdateSettings({ zenMode: false })}
-            className="px-3 py-1 rounded-full bg-secondary border border-subtle text-xs text-muted hover:text-primary shadow-sm"
+            className="px-3 py-1 rounded-full bg-secondary border border-subtle text-xs text-muted hover:text-primary shadow-xs"
           >
             Exit Zen Mode (⌘⇧F)
           </button>
@@ -4278,7 +4278,7 @@ export const App: React.FC = () => {
                 })
                 setActiveTabKey(key)
               }}
-              className="px-2.5 py-0.5 rounded bg-accent text-white font-medium"
+              className="px-2.5 py-0.5 rounded-sm bg-accent text-white font-medium"
             >
               Restore Buffer
             </button>
@@ -4289,7 +4289,7 @@ export const App: React.FC = () => {
                 await window.klartext.clearRecoverySnapshot(snap.rootId, snap.relativePath)
                 setRecoverySnapshots((prev) => prev.slice(1))
               }}
-              className="px-2 py-0.5 rounded bg-panel border border-subtle text-muted"
+              className="px-2 py-0.5 rounded-sm bg-panel border border-subtle text-muted"
             >
               Dismiss
             </button>
@@ -4855,7 +4855,7 @@ export const App: React.FC = () => {
                       onClick={() => {
                         tabBarScrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })
                       }}
-                      className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                      className="p-1 rounded-sm bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
                     >
                       <ChevronLeft className="w-3.5 h-3.5" />
                     </button>
@@ -4957,7 +4957,7 @@ export const App: React.FC = () => {
                       onClick={() => {
                         tabBarScrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })
                       }}
-                      className="p-1 rounded bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
+                      className="p-1 rounded-sm bg-panel border border-subtle text-muted hover:text-primary hover:border-accent shrink-0 mb-1 titlebar-no-drag"
                     >
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
@@ -5538,7 +5538,7 @@ export const App: React.FC = () => {
                     className="px-1.5 py-1.5 bg-panel border-t border-l border-subtle flex items-center justify-between gap-1 shrink-0 select-none"
                   >
                     <div
-                      className="flex items-center bg-secondary p-0.5 rounded border border-subtle gap-0.5"
+                      className="flex items-center bg-secondary p-0.5 rounded-sm border border-subtle gap-0.5"
                       data-testid="right-panel-tab-switcher"
                     >
                       <button
@@ -5552,7 +5552,7 @@ export const App: React.FC = () => {
                         }
                         className={`p-1 rounded transition-colors ${
                           settings.frontmatterPanelVisible
-                            ? 'bg-panel text-accent shadow-sm'
+                            ? 'bg-panel text-accent shadow-xs'
                             : 'text-muted hover:text-primary'
                         }`}
                       >
@@ -5570,7 +5570,7 @@ export const App: React.FC = () => {
                         }
                         className={`p-1 rounded transition-colors ${
                           settings.templatesPanelVisible
-                            ? 'bg-panel text-accent shadow-sm'
+                            ? 'bg-panel text-accent shadow-xs'
                             : 'text-muted hover:text-primary'
                         }`}
                       >
@@ -5588,7 +5588,7 @@ export const App: React.FC = () => {
                         }
                         className={`p-1 rounded transition-colors ${
                           settings.rightSidebarOpen
-                            ? 'bg-panel text-accent shadow-sm'
+                            ? 'bg-panel text-accent shadow-xs'
                             : 'text-muted hover:text-primary'
                         }`}
                       >
@@ -5606,7 +5606,7 @@ export const App: React.FC = () => {
                         }
                         className={`p-1 rounded transition-colors ${
                           settings.calendarPanelVisible
-                            ? 'bg-panel text-accent shadow-sm'
+                            ? 'bg-panel text-accent shadow-xs'
                             : 'text-muted hover:text-primary'
                         }`}
                       >
@@ -5624,7 +5624,7 @@ export const App: React.FC = () => {
                         }
                         className={`p-1 rounded transition-colors ${
                           settings.tasksPanelVisible
-                            ? 'bg-panel text-accent shadow-sm'
+                            ? 'bg-panel text-accent shadow-xs'
                             : 'text-muted hover:text-primary'
                         }`}
                       >
@@ -5642,7 +5642,7 @@ export const App: React.FC = () => {
                         }
                         className={`p-1 rounded transition-colors ${
                           settings.helpPanelVisible
-                            ? 'bg-panel text-accent shadow-sm'
+                            ? 'bg-panel text-accent shadow-xs'
                             : 'text-muted hover:text-primary'
                         }`}
                       >
@@ -5666,7 +5666,7 @@ export const App: React.FC = () => {
                           tasksPanelVisible: false
                         })
                       }
-                      className="p-1 rounded bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
+                      className="p-1 rounded-sm bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
                     >
                       <PanelRight className="w-3.5 h-3.5" />
                     </button>
@@ -5727,7 +5727,7 @@ export const App: React.FC = () => {
               .
             </p>
             {crossRootMovePrompt.referencedAssets.length > 0 && (
-              <div className="p-2.5 rounded bg-secondary border border-subtle space-y-1">
+              <div className="p-2.5 rounded-sm bg-secondary border border-subtle space-y-1">
                 <div className="font-semibold text-primary">
                   Referenced Local Assets Detected ({crossRootMovePrompt.referencedAssets.length}):
                 </div>
@@ -5742,7 +5742,7 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCrossRootMovePrompt(null)}
-                className="px-3 py-1 rounded bg-secondary border border-subtle text-primary"
+                className="px-3 py-1 rounded-sm bg-secondary border border-subtle text-primary"
               >
                 Cancel
               </button>
@@ -5750,7 +5750,7 @@ export const App: React.FC = () => {
                 type="button"
                 data-testid="confirm-cross-root-migrate-btn"
                 onClick={() => handleConfirmCrossRootMove(true)}
-                className="px-3 py-1 rounded bg-accent text-white font-medium"
+                className="px-3 py-1 rounded-sm bg-accent text-white font-medium"
               >
                 Move & Migrate Assets
               </button>
@@ -6114,7 +6114,7 @@ export const App: React.FC = () => {
             zIndex: 2147483647,
             pointerEvents: 'none'
           }}
-          className="px-2 py-0.5 rounded bg-app border border-subtle text-primary text-[10px] font-medium whitespace-nowrap shadow-lg"
+          className="px-2 py-0.5 rounded-sm bg-app border border-subtle text-primary text-[10px] font-medium whitespace-nowrap shadow-lg"
         >
           {portalTooltip.text}
         </div>

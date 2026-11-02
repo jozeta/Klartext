@@ -80,7 +80,7 @@ export const KnowledgeGraphModal: React.FC<KnowledgeGraphModalProps> = ({
           <div className="flex items-center gap-2 font-semibold text-primary">
             <Compass className="w-4 h-4 text-accent" />
             <span>Interactive Knowledge Graph (2D)</span>
-            <span className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] font-mono text-muted">
+            <span className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] font-mono text-muted">
               {graph.nodes.filter((n) => n.type === 'document').length} docs ·{' '}
               {graph.edges.length} links
             </span>
@@ -88,7 +88,7 @@ export const KnowledgeGraphModal: React.FC<KnowledgeGraphModalProps> = ({
 
           <div className="flex items-center gap-2">
             {/* Global vs Local Graph Toggle */}
-            <div className="inline-flex rounded border border-subtle bg-panel p-0.5">
+            <div className="inline-flex rounded-sm border border-subtle bg-panel p-0.5">
               <button
                 type="button"
                 data-testid="graph-mode-global"
@@ -139,17 +139,17 @@ export const KnowledgeGraphModal: React.FC<KnowledgeGraphModalProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter nodes or #tags..."
-                className="w-full pl-7 pr-2 py-1 rounded bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent"
+                className="w-full pl-7 pr-2 py-1 rounded-sm bg-panel border border-subtle text-primary text-xs focus:outline-hidden focus:border-accent"
               />
             </div>
 
             {/* Zoom Controls */}
-            <div className="inline-flex items-center gap-0.5 bg-panel border border-subtle rounded px-1 py-0.5">
+            <div className="inline-flex items-center gap-0.5 bg-panel border border-subtle rounded-sm px-1 py-0.5">
               <button
                 type="button"
                 title="Zoom Out"
                 onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.15).toFixed(2))))}
-                className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+                className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
@@ -160,7 +160,7 @@ export const KnowledgeGraphModal: React.FC<KnowledgeGraphModalProps> = ({
                 type="button"
                 title="Zoom In"
                 onClick={() => setZoom((z) => Math.min(2.4, Number((z + 0.15).toFixed(2))))}
-                className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+                className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
@@ -171,7 +171,7 @@ export const KnowledgeGraphModal: React.FC<KnowledgeGraphModalProps> = ({
                   setZoom(1)
                   setPan({ x: 0, y: 0 })
                 }}
-                className="p-1 rounded hover:bg-secondary text-muted hover:text-primary"
+                className="p-1 rounded-sm hover:bg-secondary text-muted hover:text-primary"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -181,7 +181,7 @@ export const KnowledgeGraphModal: React.FC<KnowledgeGraphModalProps> = ({
               type="button"
               data-testid="close-graph-view-btn"
               onClick={onClose}
-              className="p-1 rounded hover:bg-panel text-muted hover:text-primary"
+              className="p-1 rounded-sm hover:bg-panel text-muted hover:text-primary"
             >
               <X className="w-4 h-4" />
             </button>
@@ -313,7 +313,7 @@ export const KnowledgeGraphModal: React.FC<KnowledgeGraphModalProps> = ({
 
           {/* Legend Footer */}
           <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between pointer-events-none text-[11px] text-muted">
-            <div className="flex items-center gap-4 bg-panel/90 border border-subtle rounded px-3 py-1.5">
+            <div className="flex items-center gap-4 bg-panel/90 border border-subtle rounded-sm px-3 py-1.5">
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-accent inline-block" />
                 <span>Active Document</span>

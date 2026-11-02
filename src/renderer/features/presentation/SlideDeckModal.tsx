@@ -73,7 +73,7 @@ const PRESENTATION_THEMES: Record<PresentationThemeId, PresentationThemeConfig> 
     label: 'Midnight',
     mermaidTheme: 'dark',
     stageBg: 'bg-[#090B14]',
-    cardBg: 'bg-gradient-to-br from-[#12172A] via-[#161D34] to-[#0F1425]',
+    cardBg: 'bg-linear-to-br from-[#12172A] via-[#161D34] to-[#0F1425]',
     cardBorder: 'border-[#2D3A5E]',
     cardText: 'text-[#F1F5F9]',
     cardMuted: 'text-[#94A3B8]',
@@ -309,8 +309,8 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
         </div>
 
         {/* Center: Split Mode Selector, Theme Selector & Scale */}
-        <div className="hidden lg:flex items-center gap-2 min-w-0 shrink-[10] overflow-x-auto [scrollbar-width:thin]">
-          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
+        <div className="hidden lg:flex items-center gap-2 min-w-0 shrink-10 overflow-x-auto scrollbar-thin">
+          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded-sm p-0.5 text-[11px]">
             <span className="px-2 text-[10px] uppercase tracking-wider text-muted font-semibold">
               Split:
             </span>
@@ -332,7 +332,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                 }}
                 className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
                   splitMode === mode.id
-                    ? 'bg-accent text-white font-medium shadow-sm'
+                    ? 'bg-accent text-white font-medium shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -342,7 +342,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
           </div>
 
           {/* Theme Selector */}
-          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
+          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded-sm p-0.5 text-[11px]">
             {(Object.values(PRESENTATION_THEMES) as PresentationThemeConfig[]).map((t) => (
               <button
                 key={t.id}
@@ -351,7 +351,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                 onClick={() => setSlideThemeId(t.id)}
                 className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
                   slideThemeId === t.id
-                    ? 'bg-panel text-primary font-medium border border-subtle shadow-sm'
+                    ? 'bg-panel text-primary font-medium border border-subtle shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -361,12 +361,12 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
           </div>
 
           {/* Font Scale & Stage Fit */}
-          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded p-0.5 text-[11px]">
+          <div className="flex shrink-0 items-center bg-secondary border border-subtle rounded-sm p-0.5 text-[11px]">
             <button
               type="button"
               title="Decrease Slide Text Scale"
               onClick={() => setFontScale((s) => Math.max(75, s - 10))}
-              className="px-1.5 py-0.5 rounded text-muted hover:text-primary font-mono"
+              className="px-1.5 py-0.5 rounded-sm text-muted hover:text-primary font-mono"
             >
               A-
             </button>
@@ -382,7 +382,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
               type="button"
               title="Increase Slide Text Scale"
               onClick={() => setFontScale((s) => Math.min(150, s + 10))}
-              className="px-1.5 py-0.5 rounded text-muted hover:text-primary font-mono"
+              className="px-1.5 py-0.5 rounded-sm text-muted hover:text-primary font-mono"
             >
               A+
             </button>
@@ -391,7 +391,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
               type="button"
               title={wideStage ? 'Switch to 16:9 Stage' : 'Expand Slide to Wide Stage'}
               onClick={() => setWideStage((v) => !v)}
-              className="px-1.5 py-0.5 rounded text-muted hover:text-primary"
+              className="px-1.5 py-0.5 rounded-sm text-muted hover:text-primary"
             >
               {wideStage ? (
                 <Minimize2 className="w-3 h-3" />
@@ -405,7 +405,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
         {/* Right: Timer, Navigation, Speaker Notes, Laser Pointer, Exit */}
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Elapsed Presentation Timer */}
-          <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded bg-secondary border border-subtle text-[11px] font-mono text-muted">
+          <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-sm bg-secondary border border-subtle text-[11px] font-mono text-muted">
             <Clock className="w-3 h-3 text-accent" />
             <button
               type="button"
@@ -433,7 +433,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
               setShowGridOverview(false)
               setCurrentIndex((i) => Math.max(0, i - 1))
             }}
-            className="px-2.5 py-1 rounded bg-secondary border border-subtle text-xs text-primary hover:border-accent disabled:opacity-40 flex items-center gap-1"
+            className="px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-xs text-primary hover:border-accent disabled:opacity-40 flex items-center gap-1"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>Prev (←)</span>
@@ -446,7 +446,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
               setShowGridOverview(false)
               setCurrentIndex((i) => Math.min(slides.length - 1, i + 1))
             }}
-            className="px-2.5 py-1 rounded bg-secondary border border-subtle text-xs text-primary hover:border-accent disabled:opacity-40 flex items-center gap-1"
+            className="px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-xs text-primary hover:border-accent disabled:opacity-40 flex items-center gap-1"
           >
             <span>Next (→)</span>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -494,7 +494,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
             type="button"
             data-testid="slide-close-btn"
             onClick={onClose}
-            className="ml-1 px-2.5 py-1 rounded bg-secondary border border-subtle text-xs text-muted hover:text-primary flex items-center gap-1"
+            className="ml-1 px-2.5 py-1 rounded-sm bg-secondary border border-subtle text-xs text-muted hover:text-primary flex items-center gap-1"
           >
             <X className="w-3.5 h-3.5" />
             <span>Exit (Esc)</span>
@@ -528,7 +528,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                     onClick={() => setCurrentIndex(idx)}
                     className={`w-full text-left rounded-lg p-2.5 border transition-all flex flex-col gap-1.5 ${
                       isSelected
-                        ? 'bg-accent/15 border-accent shadow-sm ring-1 ring-accent/40'
+                        ? 'bg-accent/15 border-accent shadow-xs ring-1 ring-accent/40'
                         : 'bg-secondary/50 border-subtle hover:border-accent/50 hover:bg-secondary'
                     }`}
                   >
@@ -546,7 +546,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                         {s.hasMermaid && (
                           <span
                             title="Contains Mermaid Diagram"
-                            className="px-1 py-0.2 rounded bg-accent/15 text-accent"
+                            className="px-1 py-0.2 rounded-sm bg-accent/15 text-accent"
                           >
                             ◇
                           </span>
@@ -554,7 +554,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                         {s.hasTable && (
                           <span
                             title="Contains Table"
-                            className="px-1 py-0.2 rounded bg-panel border border-subtle"
+                            className="px-1 py-0.2 rounded-sm bg-panel border border-subtle"
                           >
                             ⊞
                           </span>
@@ -562,7 +562,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                         {s.hasCode && (
                           <span
                             title="Contains Code Block"
-                            className="px-1 py-0.2 rounded bg-panel border border-subtle"
+                            className="px-1 py-0.2 rounded-sm bg-panel border border-subtle"
                           >
                             &lt;/&gt;
                           </span>
@@ -570,7 +570,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                         {s.hasImage && (
                           <span
                             title="Contains Image"
-                            className="px-1 py-0.2 rounded bg-panel border border-subtle"
+                            className="px-1 py-0.2 rounded-sm bg-panel border border-subtle"
                           >
                             🖼
                           </span>
@@ -578,7 +578,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                         {s.speakerNotes && (
                           <span
                             title="Has Speaker Notes"
-                            className="px-1 py-0.2 rounded bg-amber-500/20 text-amber-400"
+                            className="px-1 py-0.2 rounded-sm bg-amber-500/20 text-amber-400"
                           >
                             🗒
                           </span>
@@ -654,17 +654,17 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                           </span>
                           <div className="flex items-center gap-1 text-[10px]">
                             {s.hasMermaid && (
-                              <span className="px-1.5 py-0.5 rounded bg-accent/20 text-accent font-mono">
+                              <span className="px-1.5 py-0.5 rounded-sm bg-accent/20 text-accent font-mono">
                                 Diagram
                               </span>
                             )}
                             {s.hasTable && (
-                              <span className="px-1.5 py-0.5 rounded bg-slate-500/20 font-mono">
+                              <span className="px-1.5 py-0.5 rounded-sm bg-slate-500/20 font-mono">
                                 Table
                               </span>
                             )}
                             {s.speakerNotes && (
-                              <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono">
+                              <span className="px-1.5 py-0.5 rounded-sm bg-amber-500/20 text-amber-400 font-mono">
                                 Notes
                               </span>
                             )}
@@ -727,7 +727,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
               } ${themeConfig.cardText} shadow-[0_25px_70px_-15px_rgba(0,0,0,0.65)] flex flex-col overflow-hidden transition-all duration-200`}
             >
               {/* Top Decorative Accent Gradient Bar */}
-              <div className={`h-1.5 w-full bg-gradient-to-r ${themeConfig.accentBg} shrink-0`} />
+              <div className={`h-1.5 w-full bg-linear-to-r ${themeConfig.accentBg} shrink-0`} />
 
               {/* Subtle Slide Header Metadata Bar */}
               <div

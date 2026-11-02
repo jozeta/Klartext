@@ -1084,7 +1084,7 @@ export const MultiRootSidebar: React.FC<{
                     }
                   }}
                   onBlur={() => commitInlineRename()}
-                  className="flex-1 px-1.5 py-0.5 rounded bg-panel border border-accent text-primary text-xs focus:outline-none"
+                  className="flex-1 px-1.5 py-0.5 rounded-sm bg-panel border border-accent text-primary text-xs focus:outline-hidden"
                 />
               ) : (
                 <span className="truncate flex-1">{node.name}</span>
@@ -1266,7 +1266,7 @@ export const MultiRootSidebar: React.FC<{
                   }
                 }}
                 onBlur={() => commitInlineRename()}
-                className="flex-1 px-1.5 py-0.5 rounded bg-panel border border-accent text-primary text-xs focus:outline-none"
+                className="flex-1 px-1.5 py-0.5 rounded-sm bg-panel border border-accent text-primary text-xs focus:outline-hidden"
               />
             ) : (
               <span className="truncate">{node.name}</span>
@@ -1290,7 +1290,7 @@ export const MultiRootSidebar: React.FC<{
                 e.stopPropagation()
                 onMoveFileCrossRoot(rootId, node.relativePath, otherRoots[0].id)
               }}
-              className="opacity-0 group-hover:opacity-100 px-1 py-0.5 rounded bg-panel border border-subtle text-[10px] text-muted hover:text-primary"
+              className="opacity-0 group-hover:opacity-100 px-1 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] text-muted hover:text-primary"
             >
               <ArrowRightLeft className="w-3 h-3 inline mr-0.5" />
               Move
@@ -1403,7 +1403,7 @@ export const MultiRootSidebar: React.FC<{
                 title="Open Today's Daily Note"
                 data-testid="open-daily-note-btn"
                 onClick={() => onOpenDailyNote?.()}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-panel border border-subtle hover:border-accent text-[10px] font-medium text-primary"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-panel border border-subtle hover:border-accent text-[10px] font-medium text-primary"
               >
                 <Calendar className="w-3 h-3 text-accent" />
                 <span>Daily</span>
@@ -1414,7 +1414,7 @@ export const MultiRootSidebar: React.FC<{
           {/* Workspace Sort Order Dropdown (Name A-Z, Name Z-A, Custom) + Folders on Top Checkbox */}
           <div
             data-testid="workspace-sort-controls"
-            className="shrink-0 flex items-center justify-between gap-2 px-1.5 py-1 rounded bg-panel border border-subtle text-[11px]"
+            className="shrink-0 flex items-center justify-between gap-2 px-1.5 py-1 rounded-sm bg-panel border border-subtle text-[11px]"
           >
             <div className="flex items-center gap-1 min-w-0 flex-1">
               <ArrowUpDown className="w-3 h-3 text-muted shrink-0" />
@@ -1423,7 +1423,7 @@ export const MultiRootSidebar: React.FC<{
                 aria-label="Workspace sort order"
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value as WorkspaceSortOrder)}
-                className="w-full bg-transparent text-primary text-[11px] font-medium focus:outline-none cursor-pointer truncate"
+                className="w-full bg-transparent text-primary text-[11px] font-medium focus:outline-hidden cursor-pointer truncate"
               >
                 <option value="name-asc">Name A–Z</option>
                 <option value="name-desc">Name Z–A</option>
@@ -1441,7 +1441,7 @@ export const MultiRootSidebar: React.FC<{
                 data-testid="workspace-folders-on-top-checkbox"
                 checked={foldersOnTop}
                 onChange={(e) => setFoldersOnTop(e.target.checked)}
-                className="rounded border-subtle accent-accent cursor-pointer"
+                className="rounded-sm border-subtle accent-accent cursor-pointer"
               />
               <span>Folders on top</span>
             </label>
@@ -1655,7 +1655,7 @@ export const MultiRootSidebar: React.FC<{
                         }
                         data-testid={`new-file-btn-${root.id}`}
                         onClick={() => handleCreateUntitledFile(root.id)}
-                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                        className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-primary"
                       >
                         <FilePlus className="w-3.5 h-3.5" />
                       </button>
@@ -1668,7 +1668,7 @@ export const MultiRootSidebar: React.FC<{
                         }
                         data-testid={`new-folder-btn-${root.id}`}
                         onClick={() => handleCreateNewSubfolder(root.id)}
-                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                        className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-primary"
                       >
                         <FolderPlus className="w-3.5 h-3.5" />
                       </button>
@@ -1677,7 +1677,7 @@ export const MultiRootSidebar: React.FC<{
                         title="Remove Root from Workspace"
                         data-testid={`remove-root-btn-${root.id}`}
                         onClick={() => onRemoveRoot(root.id)}
-                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
+                        className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-danger"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1838,7 +1838,7 @@ export const MultiRootSidebar: React.FC<{
                   >
                     <span
                       data-testid={`dynamic-workspace-badge-${dynWs.id}`}
-                      className="text-[10px] px-1.5 py-0.5 rounded border border-accent/40 bg-accent/10 text-accent font-medium select-none"
+                      className="text-[10px] px-1.5 py-0.5 rounded-sm border border-accent/40 bg-accent/10 text-accent font-medium select-none"
                     >
                       Dynamic
                     </span>
@@ -1848,7 +1848,7 @@ export const MultiRootSidebar: React.FC<{
                         title="Edit Root Dynamic Filter Rules"
                         data-testid={`edit-dynamic-root-rules-btn-${dynWs.id}`}
                         onClick={() => onOpenEditDynamicRootRules?.(dynWs)}
-                        className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                        className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-primary"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
@@ -1858,7 +1858,7 @@ export const MultiRootSidebar: React.FC<{
                       title="Add Dynamic Folder"
                       data-testid={`add-dynamic-folder-btn-${dynWs.id}`}
                       onClick={() => onOpenAddDynamicFolder?.(dynWs)}
-                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                      className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-primary"
                     >
                       <FolderPlus className="w-3.5 h-3.5" />
                     </button>
@@ -1867,7 +1867,7 @@ export const MultiRootSidebar: React.FC<{
                       title="Remove Dynamic Workspace"
                       data-testid={`remove-dynamic-workspace-btn-${dynWs.id}`}
                       onClick={() => onRemoveDynamicWorkspace?.(dynWs.id)}
-                      className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
+                      className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-danger"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1937,7 +1937,7 @@ export const MultiRootSidebar: React.FC<{
                           <div
                             key={folder.id}
                             data-testid={`dynamic-folder-node-${folder.id}`}
-                            className="rounded border border-subtle/60 bg-app/40 overflow-hidden"
+                            className="rounded-sm border border-subtle/60 bg-app/40 overflow-hidden"
                           >
                             <div
                               onClick={() =>
@@ -1964,7 +1964,7 @@ export const MultiRootSidebar: React.FC<{
                               >
                                 <span
                                   data-testid={`dynamic-folder-count-${folder.id}`}
-                                  className="text-[10px] font-mono text-muted px-1 rounded bg-secondary"
+                                  className="text-[10px] font-mono text-muted px-1 rounded-sm bg-secondary"
                                 >
                                   {folderMatches.length}
                                 </span>
@@ -1973,7 +1973,7 @@ export const MultiRootSidebar: React.FC<{
                                   title="Edit Dynamic Folder Rules"
                                   data-testid={`edit-dynamic-folder-btn-${folder.id}`}
                                   onClick={() => onOpenEditDynamicFolder?.(dynWs, folder)}
-                                  className="p-0.5 rounded hover:bg-panel text-muted hover:text-primary"
+                                  className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-primary"
                                 >
                                   <Edit3 className="w-3 h-3" />
                                 </button>
@@ -1982,7 +1982,7 @@ export const MultiRootSidebar: React.FC<{
                                   title="Delete Dynamic Folder"
                                   data-testid={`delete-dynamic-folder-btn-${folder.id}`}
                                   onClick={() => onDeleteDynamicFolder?.(dynWs.id, folder.id)}
-                                  className="p-0.5 rounded hover:bg-panel text-muted hover:text-danger"
+                                  className="p-0.5 rounded-sm hover:bg-panel text-muted hover:text-danger"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
@@ -2055,7 +2055,7 @@ export const MultiRootSidebar: React.FC<{
             top: `${hoveredRootBadge.y}px`,
             zIndex: 120
           }}
-          className="pointer-events-none px-2 py-1 rounded bg-app border border-subtle shadow-lg text-[11px] font-mono text-primary whitespace-nowrap"
+          className="pointer-events-none px-2 py-1 rounded-sm bg-app border border-subtle shadow-lg text-[11px] font-mono text-primary whitespace-nowrap"
         >
           {hoveredRootBadge.path}
         </div>
@@ -2134,7 +2134,7 @@ export const MultiRootSidebar: React.FC<{
                 )
                 setFileContextMenu(null)
               }}
-              className="flex-1 px-2 py-1 rounded bg-secondary/60 hover:bg-secondary text-primary flex items-center justify-center gap-1 text-[11px]"
+              className="flex-1 px-2 py-1 rounded-sm bg-secondary/60 hover:bg-secondary text-primary flex items-center justify-center gap-1 text-[11px]"
               title="Move item up (switches to Custom sort)"
             >
               <ArrowUp className="w-3 h-3 text-muted" />
@@ -2155,7 +2155,7 @@ export const MultiRootSidebar: React.FC<{
                 )
                 setFileContextMenu(null)
               }}
-              className="flex-1 px-2 py-1 rounded bg-secondary/60 hover:bg-secondary text-primary flex items-center justify-center gap-1 text-[11px]"
+              className="flex-1 px-2 py-1 rounded-sm bg-secondary/60 hover:bg-secondary text-primary flex items-center justify-center gap-1 text-[11px]"
               title="Move item down (switches to Custom sort)"
             >
               <ArrowDown className="w-3 h-3 text-muted" />
@@ -2521,14 +2521,14 @@ export const MultiRootSidebar: React.FC<{
       {activeTab === 'search' && (
         <div className="flex-1 flex flex-col overflow-y-auto p-3 space-y-2.5 text-xs">
           <div className="space-y-1.5">
-            <label className="font-semibold text-muted uppercase text-[10px]">
+            <label className="block font-semibold text-muted uppercase text-[10px]">
               Scope Root Filter
             </label>
             <select
               data-testid="search-root-filter"
               value={selectedSearchRoot}
               onChange={(e) => setSelectedSearchRoot(e.target.value)}
-              className="w-full px-2 py-1 rounded bg-panel border border-subtle text-primary"
+              className="w-full px-2 py-1 rounded-sm bg-panel border border-subtle text-primary"
             >
               <option value="ALL">All Mounted Roots ({roots.length})</option>
               {roots.map((r) => (
@@ -2548,7 +2548,7 @@ export const MultiRootSidebar: React.FC<{
                 placeholder="Type to search instantly across roots..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-2 py-1.5 rounded bg-panel border border-subtle text-primary focus:outline-none focus:border-accent"
+                className="w-full pl-8 pr-2 py-1.5 rounded-sm bg-panel border border-subtle text-primary focus:outline-hidden focus:border-accent"
               />
             </div>
 
@@ -2559,13 +2559,13 @@ export const MultiRootSidebar: React.FC<{
                 placeholder="Replace with..."
                 value={replaceText}
                 onChange={(e) => setReplaceText(e.target.value)}
-                className="flex-1 px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                className="flex-1 px-2 py-1 rounded-sm bg-panel border border-subtle text-primary"
               />
               <button
                 type="button"
                 data-testid="global-replace-confirm-btn"
                 onClick={handleExecuteReplace}
-                className="px-2 py-1 rounded bg-secondary border border-subtle hover:border-accent text-primary font-medium"
+                className="px-2 py-1 rounded-sm bg-secondary border border-subtle hover:border-accent text-primary font-medium"
               >
                 Replace Checked
               </button>
@@ -2575,7 +2575,7 @@ export const MultiRootSidebar: React.FC<{
           {replaceSummary && (
             <div
               data-testid="search-replace-summary"
-              className="p-2 rounded bg-secondary border border-subtle text-success font-medium"
+              className="p-2 rounded-sm bg-secondary border border-subtle text-success font-medium"
             >
               {replaceSummary}
             </div>
@@ -2585,7 +2585,7 @@ export const MultiRootSidebar: React.FC<{
             <div
               role="alert"
               data-testid="search-replace-error"
-              className="p-2 rounded bg-secondary border border-danger text-danger font-medium"
+              className="p-2 rounded-sm bg-secondary border border-danger text-danger font-medium"
             >
               {replaceError}
             </div>
@@ -2598,7 +2598,7 @@ export const MultiRootSidebar: React.FC<{
                 <div
                   key={key}
                   data-testid={`search-result-card-${fileHit.rootId}-${fileHit.relativePath}`}
-                  className="p-2 rounded bg-panel border border-subtle space-y-1"
+                  className="p-2 rounded-sm bg-panel border border-subtle space-y-1"
                 >
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-1.5 font-semibold text-primary truncate">
@@ -2612,7 +2612,7 @@ export const MultiRootSidebar: React.FC<{
                           }))
                         }
                       />
-                      <span className="px-1.5 py-0.5 rounded bg-secondary text-[10px] text-accent">
+                      <span className="px-1.5 py-0.5 rounded-sm bg-secondary text-[10px] text-accent">
                         {fileHit.rootName}
                       </span>
                       <span
@@ -2638,7 +2638,7 @@ export const MultiRootSidebar: React.FC<{
                       onClick={() =>
                         onNavigateToLine(fileHit.rootId, fileHit.relativePath, m.lineNumber)
                       }
-                      className="pl-4 py-0.5 rounded text-[11px] font-mono text-muted truncate cursor-pointer hover:bg-secondary hover:text-primary"
+                      className="pl-4 py-0.5 rounded-sm text-[11px] font-mono text-muted truncate cursor-pointer hover:bg-secondary hover:text-primary"
                     >
                       L{m.lineNumber}: {m.lineText}
                     </div>
@@ -2666,7 +2666,7 @@ export const MultiRootSidebar: React.FC<{
                 }
               }}
               style={{ paddingLeft: `${(h.depth - 1) * 10}px` }}
-              className="py-1 px-2 rounded hover:bg-secondary cursor-pointer text-primary truncate flex items-center justify-between"
+              className="py-1 px-2 rounded-sm hover:bg-secondary cursor-pointer text-primary truncate flex items-center justify-between"
             >
               <div className="truncate">
                 <span className="text-muted mr-1.5 font-mono text-[10px]">H{h.depth}</span>
@@ -2693,7 +2693,7 @@ export const MultiRootSidebar: React.FC<{
                 type="button"
                 title="Refresh All Statuses"
                 onClick={onRefreshGit}
-                className="p-1 rounded bg-panel border border-subtle hover:border-accent"
+                className="p-1 rounded-sm bg-panel border border-subtle hover:border-accent"
               >
                 <RefreshCw className="w-3 h-3" />
               </button>
@@ -2701,7 +2701,7 @@ export const MultiRootSidebar: React.FC<{
                 type="button"
                 data-testid="sync-all-repos-btn"
                 onClick={onSyncAllRepos}
-                className="px-2 py-1 rounded bg-accent text-white font-medium flex items-center gap-1"
+                className="px-2 py-1 rounded-sm bg-accent text-white font-medium flex items-center gap-1"
               >
                 <GitBranch className="w-3 h-3" />
                 <span>Sync All Repos</span>
@@ -2748,7 +2748,7 @@ export const MultiRootSidebar: React.FC<{
                     {st.conflictedFiles.length > 0 && (
                       <div
                         data-testid={`git-conflicted-group-${root.id}`}
-                        className="p-2 rounded bg-secondary border border-danger/40 space-y-1.5"
+                        className="p-2 rounded-sm bg-secondary border border-danger/40 space-y-1.5"
                       >
                         <div className="flex items-center justify-between text-danger font-semibold">
                           <span>Conflicted Files ({st.conflictedFiles.length})</span>
@@ -2756,7 +2756,7 @@ export const MultiRootSidebar: React.FC<{
                             type="button"
                             data-testid={`git-abort-merge-${root.id}`}
                             onClick={() => onAbortMergeRepo(root.id)}
-                            className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-primary text-[10px]"
+                            className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-primary text-[10px]"
                           >
                             Abort Merge
                           </button>
@@ -2776,7 +2776,7 @@ export const MultiRootSidebar: React.FC<{
                                 onClick={() =>
                                   onResolveConflictFromGitPanel(root.id, cf, 'current')
                                 }
-                                className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px]"
+                                className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px]"
                               >
                                 Accept Current
                               </button>
@@ -2786,7 +2786,7 @@ export const MultiRootSidebar: React.FC<{
                                 onClick={() =>
                                   onResolveConflictFromGitPanel(root.id, cf, 'incoming')
                                 }
-                                className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px]"
+                                className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px]"
                               >
                                 Accept Incoming
                               </button>
@@ -2794,7 +2794,7 @@ export const MultiRootSidebar: React.FC<{
                                 type="button"
                                 data-testid={`git-resolve-both-${root.id}-${cf}`}
                                 onClick={() => onResolveConflictFromGitPanel(root.id, cf, 'both')}
-                                className="px-1.5 py-0.5 rounded bg-accent text-white text-[10px]"
+                                className="px-1.5 py-0.5 rounded-sm bg-accent text-white text-[10px]"
                               >
                                 Accept Both
                               </button>
@@ -2814,7 +2814,7 @@ export const MultiRootSidebar: React.FC<{
                         onChange={(e) =>
                           setCommitMessages((p) => ({ ...p, [root.id]: e.target.value }))
                         }
-                        className="flex-1 px-2 py-1 rounded bg-app border border-subtle text-primary"
+                        className="flex-1 px-2 py-1 rounded-sm bg-app border border-subtle text-primary"
                       />
                       <button
                         type="button"
@@ -2827,7 +2827,7 @@ export const MultiRootSidebar: React.FC<{
                             setCommitMessages((p) => ({ ...p, [root.id]: '' }))
                           }
                         }}
-                        className="px-2 py-1 rounded bg-accent text-white disabled:opacity-40"
+                        className="px-2 py-1 rounded-sm bg-accent text-white disabled:opacity-40"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
@@ -2848,7 +2848,7 @@ export const MultiRootSidebar: React.FC<{
         >
           {/* Left side: Sidebar Tab Icons (Files, Search, Outline, Links, Git) */}
           <div
-            className="flex items-center bg-secondary p-0.5 rounded border border-subtle gap-0.5"
+            className="flex items-center bg-secondary p-0.5 rounded-sm border border-subtle gap-0.5"
             data-testid="sidebar-tab-switcher"
           >
             {visibleTabs.map((tab) => (
@@ -2862,7 +2862,7 @@ export const MultiRootSidebar: React.FC<{
                 onClick={() => onSelectTab(tab.id)}
                 className={`p-1 rounded transition-colors ${
                   activeTab === tab.id
-                    ? 'bg-panel text-accent shadow-sm'
+                    ? 'bg-panel text-accent shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -2874,7 +2874,7 @@ export const MultiRootSidebar: React.FC<{
           {/* Right side: Edit Mode Switcher (Code, Inline Rich, Split) + Command Palette & Quick Open */}
           <div className="flex items-center gap-1">
             <div
-              className="flex items-center bg-secondary p-0.5 rounded border border-subtle gap-0.5"
+              className="flex items-center bg-secondary p-0.5 rounded-sm border border-subtle gap-0.5"
               data-testid="edit-mode-switcher"
             >
               <button
@@ -2886,7 +2886,7 @@ export const MultiRootSidebar: React.FC<{
                 onClick={() => onChangeEditMode?.('source')}
                 className={`p-1 rounded transition-colors ${
                   editMode === 'source'
-                    ? 'bg-panel text-accent shadow-sm'
+                    ? 'bg-panel text-accent shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -2901,7 +2901,7 @@ export const MultiRootSidebar: React.FC<{
                 onClick={() => onChangeEditMode?.('inline')}
                 className={`p-1 rounded transition-colors ${
                   editMode === 'inline'
-                    ? 'bg-panel text-accent shadow-sm'
+                    ? 'bg-panel text-accent shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -2916,7 +2916,7 @@ export const MultiRootSidebar: React.FC<{
                 onClick={() => onChangeEditMode?.('split')}
                 className={`p-1 rounded transition-colors ${
                   editMode === 'split'
-                    ? 'bg-panel text-accent shadow-sm'
+                    ? 'bg-panel text-accent shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -2931,7 +2931,7 @@ export const MultiRootSidebar: React.FC<{
               aria-label="Command Palette"
               data-testid="open-command-palette-btn"
               onClick={() => onOpenCommandPalette?.()}
-              className="p-1 rounded bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
+              className="p-1 rounded-sm bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
             >
               <Command className="w-3.5 h-3.5" />
             </button>
@@ -2943,7 +2943,7 @@ export const MultiRootSidebar: React.FC<{
               aria-label="Quick Open"
               data-testid="open-quick-switcher-btn"
               onClick={() => onOpenQuickSwitcher?.()}
-              className="p-1 rounded bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
+              className="p-1 rounded-sm bg-app border border-subtle text-muted hover:text-primary hover:border-accent"
             >
               <SearchIcon className="w-3.5 h-3.5" />
             </button>

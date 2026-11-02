@@ -192,17 +192,17 @@ export const CommandPaletteModal: React.FC<{
                 }
               }
             }}
-            className="flex-1 bg-transparent text-sm text-primary focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-primary focus:outline-hidden"
           />
           {mode === 'icons' && (
-            <span className="px-2 py-0.5 rounded bg-app border border-subtle text-[10px] font-mono text-accent">
+            <span className="px-2 py-0.5 rounded-sm bg-app border border-subtle text-[10px] font-mono text-accent">
               Untitled UI Icons (⌘⇧I)
             </span>
           )}
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-panel text-muted"
+            className="p-1 rounded-sm hover:bg-panel text-muted"
           >
             <X className="w-4 h-4" />
           </button>
@@ -220,14 +220,14 @@ export const CommandPaletteModal: React.FC<{
                     act.run()
                     onClose()
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded hover:bg-secondary text-left"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-sm hover:bg-secondary text-left"
                 >
                   <div>
                     <span className="text-muted mr-2">[{act.category}]</span>
                     <span className="font-medium text-primary">{act.label}</span>
                   </div>
                   {act.shortcut && (
-                    <kbd className="px-1.5 py-0.5 rounded bg-app border border-subtle font-mono text-[10px] text-muted">
+                    <kbd className="px-1.5 py-0.5 rounded-sm bg-app border border-subtle font-mono text-[10px] text-muted">
                       {act.shortcut}
                     </kbd>
                   )}
@@ -245,13 +245,13 @@ export const CommandPaletteModal: React.FC<{
                     onSelectFile(file.rootId, file.relativePath)
                     onClose()
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded hover:bg-secondary text-left"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-sm hover:bg-secondary text-left"
                 >
                   <div className="flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5 text-muted" />
                     <span className="font-medium text-primary">{file.relativePath}</span>
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-secondary border border-subtle text-[10px] text-accent font-medium">
+                  <span className="px-2 py-0.5 rounded-sm bg-secondary border border-subtle text-[10px] text-accent font-medium">
                     {file.rootName}
                   </span>
                 </button>
@@ -261,7 +261,7 @@ export const CommandPaletteModal: React.FC<{
             <div>
               <div className="flex items-center justify-between px-2 pb-2 text-[11px] text-muted">
                 <span>
-                  Click an icon or press <kbd className="px-1 py-0.5 rounded bg-app border border-subtle font-mono">Enter</kbd> to insert inline <code className="font-mono text-accent">:icon[IconName]:</code>
+                  Click an icon or press <kbd className="px-1 py-0.5 rounded-sm bg-app border border-subtle font-mono">Enter</kbd> to insert inline <code className="font-mono text-accent">:icon[IconName]:</code>
                 </span>
                 <span>{filteredIcons.length} icons shown</span>
               </div>
@@ -280,9 +280,9 @@ export const CommandPaletteModal: React.FC<{
                         onSelectIcon?.(`:icon[${iconItem.id}]:`)
                         onClose()
                       }}
-                      className="flex items-center gap-2.5 p-2 rounded border border-subtle/60 bg-app/50 hover:bg-secondary hover:border-accent text-left transition-colors group"
+                      className="flex items-center gap-2.5 p-2 rounded-sm border border-subtle/60 bg-app/50 hover:bg-secondary hover:border-accent text-left transition-colors group"
                     >
-                      <div className="w-7 h-7 rounded bg-panel border border-subtle flex items-center justify-center shrink-0 text-primary group-hover:text-accent">
+                      <div className="w-7 h-7 rounded-sm bg-panel border border-subtle flex items-center justify-center shrink-0 text-primary group-hover:text-accent">
                         <IconComp className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -644,14 +644,14 @@ export const SettingsModal: React.FC<{
             <span className="font-semibold text-sm text-primary">
               Klartext Settings &amp; Customization
             </span>
-            <div className="flex items-center gap-1 bg-app p-0.5 rounded border border-subtle text-xs">
+            <div className="flex items-center gap-1 bg-app p-0.5 rounded-sm border border-subtle text-xs">
               <button
                 type="button"
                 data-testid="settings-tab-general"
                 onClick={() => setSettingsTab('general')}
                 className={`px-2.5 py-1 rounded font-medium transition-colors ${
                   settingsTab === 'general'
-                    ? 'bg-panel text-accent shadow-sm'
+                    ? 'bg-panel text-accent shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -663,7 +663,7 @@ export const SettingsModal: React.FC<{
                 onClick={() => setSettingsTab('visual')}
                 className={`px-2.5 py-1 rounded font-medium transition-colors ${
                   settingsTab === 'visual'
-                    ? 'bg-panel text-accent shadow-sm'
+                    ? 'bg-panel text-accent shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -675,7 +675,7 @@ export const SettingsModal: React.FC<{
                 onClick={() => setSettingsTab('frontmatter')}
                 className={`px-2.5 py-1 rounded font-medium transition-colors ${
                   settingsTab === 'frontmatter'
-                    ? 'bg-panel text-accent shadow-sm'
+                    ? 'bg-panel text-accent shadow-xs'
                     : 'text-muted hover:text-primary'
                 }`}
               >
@@ -687,7 +687,7 @@ export const SettingsModal: React.FC<{
             type="button"
             data-testid="close-settings-btn"
             onClick={onClose}
-            className="px-2.5 py-1 rounded bg-panel border border-subtle text-xs"
+            className="px-2.5 py-1 rounded-sm bg-panel border border-subtle text-xs"
           >
             Close
           </button>
@@ -713,7 +713,7 @@ export const SettingsModal: React.FC<{
                       type="button"
                       data-testid="export-themes-btn"
                       onClick={handleExportThemes}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Export Themes</span>
@@ -725,7 +725,7 @@ export const SettingsModal: React.FC<{
                         setShowThemeJsonDrawer((v) => !v)
                         setThemeJsonText('')
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
                     >
                       <Upload className="w-3.5 h-3.5" />
                       <span>Import Themes</span>
@@ -736,7 +736,7 @@ export const SettingsModal: React.FC<{
                 {themeStatusMsg && (
                   <div
                     data-testid="theme-status-banner"
-                    className="px-2.5 py-1 rounded bg-panel border border-subtle text-[11px] text-accent flex items-center justify-between"
+                    className="px-2.5 py-1 rounded-sm bg-panel border border-subtle text-[11px] text-accent flex items-center justify-between"
                   >
                     <span>{themeStatusMsg}</span>
                     <button
@@ -756,7 +756,7 @@ export const SettingsModal: React.FC<{
                       data-testid="settings-saved-themes-select"
                       value={activeSavedThemeId}
                       onChange={(e) => handleSelectSavedTheme(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary font-medium"
+                      className="w-full px-2.5 py-1.5 rounded-sm bg-panel border border-subtle text-primary font-medium"
                     >
                       <option value="">Nordic Default (Unsaved Preset)</option>
                       {savedThemes.map((t) => (
@@ -775,7 +775,7 @@ export const SettingsModal: React.FC<{
                       placeholder="e.g., Midnight Fjord, Solarized Snow..."
                       value={newThemeName}
                       onChange={(e) => setNewThemeName(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary"
+                      className="w-full px-2.5 py-1.5 rounded-sm bg-panel border border-subtle text-primary"
                     />
                   </div>
 
@@ -784,7 +784,7 @@ export const SettingsModal: React.FC<{
                       type="button"
                       data-testid="save-theme-btn"
                       onClick={handleSaveNewTheme}
-                      className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded bg-accent text-white font-medium"
+                      className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-sm bg-accent text-white font-medium"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Save Theme</span>
@@ -799,7 +799,7 @@ export const SettingsModal: React.FC<{
                             setEditThemeName(activeSavedTheme.name)
                             setIsEditingSavedTheme((v) => !v)
                           }}
-                          className="p-1.5 rounded bg-panel border border-subtle text-primary hover:border-accent"
+                          className="p-1.5 rounded-sm bg-panel border border-subtle text-primary hover:border-accent"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -808,7 +808,7 @@ export const SettingsModal: React.FC<{
                           data-tooltip="Delete Saved Theme"
                           data-testid="delete-theme-btn"
                           onClick={handleDeleteActiveTheme}
-                          className="p-1.5 rounded bg-panel border border-subtle text-danger hover:border-danger"
+                          className="p-1.5 rounded-sm bg-panel border border-subtle text-danger hover:border-danger"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -821,7 +821,7 @@ export const SettingsModal: React.FC<{
                 {isEditingSavedTheme && activeSavedTheme && (
                   <div
                     data-testid="edit-saved-theme-drawer"
-                    className="p-3 rounded bg-panel border border-subtle space-y-2.5"
+                    className="p-3 rounded-sm bg-panel border border-subtle space-y-2.5"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-primary text-[11px]">
@@ -831,7 +831,7 @@ export const SettingsModal: React.FC<{
                         type="button"
                         data-testid="update-saved-theme-btn"
                         onClick={handleUpdateActiveTheme}
-                        className="px-2.5 py-1 rounded bg-accent text-white font-medium text-[11px]"
+                        className="px-2.5 py-1 rounded-sm bg-accent text-white font-medium text-[11px]"
                       >
                         Save Theme Changes
                       </button>
@@ -844,7 +844,7 @@ export const SettingsModal: React.FC<{
                           data-testid="edit-theme-name-input"
                           value={editThemeName}
                           onChange={(e) => setEditThemeName(e.target.value)}
-                          className="w-full px-2 py-1 rounded bg-app border border-subtle text-primary"
+                          className="w-full px-2 py-1 rounded-sm bg-app border border-subtle text-primary"
                         />
                       </div>
                       <div>
@@ -861,7 +861,7 @@ export const SettingsModal: React.FC<{
                               }
                             })
                           }
-                          className="w-full h-7 rounded border border-subtle cursor-pointer bg-app"
+                          className="w-full h-7 rounded-sm border border-subtle cursor-pointer bg-app"
                         />
                       </div>
                       <div>
@@ -878,7 +878,7 @@ export const SettingsModal: React.FC<{
                               }
                             })
                           }
-                          className="w-full h-7 rounded border border-subtle cursor-pointer bg-app"
+                          className="w-full h-7 rounded-sm border border-subtle cursor-pointer bg-app"
                         />
                       </div>
                       <div>
@@ -895,7 +895,7 @@ export const SettingsModal: React.FC<{
                               }
                             })
                           }
-                          className="w-full h-7 rounded border border-subtle cursor-pointer bg-app"
+                          className="w-full h-7 rounded-sm border border-subtle cursor-pointer bg-app"
                         />
                       </div>
                     </div>
@@ -906,14 +906,14 @@ export const SettingsModal: React.FC<{
                 {showThemeJsonDrawer && (
                   <div
                     data-testid="themes-import-export-drawer"
-                    className="p-3 rounded bg-panel border border-subtle space-y-2"
+                    className="p-3 rounded-sm bg-panel border border-subtle space-y-2"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-primary text-[11px]">
                         Import or Export Themes JSON
                       </span>
                       <div className="flex items-center gap-2">
-                        <label className="px-2 py-1 rounded bg-secondary border border-subtle text-[11px] cursor-pointer hover:border-accent">
+                        <label className="px-2 py-1 rounded-sm bg-secondary border border-subtle text-[11px] cursor-pointer hover:border-accent">
                           <span>Load .json File</span>
                           <input
                             type="file"
@@ -937,7 +937,7 @@ export const SettingsModal: React.FC<{
                           type="button"
                           data-testid="apply-import-themes-btn"
                           onClick={() => handleImportThemesFromJson(themeJsonText)}
-                          className="px-2.5 py-1 rounded bg-accent text-white font-medium text-[11px]"
+                          className="px-2.5 py-1 rounded-sm bg-accent text-white font-medium text-[11px]"
                         >
                           Apply Imported JSON
                         </button>
@@ -949,7 +949,7 @@ export const SettingsModal: React.FC<{
                       placeholder='Paste exported theme JSON here (e.g., {"themes": [...]})'
                       value={themeJsonText}
                       onChange={(e) => setThemeJsonText(e.target.value)}
-                      className="w-full p-2 rounded bg-app border border-subtle font-mono text-[11px] text-primary"
+                      className="w-full p-2 rounded-sm bg-app border border-subtle font-mono text-[11px] text-primary"
                     />
                   </div>
                 )}
@@ -972,7 +972,7 @@ export const SettingsModal: React.FC<{
                   <span
                     data-testid="active-highlight-color-badge"
                     style={{ backgroundColor: activeHighlightColor }}
-                    className="px-2.5 py-1 rounded text-white font-mono text-[11px] font-semibold shadow-sm"
+                    className="px-2.5 py-1 rounded-sm text-white font-mono text-[11px] font-semibold shadow-xs"
                   >
                     {activeHighlightColor.toUpperCase()}
                   </span>
@@ -1050,7 +1050,7 @@ export const SettingsModal: React.FC<{
                           : '#FF5E5B'
                       }
                       onChange={(e) => setCustomHighlightHex(e.target.value.toUpperCase())}
-                      className="w-7 h-7 rounded border border-subtle cursor-pointer bg-panel"
+                      className="w-7 h-7 rounded-sm border border-subtle cursor-pointer bg-panel"
                     />
                     <input
                       type="text"
@@ -1058,13 +1058,13 @@ export const SettingsModal: React.FC<{
                       value={customHighlightHex}
                       onChange={(e) => setCustomHighlightHex(e.target.value)}
                       placeholder="#FF5E5B"
-                      className="w-24 px-2 py-1 rounded bg-panel border border-subtle font-mono text-[11px] text-primary"
+                      className="w-24 px-2 py-1 rounded-sm bg-panel border border-subtle font-mono text-[11px] text-primary"
                     />
                     <button
                       type="button"
                       data-testid="add-custom-highlight-color-btn"
                       onClick={handleAddCustomHighlightColor}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded bg-accent text-white font-medium text-[11px]"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-sm bg-accent text-white font-medium text-[11px]"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add Color</span>
@@ -1096,7 +1096,7 @@ export const SettingsModal: React.FC<{
                   </div>
                   <span
                     style={{ backgroundColor: activeHighlightColor }}
-                    className="px-2 py-0.5 rounded text-white text-[10px] font-medium flex items-center gap-1"
+                    className="px-2 py-0.5 rounded-sm text-white text-[10px] font-medium flex items-center gap-1"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span>Accent Button</span>
@@ -1119,7 +1119,7 @@ export const SettingsModal: React.FC<{
                         backgroundColor: `${activeHighlightColor}22`,
                         borderLeft: `3px solid ${activeHighlightColor}`
                       }}
-                      className="px-2 py-1 rounded text-[10px] font-medium"
+                      className="px-2 py-1 rounded-sm text-[10px] font-medium"
                     >
                       Architecture-Overview.md
                     </div>
@@ -1153,7 +1153,7 @@ export const SettingsModal: React.FC<{
                           backgroundColor: `${activeHighlightColor}38`,
                           borderBottom: `2px solid ${activeHighlightColor}`
                         }}
-                        className="px-1 py-0.5 rounded font-medium"
+                        className="px-1 py-0.5 rounded-sm font-medium"
                       >
                         ==highlighted key insights==
                       </span>{' '}
@@ -1184,7 +1184,7 @@ export const SettingsModal: React.FC<{
                       onChange={(e) =>
                         onUpdateSettings({ theme: e.target.value as AppSettings['theme'] })
                       }
-                      className="w-full px-2 py-1.5 rounded bg-app border border-subtle text-primary"
+                      className="w-full px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary"
                     >
                       <option value="system">Follow OS</option>
                       <option value="light">Nordic Light</option>
@@ -1204,7 +1204,7 @@ export const SettingsModal: React.FC<{
                           }
                         })
                       }
-                      className="w-full px-2 py-1.5 rounded bg-app border border-subtle text-primary"
+                      className="w-full px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary"
                     >
                       {FONT_FAMILY_OPTIONS.map((opt) => (
                         <option key={opt.label} value={opt.value}>
@@ -1229,7 +1229,7 @@ export const SettingsModal: React.FC<{
                           }
                         })
                       }
-                      className="w-full px-2 py-1.5 rounded bg-app border border-subtle text-primary"
+                      className="w-full px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary"
                     />
                   </div>
                   <div>
@@ -1247,7 +1247,7 @@ export const SettingsModal: React.FC<{
                             }
                           })
                         }
-                        className="w-8 h-7 rounded border border-subtle cursor-pointer bg-app"
+                        className="w-8 h-7 rounded-sm border border-subtle cursor-pointer bg-app"
                       />
                       <button
                         type="button"
@@ -1256,7 +1256,7 @@ export const SettingsModal: React.FC<{
                             typography: { ...settings.typography, bodyColor: '' }
                           })
                         }
-                        className="px-2 py-1 rounded bg-app border border-subtle text-[10px] text-muted hover:text-primary"
+                        className="px-2 py-1 rounded-sm bg-app border border-subtle text-[10px] text-muted hover:text-primary"
                       >
                         Default
                       </button>
@@ -1279,7 +1279,7 @@ export const SettingsModal: React.FC<{
                           }
                         })
                       }
-                      className="w-full px-2 py-1.5 rounded bg-app border border-subtle text-primary font-mono"
+                      className="w-full px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary font-mono"
                     >
                       {CODE_FONT_OPTIONS.map((opt) => (
                         <option key={opt.label} value={opt.value}>
@@ -1304,7 +1304,7 @@ export const SettingsModal: React.FC<{
                           }
                         })
                       }
-                      className="w-full px-2 py-1.5 rounded bg-app border border-subtle text-primary"
+                      className="w-full px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary"
                     />
                   </div>
                 </div>
@@ -1320,7 +1320,7 @@ export const SettingsModal: React.FC<{
                           pageTabsPosition: e.target.value as AppSettings['pageTabsPosition']
                         })
                       }
-                      className="px-2.5 py-1 rounded bg-app border border-subtle text-primary"
+                      className="px-2.5 py-1 rounded-sm bg-app border border-subtle text-primary"
                     >
                       <option value="editor">Above Writing Area (Default)</option>
                       <option value="top-menu">Top Menu Row (Right of Last Menu Item)</option>
@@ -1374,7 +1374,7 @@ export const SettingsModal: React.FC<{
                       <div
                         key={key}
                         data-testid={`settings-heading-row-${key}`}
-                        className="grid grid-cols-12 items-center gap-2 p-2 rounded bg-app border border-subtle"
+                        className="grid grid-cols-12 items-center gap-2 p-2 rounded-sm bg-app border border-subtle"
                       >
                         <span className="col-span-3 font-semibold text-primary">{label}</span>
                         <div className="col-span-4">
@@ -1392,7 +1392,7 @@ export const SettingsModal: React.FC<{
                                 }
                               })
                             }
-                            className="w-full px-2 py-1 rounded bg-panel border border-subtle text-primary"
+                            className="w-full px-2 py-1 rounded-sm bg-panel border border-subtle text-primary"
                           >
                             <option value="">Inherit Ordinary Font</option>
                             {FONT_FAMILY_OPTIONS.map((opt) => (
@@ -1424,7 +1424,7 @@ export const SettingsModal: React.FC<{
                                 }
                               })
                             }
-                            className="w-full px-1.5 py-1 rounded bg-panel border border-subtle text-primary"
+                            className="w-full px-1.5 py-1 rounded-sm bg-panel border border-subtle text-primary"
                           />
                           <span className="text-[10px] text-muted">em</span>
                         </div>
@@ -1444,7 +1444,7 @@ export const SettingsModal: React.FC<{
                                 }
                               })
                             }
-                            className="w-7 h-6 rounded border border-subtle cursor-pointer bg-panel"
+                            className="w-7 h-6 rounded-sm border border-subtle cursor-pointer bg-panel"
                           />
                           <button
                             type="button"
@@ -1459,7 +1459,7 @@ export const SettingsModal: React.FC<{
                                 }
                               })
                             }
-                            className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] text-muted hover:text-primary"
+                            className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] text-muted hover:text-primary"
                           >
                             Reset
                           </button>
@@ -1481,7 +1481,7 @@ export const SettingsModal: React.FC<{
                     </div>
                     <div className="text-[11px] text-muted leading-relaxed">
                       Configure the default YAML properties and values automatically evaluated whenever you create a new Markdown document. Supports all{' '}
-                      <code className="px-1 py-0.5 rounded bg-panel border border-subtle text-accent font-mono text-[10px]">
+                      <code className="px-1 py-0.5 rounded-sm bg-panel border border-subtle text-accent font-mono text-[10px]">
                         &lt;% ... %&gt;
                       </code>{' '}
                       dynamic variables.
@@ -1554,7 +1554,7 @@ export const SettingsModal: React.FC<{
               </div>
 
               {/* Aligned Table of Default Frontmatter Properties */}
-              <div className="rounded-lg border border-subtle bg-app overflow-hidden shadow-xs">
+              <div className="rounded-lg border border-subtle bg-app overflow-hidden shadow-2xs">
                 <div className="grid grid-cols-12 items-center gap-2.5 px-3.5 py-2 bg-secondary border-b border-subtle text-[10px] font-semibold uppercase tracking-wider text-muted">
                   <div className="col-span-3">Property &amp; YAML Key</div>
                   <div className="col-span-2">Field Type</div>
@@ -1595,7 +1595,7 @@ export const SettingsModal: React.FC<{
                             {displayLabel}
                           </span>
                           <span
-                            className="px-1.5 py-0.5 rounded bg-panel border border-subtle text-[10px] font-mono text-muted shrink-0"
+                            className="px-1.5 py-0.5 rounded-sm bg-panel border border-subtle text-[10px] font-mono text-muted shrink-0"
                             title={`YAML frontmatter key: ${prop.key}`}
                           >
                             {prop.key}
@@ -1611,7 +1611,7 @@ export const SettingsModal: React.FC<{
                                 type: e.target.value as FrontmatterFieldType
                               })
                             }
-                            className="w-full h-8 px-2 rounded-md bg-panel border border-subtle text-primary text-xs font-medium focus:outline-none focus:border-accent transition-colors"
+                            className="w-full h-8 px-2 rounded-md bg-panel border border-subtle text-primary text-xs font-medium focus:outline-hidden focus:border-accent transition-colors"
                           >
                             <option value="text">Text</option>
                             <option value="date">Date</option>
@@ -1634,7 +1634,7 @@ export const SettingsModal: React.FC<{
                                 defaultValue: e.target.value
                               })
                             }
-                            className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary font-mono text-xs focus:outline-none focus:border-accent transition-colors"
+                            className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary font-mono text-xs focus:outline-hidden focus:border-accent transition-colors"
                           />
                         </div>
 
@@ -1712,7 +1712,7 @@ export const SettingsModal: React.FC<{
                           handleAddDefaultFmProp()
                         }
                       }}
-                      className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary text-xs focus:outline-none focus:border-accent transition-colors"
+                      className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary text-xs focus:outline-hidden focus:border-accent transition-colors"
                     />
                   </div>
                   <div className="col-span-2 space-y-1">
@@ -1721,7 +1721,7 @@ export const SettingsModal: React.FC<{
                       data-testid="settings-fm-new-type-select"
                       value={newFmType}
                       onChange={(e) => setNewFmType(e.target.value as FrontmatterFieldType)}
-                      className="w-full h-8 px-2 rounded-md bg-panel border border-subtle text-primary text-xs font-medium focus:outline-none focus:border-accent transition-colors"
+                      className="w-full h-8 px-2 rounded-md bg-panel border border-subtle text-primary text-xs font-medium focus:outline-hidden focus:border-accent transition-colors"
                     >
                       <option value="text">Text</option>
                       <option value="date">Date</option>
@@ -1748,7 +1748,7 @@ export const SettingsModal: React.FC<{
                           handleAddDefaultFmProp()
                         }
                       }}
-                      className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary font-mono text-xs focus:outline-none focus:border-accent transition-colors"
+                      className="w-full h-8 px-2.5 rounded-md bg-panel border border-subtle text-primary font-mono text-xs focus:outline-hidden focus:border-accent transition-colors"
                     />
                   </div>
                   <div className="col-span-2">
@@ -1780,7 +1780,7 @@ export const SettingsModal: React.FC<{
                       </span>
                       <span
                         data-testid="settings-current-version-badge"
-                        className="px-2 py-0.5 rounded bg-panel border border-subtle font-mono text-[10px] text-accent font-semibold"
+                        className="px-2 py-0.5 rounded-sm bg-panel border border-subtle font-mono text-[10px] text-accent font-semibold"
                       >
                         v{APP_METADATA.version}
                       </span>
@@ -1806,7 +1806,7 @@ export const SettingsModal: React.FC<{
                           updateCheckInterval: e.target.value as UpdateCheckInterval
                         })
                       }
-                      className="px-2.5 py-1.5 rounded bg-panel border border-subtle text-primary text-xs font-medium"
+                      className="px-2.5 py-1.5 rounded-sm bg-panel border border-subtle text-primary text-xs font-medium"
                     >
                       {UPDATE_CHECK_INTERVAL_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -1820,7 +1820,7 @@ export const SettingsModal: React.FC<{
                       data-testid="settings-check-updates-btn"
                       disabled={checkingForUpdates}
                       onClick={handleCheckForUpdatesNow}
-                      className="px-3 py-1.5 rounded bg-accent text-white text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60 transition-opacity"
+                      className="px-3 py-1.5 rounded-sm bg-accent text-white text-xs font-semibold flex items-center gap-1.5 hover:opacity-90 disabled:opacity-60 transition-opacity"
                     >
                       <RefreshCw
                         className={`w-3.5 h-3.5 ${checkingForUpdates ? 'animate-spin' : ''}`}
@@ -1890,7 +1890,7 @@ export const SettingsModal: React.FC<{
                         target="_blank"
                         rel="noreferrer"
                         data-testid="settings-update-release-link"
-                        className="px-2.5 py-1 rounded bg-panel border border-subtle text-[11px] font-medium text-accent hover:bg-secondary shrink-0"
+                        className="px-2.5 py-1 rounded-sm bg-panel border border-subtle text-[11px] font-medium text-accent hover:bg-secondary shrink-0"
                       >
                         View Releases
                       </a>
@@ -1917,7 +1917,7 @@ export const SettingsModal: React.FC<{
                       pageTabsPosition: e.target.value as AppSettings['pageTabsPosition']
                     })
                   }
-                  className="px-2.5 py-1.5 rounded bg-app border border-subtle text-primary shrink-0"
+                  className="px-2.5 py-1.5 rounded-sm bg-app border border-subtle text-primary shrink-0"
                 >
                   <option value="editor">Above Writing Area (Default)</option>
                   <option value="top-menu">Top Menu Row (Right of Last Menu Item)</option>
@@ -2003,7 +2003,7 @@ export const SettingsModal: React.FC<{
                     placeholder="/path/to/project.klartext-workspace"
                     value={manifestPath}
                     onChange={(e) => setManifestPath(e.target.value)}
-                    className="flex-1 px-2 py-1.5 rounded bg-app border border-subtle text-primary font-mono"
+                    className="flex-1 px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary font-mono"
                   />
                   <button
                     type="button"
@@ -2011,7 +2011,7 @@ export const SettingsModal: React.FC<{
                     onClick={() =>
                       manifestPath.trim() && onSaveWorkspaceManifest(manifestPath.trim())
                     }
-                    className="px-3 py-1.5 rounded bg-accent text-white font-medium"
+                    className="px-3 py-1.5 rounded-sm bg-accent text-white font-medium"
                   >
                     Save Manifest
                   </button>
@@ -2021,7 +2021,7 @@ export const SettingsModal: React.FC<{
                     onClick={() =>
                       manifestPath.trim() && onLoadWorkspaceManifest(manifestPath.trim())
                     }
-                    className="px-3 py-1.5 rounded bg-secondary border border-subtle text-primary font-medium"
+                    className="px-3 py-1.5 rounded-sm bg-secondary border border-subtle text-primary font-medium"
                   >
                     Load Manifest
                   </button>
@@ -2040,7 +2040,7 @@ export const SettingsModal: React.FC<{
                     placeholder="ghp_... Fine-Grained Personal Access Token"
                     value={patInput}
                     onChange={(e) => setPatInput(e.target.value)}
-                    className="flex-1 px-2 py-1.5 rounded bg-app border border-subtle text-primary font-mono"
+                    className="flex-1 px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary font-mono"
                   />
                   <button
                     type="button"
@@ -2052,7 +2052,7 @@ export const SettingsModal: React.FC<{
                         setHasGithubPat(true)
                       }
                     }}
-                    className="px-3 py-1.5 rounded bg-accent text-white font-medium"
+                    className="px-3 py-1.5 rounded-sm bg-accent text-white font-medium"
                   >
                     Save to Keychain
                   </button>
@@ -2088,7 +2088,7 @@ export const SettingsModal: React.FC<{
                         }
                       })
                     }
-                    className="px-2 py-0.5 rounded bg-secondary border border-subtle text-[11px] hover:border-accent"
+                    className="px-2 py-0.5 rounded-sm bg-secondary border border-subtle text-[11px] hover:border-accent"
                   >
                     Reset to Defaults
                   </button>
@@ -2104,7 +2104,7 @@ export const SettingsModal: React.FC<{
                     return (
                       <div
                         key={actionId}
-                        className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-app border border-subtle"
+                        className="flex items-center justify-between gap-2 px-2 py-1 rounded-sm bg-app border border-subtle"
                       >
                         <span className="font-mono text-[11px] text-primary">{actionId}</span>
                         <div className="flex items-center gap-2">
