@@ -4,6 +4,7 @@
 
 ### Fixed
 - Slide deck: in windows narrower than about 1400 px, the presentation toolbar pushed Laser Pointer and Exit off-screen (only the L and Esc shortcuts still worked). The display settings in the middle now give way first, and the buttons no longer overlap.
+- The floating selection toolbar now stays inside the editor pane. In a narrower window it could cover the AI panel's buttons, and after Select All it could be placed off-screen.
 
 ### Security
 - Dependency upgrades fixing 77 Dependabot alerts: Electron 45, electron-builder 26, electron-vite 4, Vite 6.4, Vitest 4, simple-git 4, zod 4, KaTeX 0.18.

@@ -274,17 +274,13 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
         .getByTestId('inline-rename-input-root-starter')
         .fill('Architecture-Overview.md')
       await page.getByTestId('inline-rename-input-root-starter').press('Enter')
+      // The app renames the file first and rewrites its "# Untitled" heading in a second write, so
+      // wait for the content, not just for the file to exist (Windows CI lost that race).
+      const renamedPath = path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md')
       await expect
-        .poll(() =>
-          fs.existsSync(
-            path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md')
-          )
-        )
-        .toBe(true)
-      const renamedContent = fs.readFileSync(
-        path.join(userDataDir, 'Starter-Workspace', 'Architecture-Overview.md'),
-        'utf-8'
-      )
+        .poll(() => (fs.existsSync(renamedPath) ? fs.readFileSync(renamedPath, 'utf-8') : ''))
+        .toContain('# Architecture-Overview')
+      const renamedContent = fs.readFileSync(renamedPath, 'utf-8')
       expect(renamedContent).toContain('# Architecture-Overview')
       expect(renamedContent).not.toContain('# Architecture-Overview.md')
       expect(renamedContent).not.toContain('# Untitled')

@@ -76,6 +76,7 @@ import {
   type SupportedSpellLanguage
 } from './spellcheck-extension'
 import { MermaidDiagramWidget, VisualMermaidBuilderModal } from '../diagrams/DiagramWidgets'
+import { computeFloatingToolbarPosition, type Box } from './floating-toolbar-position'
 import {
   convertMarkdownToSlack,
   convertMarkdownToJira,
@@ -534,6 +535,27 @@ export const MarkdownEditorWorkspace: React.FC<{
 
   // Live container width tracking so Word Flow dynamically recalculates margins & reflows on resize
   const [editorPaneWidth, setEditorPaneWidth] = useState<number>(960)
+
+  // Floating selection toolbar position for a selection whose ends are at `from` / `to`, kept inside
+  // the visible editor pane (falls back to the whole window if the pane isn't mounted).
+  const floatingToolbarCoords = (
+    from: { top: number; bottom: number; left: number },
+    to: { top: number; bottom: number; left: number }
+  ): { top: number; left: number } => {
+    const paneRect = (editorScrollWrapperRef.current || splitContainerRef.current)?.getBoundingClientRect()
+    const pane: Box = paneRect
+      ? { top: paneRect.top, bottom: paneRect.bottom, left: paneRect.left, right: paneRect.right }
+      : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth }
+    return computeFloatingToolbarPosition(
+      {
+        top: Math.min(from.top, to.top),
+        bottom: Math.max(from.bottom, to.bottom),
+        left: Math.min(from.left, to.left),
+        right: Math.max(from.left, to.left)
+      },
+      pane
+    )
+  }
 
   useEffect(() => {
     const updateMeasuredWidth = () => {
@@ -1243,12 +1265,7 @@ export const MarkdownEditorWorkspace: React.FC<{
             const fromCoords = view.coordsAtPos(sel.from)
             const toCoords = view.coordsAtPos(sel.to) || fromCoords
             if (fromCoords && toCoords) {
-              const selectionTop = Math.min(fromCoords.top, toCoords.top)
-              const selectionBottom = Math.max(fromCoords.bottom, toCoords.bottom)
-              const selectionLeft = Math.min(fromCoords.left, toCoords.left)
-              const placeAbove = selectionTop > 110
-              const top = placeAbove ? selectionTop - 68 : selectionBottom + 8
-              const left = Math.max(12, Math.min(window.innerWidth - 420, selectionLeft))
+              const { top, left } = floatingToolbarCoords(fromCoords, toCoords)
               setSelectionCoords({ top, left, selectedText: selectedStr })
             }
           } else {
@@ -1883,16 +1900,7 @@ export const MarkdownEditorWorkspace: React.FC<{
                 const fromCoords = update.view.coordsAtPos(sel.from)
                 const toCoords = update.view.coordsAtPos(sel.to) || fromCoords
                 if (fromCoords && toCoords) {
-                  const selectionTop = Math.min(fromCoords.top, toCoords.top)
-                  const selectionBottom = Math.max(fromCoords.bottom, toCoords.bottom)
-                  const selectionLeft = Math.min(fromCoords.left, toCoords.left)
-                  // Always position directly above the selected text (or directly below if near the top edge)
-                  const placeAbove = selectionTop > 110
-                  const top = placeAbove ? selectionTop - 68 : selectionBottom + 8
-                  const left = Math.max(
-                    12,
-                    Math.min(window.innerWidth - 420, selectionLeft)
-                  )
+                  const { top, left } = floatingToolbarCoords(fromCoords, toCoords)
                   setSelectionCoords({
                     top,
                     left,
