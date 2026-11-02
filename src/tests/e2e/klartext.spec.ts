@@ -869,9 +869,48 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('export-themes-btn').click()
       await expect(page.getByTestId('themes-import-export-drawer')).toBeVisible()
       await expect(page.getByTestId('themes-json-textarea')).toHaveValue(/My Nordic Theme/)
+
+      // Power-User variables that reach outside the editor are blocked until enabled in Settings,
+      // even when called straight through the IPC bridge; harmless ones still evaluate.
+      const blockedResult = await page.evaluate(() =>
+        window.klartext.evaluatePowerTemplate({
+          expressions: ['exec: printf "SHOULD_NOT_RUN"', 'env:PATH', 'cpu_cores']
+        })
+      )
+      expect(blockedResult['exec: printf "SHOULD_NOT_RUN"']).toContain('blocked')
+      expect(blockedResult['env:PATH']).toContain('blocked')
+      expect(Number(blockedResult['cpu_cores'])).toBeGreaterThan(0)
+
+      // Enable them in Settings → General, then verify they run (CLI exec, sh script, URL fetch, env var)
+      await page.getByTestId('settings-tab-general').click()
+      await page.getByTestId('settings-template-commands-checkbox').check()
       await page.getByTestId('close-settings-btn').click()
 
-      // Verify Power-User dynamic variables (CLI exec, sh script, URL fetch, env var)
+      // Even when enabled, the main process asks first in a native dialog. Playwright can't click
+      // native dialogs, so replace dialog.showMessageBox in the main process: first "Cancel"...
+      await app.evaluate(({ dialog }) => {
+        const g = globalThis as unknown as { __tplDialogs: string[] }
+        g.__tplDialogs = []
+        dialog.showMessageBox = (async (...args: unknown[]) => {
+          const opts = args[args.length - 1] as { detail?: string }
+          g.__tplDialogs.push(opts.detail ?? '')
+          return { response: 0, checkboxChecked: false }
+        }) as typeof dialog.showMessageBox
+      })
+      const declinedResult = await page.evaluate(() =>
+        window.klartext.evaluatePowerTemplate({ expressions: ['exec: printf "SHOULD_NOT_RUN"'] })
+      )
+      expect(declinedResult['exec: printf "SHOULD_NOT_RUN"']).toContain('not approved')
+      const dialogDetails = await app.evaluate(
+        () => (globalThis as unknown as { __tplDialogs: string[] }).__tplDialogs
+      )
+      expect(dialogDetails).toHaveLength(1)
+      expect(dialogDetails[0]).toContain('exec: printf "SHOULD_NOT_RUN"')
+
+      // ...then "Run".
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = (async () => ({ response: 1, checkboxChecked: false })) as typeof dialog.showMessageBox
+      })
       const powerResult = await page.evaluate(async (port) => {
         return window.klartext.evaluatePowerTemplate({
           expressions: [

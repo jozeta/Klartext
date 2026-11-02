@@ -8,6 +8,7 @@
 - The floating selection toolbar now stays inside the editor pane. In a narrower window it could cover the AI panel's buttons, and after Select All it could be placed off-screen.
 
 ### Security
+- Template commands are now off by default. Variables that run programs (`<% exec: %>`, `<% sh: %>`, …), fetch URLs (`<% url: %>`, …) or read environment variables (`<% env: %>`) used to run without asking whenever a template was inserted or a document evaluated, so a document from someone else could run commands. Turn them on in Settings → General → Template Commands; even then, Klartext lists exactly what will run and asks first. The working folder must now be inside an open workspace.
 - Dependency upgrades fixing 77 Dependabot alerts: Electron 45, electron-builder 26, electron-vite 4, Vite 6.4, Vitest 4, simple-git 4, zod 4, KaTeX 0.18.
 - Force every bundled copy of KaTeX (used by Mermaid, rehype-katex and remark-math) to the patched top-level version.
 

@@ -45,6 +45,11 @@ import {
   SearchReplaceRequestSchema
 } from '../../../shared/schemas'
 import { isSafeUrl } from '../../../shared/markdown/pipeline'
+import {
+  blockedPlaceholder,
+  classifyPowerExpression,
+  resolveTemplateCwd
+} from '../../security/template-command-policy'
 import { MultiRootRegistry, atomicWriteFile } from '../../workspace/multi-root-registry'
 import { AssetAndDocumentService } from '../../assets/asset-service'
 import { RecoveryService } from '../../recovery/recovery-service'
@@ -361,13 +366,45 @@ export function registerAllIpcHandlers(
       cwd: z.string().optional()
     })
     const { expressions, cwd } = schema.parse(rawInput || { expressions: [] })
-    const defaultRootPath = registry.getState().roots[0]?.path || os.homedir()
-    const execCwd = cwd && fs.existsSync(cwd) ? cwd : defaultRootPath
+    const rootPaths = registry.getState().roots.map((r) => r.path)
+    const execCwd = resolveTemplateCwd(cwd, rootPaths, os.homedir())
     const powerVariables: Record<string, string> = {}
+
+    // Commands, URL fetches and env vars only run when enabled in Settings AND approved in a native
+    // dialog listing exactly what will run (the renderer can't skip either step).
+    const sensitive = [...new Set(expressions.map((e) => e.trim()))].filter(
+      (e) => classifyPowerExpression(e) !== null
+    )
+    let sensitiveBlocked: 'disabled' | 'declined' | null = null
+    if (sensitive.length > 0) {
+      if (!settingsService.getSettings().templateCommandsEnabled) {
+        sensitiveBlocked = 'disabled'
+      } else {
+        const win = getMainWindow()
+        const options: Electron.MessageBoxOptions = {
+          type: 'warning',
+          buttons: ['Cancel', 'Run'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+          title: 'Run template commands?',
+          message: 'This template wants to run commands, fetch URLs or read environment variables.',
+          detail: `Working folder: ${execCwd}\n\n${sensitive.map((e) => `• ${e}`).join('\n')}\n\nOnly run templates you trust.`
+        }
+        const { response } = win
+          ? await dialog.showMessageBox(win, options)
+          : await dialog.showMessageBox(options)
+        if (response !== 1) sensitiveBlocked = 'declined'
+      }
+    }
 
     for (const rawExpr of expressions) {
       const expr = rawExpr.trim()
       const lower = expr.toLowerCase()
+      if (sensitiveBlocked && classifyPowerExpression(expr) !== null) {
+        powerVariables[expr] = blockedPlaceholder(sensitiveBlocked)
+        continue
+      }
       try {
         if (lower === 'git_commit' || lower === 'commit' || lower === 'git_sha') {
           const { stdout } = await execAsync('git rev-parse --short HEAD', {

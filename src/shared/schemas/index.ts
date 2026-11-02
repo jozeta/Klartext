@@ -224,6 +224,8 @@ export const AppSettingsSchema = z.object({
   dynamicWorkspaces: z.array(DynamicWorkspaceDefSchema).default([]),
   defaultEditMode: EditModeSchema.default('inline'),
   floatingToolbarEnabled: z.boolean().default(true),
+  // Off by default: lets templates run commands, fetch URLs and read env vars (each run still asks).
+  templateCommandsEnabled: z.boolean().default(false),
   formattingToolbarVisible: z.boolean().default(false),
   frontmatterPanelVisible: z.boolean().default(false),
   showOutlineTab: z.boolean().default(true),
