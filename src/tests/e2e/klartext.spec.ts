@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import http from 'http'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import { test, expect, _electron as electron } from '@playwright/test'
 
 const VALID_PNG_BASE64 =

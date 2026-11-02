@@ -1,4 +1,4 @@
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import type { GitCommitLogEntry, GitPullStrategy, GitRepoStatus } from '../../shared/types'
 import { MultiRootRegistry } from '../workspace/multi-root-registry'
 import { RecoveryService } from '../recovery/recovery-service'
