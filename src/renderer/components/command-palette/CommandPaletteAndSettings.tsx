@@ -1924,6 +1924,31 @@ export const SettingsModal: React.FC<{
                 </select>
               </div>
 
+              {/* Template commands (<% exec: %>, <% sh: %>, <% url: %>, <% env: %> variables) -- off by default, see docs/security.md */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-primary uppercase tracking-wider text-[11px]">
+                    Template Commands
+                  </span>
+                  <label className="flex items-center gap-2 cursor-pointer text-primary font-medium">
+                    <input
+                      type="checkbox"
+                      data-testid="settings-template-commands-checkbox"
+                      checked={settings.templateCommandsEnabled === true}
+                      onChange={(e) => onUpdateSettings({ templateCommandsEnabled: e.target.checked })}
+                      className="accent-accent"
+                    />
+                    <span>Allow templates to run commands, fetch URLs and read environment variables</span>
+                  </label>
+                </div>
+                <p className="text-[11px] text-muted leading-relaxed">
+                  Variables like <code>{'<% exec: … %>'}</code>, <code>{'<% sh: … %>'}</code>,{' '}
+                  <code>{'<% url: … %>'}</code> and <code>{'<% env:NAME %>'}</code>. Even when allowed, Klartext
+                  shows exactly what will run and asks first. A document from someone else can contain
+                  them, so only run templates you trust.
+                </p>
+              </div>
+
               {/* Multi-Language Spellcheck Configuration */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
