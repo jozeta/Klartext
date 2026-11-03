@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Development: ESLint 9 with a flat config (`eslint.config.mjs`, replacing `.eslintrc.cjs`), since ESLint 8 is end-of-life. Same rules and the same files are linted.
+
 ## [1.5.0] - 2026-11-02
 
 ### Changed
