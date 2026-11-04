@@ -56,3 +56,8 @@ Shared code is in `src/shared/` (types, schemas, markdown, serialization, templa
 - `showcase/` and `demo-workspace/` are user-facing sample Markdown (also used for the README
   screenshots); keep them rendering correctly.
 - Update `CHANGELOG.md` for user-visible changes.
+
+## App standards
+
+This repo follows the app standards in `~/Desktop/code/tools/standards/STANDARDS.md` (rule IDs,
+severities; decisions and waivers in `.claude-standards`). `claude-check --repo .` checks it.
