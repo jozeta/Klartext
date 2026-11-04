@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Animations and transitions respect the system's "Reduce motion" setting
+
 ### Changed
 - Development: ESLint 9 with a flat config (`eslint.config.mjs`, replacing `.eslintrc.cjs`), since ESLint 8 is end-of-life. Same rules and the same files are linted.
 
