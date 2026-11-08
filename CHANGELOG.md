@@ -8,6 +8,10 @@
 - Development: ESLint 9 with a flat config (`eslint.config.mjs`, replacing `.eslintrc.cjs`), since ESLint 8 is end-of-life. Same rules and the same files are linted.
 - Development: `eslint-plugin-no-unsanitized` now fails the lint on any `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write` with a non-literal value. Reviewed sinks carry a `reviewed: <why>` comment.
 
+### Fixed
+- Slides never showed Mermaid diagrams, and wikilinks in the preview pane didn't open the note or show the hover preview. The Markdown sanitizer's allow-list spelled the app's own `data-mermaid-index`, `data-wikilink`, `data-callout`, `data-start-line` and `data-icon` attributes with hyphens, so they were silently removed; they are now kept (and still no other `data-*` attributes).
+- Code blocks containing `<` or `&` showed `&#x3C;` and `&#x26;` in the preview and slides instead of the characters. The code is now decoded properly (decimal, hex and the basic named references, in one pass) and escaped again before highlighting, so `<script>` in a code block is still shown as text.
+
 ### Security
 - Opening an SVG file from someone else could inject markup into the app window: the SVG viewer's sanitizer was a list of regular expressions that missed `<svg/onload=…>`, entity-encoded `javascript:` links, `<animate>`/`<set>` tricks and `<iframe>`. Script execution was still blocked by the Content-Security-Policy, but the sanitizer no longer depends on that: SVG files, Mermaid diagrams, the Markdown preview, slides and the inline KaTeX widgets now all go through DOMPurify (allow-list, bundled, no network) right before they are inserted. Animated SVG (`<animate>`, `<set>`) is no longer animated in the SVG viewer, and `<use>` may only point inside the same SVG.
 - The SVG viewer's fallback for non-markup SVG content now builds its `<img>` element with React instead of a string, so a file name containing quotes can't add attributes.

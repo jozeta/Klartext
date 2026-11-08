@@ -476,6 +476,41 @@ function preprocessExtensions(
   }
 }
 
+const NAMED_REFERENCES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00a0'
+}
+
+/**
+ * Turns the character references in serialized HTML text back into the characters they stand for:
+ * decimal (`&#60;`), hex (`&#x3C;`, which rehype-stringify writes) and the basic named ones. One pass,
+ * so `&#x26;lt;` becomes the text `&lt;`, not `<`. Unknown names stay as they are; code points that
+ * aren't valid characters (0, surrogates, > U+10FFFF) become U+FFFD, as in the HTML spec.
+ *
+ * The result is plain text and must be escaped again before it is used as HTML.
+ */
+export function decodeCharacterReferences(text: string): string {
+  return text.replace(
+    /&(?:#(\d{1,8})|#[xX]([0-9a-fA-F]{1,7})|([a-zA-Z]+));/g,
+    (match, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
+      if (name !== undefined) {
+        return Object.prototype.hasOwnProperty.call(NAMED_REFERENCES, name)
+          ? NAMED_REFERENCES[name]
+          : match
+      }
+      const codePoint = dec !== undefined ? parseInt(dec, 10) : parseInt(hex as string, 16)
+      if (codePoint === 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+        return '\ufffd'
+      }
+      return String.fromCodePoint(codePoint)
+    }
+  )
+}
+
 const sanitizeSchema = {
   ...defaultSchema,
   protocols: {
@@ -520,17 +555,18 @@ const sanitizeSchema = {
     div: [
       'className',
       'class',
-      'data-mermaid-index',
-      'data-start-line',
-      'data-callout'
+      // hast property names (camelCase): rehype-sanitize ignores `data-foo` spellings here.
+      'dataMermaidIndex', // slides splice the Mermaid SVG in by this index
+      'dataStartLine',
+      'dataCallout'
     ],
     details: ['open', 'className', 'class'],
     li: ['style', 'className', 'class'],
-    a: ['href', 'className', 'class', 'data-wikilink', 'target', 'rel'],
+    a: ['href', 'className', 'class', 'dataWikilink', 'target', 'rel'], // dataWikilink: preview click + hover preview
     img: ['src', 'alt', 'title', 'width', 'height', 'className', 'class'],
     input: [['type', 'checkbox'], 'checked', 'disabled', 'className'],
     code: ['className', 'class'],
-    span: ['className', 'class', 'style', 'aria-hidden', 'title', 'data-icon'],
+    span: ['className', 'class', 'style', 'aria-hidden', 'title', 'dataIcon'],
     svg: [
       'viewBox',
       'width',
@@ -594,12 +630,8 @@ export async function renderMarkdownDocument(
   html = html.replace(
     /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g,
     (_m, lang, encodedCode) => {
-      const decoded = String(encodedCode)
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#x27;/g, "'")
-        .replace(/&amp;/g, '&')
+      // Back to plain text; highlightCodeToHtml escapes it again before it becomes HTML.
+      const decoded = decodeCharacterReferences(String(encodedCode))
       const highlighted = highlightCodeToHtml(decoded, lang || '')
       return `<pre class="klartext-codeblock"><code class="language-${lang || 'text'}">${highlighted}</code></pre>`
     }

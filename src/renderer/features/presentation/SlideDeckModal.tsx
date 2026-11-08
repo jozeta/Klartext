@@ -21,6 +21,7 @@ import {
 import { renderMarkdownDocument } from '../../../shared/markdown/pipeline'
 import { renderCachedMermaidSvg } from '../diagrams/DiagramWidgets'
 import { sanitizePreviewHtml } from '../../security/sanitize-markup'
+import { spliceSlideMermaid } from './slide-mermaid'
 
 interface SlideDeckModalProps {
   markdown: string
@@ -155,28 +156,13 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
       const res = await renderMarkdownDocument(activeSlide.markdown, { rootId })
       if (cancelled) return
 
-      let finalHtml = res.html
-      if (res.mermaidBlocks.length > 0) {
-        for (const block of res.mermaidBlocks) {
-          try {
-            const svg = await renderCachedMermaidSvg(
-              block.code,
-              themeConfig.mermaidTheme,
-              themeConfig.mermaidTheme === 'dark' ? 'dark' : 'neutral'
-            )
-            const placeholderRegex = new RegExp(
-              `<div class="klartext-mermaid-placeholder" data-mermaid-index="${block.index}"[^>]*></div>`,
-              'g'
-            )
-            finalHtml = finalHtml.replace(
-              placeholderRegex,
-              `<div class="klartext-slide-mermaid" data-testid="slide-mermaid-diagram">${svg}</div>`
-            )
-          } catch {
-            // Keep fallback code block if diagram syntax is incomplete
-          }
-        }
-      }
+      const finalHtml = await spliceSlideMermaid(res.html, res.mermaidBlocks, (code) =>
+        renderCachedMermaidSvg(
+          code,
+          themeConfig.mermaidTheme,
+          themeConfig.mermaidTheme === 'dark' ? 'dark' : 'neutral'
+        )
+      )
       if (!cancelled) {
         // SEC-DOM-2: sanitize the finished slide (Markdown HTML + Mermaid SVG) as the last step.
         setSlideHtml(sanitizePreviewHtml(finalHtml))
