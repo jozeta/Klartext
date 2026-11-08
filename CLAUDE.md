@@ -49,6 +49,11 @@ Shared code is in `src/shared/` (types, schemas, markdown, serialization, templa
 - **Adding an IPC channel** means: a Zod schema in `src/shared/schemas`, a handler in
   `src/main/ipc`, a typed method on the preload bridge, and a security test.
 - Never let a path from the renderer reach `fs` without going through the path guard.
+- Untrusted markup (documents, SVG files, Mermaid output, KaTeX) reaches the DOM only through
+  `src/renderer/security/sanitize-markup.ts` (DOMPurify), applied last, right before the sink. Never
+  sanitize and then edit the string. Other HTML sinks must be escaped text plus fixed markup and carry a
+  `reviewed: <why>` comment (`eslint-disable-next-line no-unsanitized/property -- reviewed: …` for
+  `innerHTML`, plain `// reviewed: …` for `dangerouslySetInnerHTML`). See docs/security.md §3.
 - Git: each root has its own `GitRepoInstance` with a serialized command queue and
   `core.hooksPath=/dev/null`. Keep commands queued; never run hooks from opened repos.
   `syncAllRepositories()` uses `Promise.allSettled` so one conflict doesn't block others.

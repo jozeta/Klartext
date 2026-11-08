@@ -6,6 +6,11 @@
 
 ### Changed
 - Development: ESLint 9 with a flat config (`eslint.config.mjs`, replacing `.eslintrc.cjs`), since ESLint 8 is end-of-life. Same rules and the same files are linted.
+- Development: `eslint-plugin-no-unsanitized` now fails the lint on any `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write` with a non-literal value. Reviewed sinks carry a `reviewed: <why>` comment.
+
+### Security
+- Opening an SVG file from someone else could inject markup into the app window: the SVG viewer's sanitizer was a list of regular expressions that missed `<svg/onload=…>`, entity-encoded `javascript:` links, `<animate>`/`<set>` tricks and `<iframe>`. Script execution was still blocked by the Content-Security-Policy, but the sanitizer no longer depends on that: SVG files, Mermaid diagrams, the Markdown preview, slides and the inline KaTeX widgets now all go through DOMPurify (allow-list, bundled, no network) right before they are inserted. Animated SVG (`<animate>`, `<set>`) is no longer animated in the SVG viewer, and `<use>` may only point inside the same SVG.
+- The SVG viewer's fallback for non-markup SVG content now builds its `<img>` element with React instead of a string, so a file name containing quotes can't add attributes.
 
 ## [1.5.0] - 2026-11-02
 

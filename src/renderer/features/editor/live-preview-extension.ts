@@ -6,7 +6,7 @@ import {
 } from '@codemirror/view'
 import { StateField } from '@codemirror/state'
 import katex from 'katex'
-import { sanitizeSvgContent } from '../../../shared/serialization/excalidraw-svg'
+import { sanitizePreviewHtml } from '../../security/sanitize-markup'
 import { highlightCodeToHtml } from '../../../shared/markdown/syntax-highlight'
 import {
   getCachedMermaidSvgSync,
@@ -138,6 +138,7 @@ class InlineUntitledIconWidget extends WidgetType {
     span.className = 'klartext-inline-icon-wrap cursor-pointer'
     span.setAttribute('data-icon', this.iconName)
     span.title = `:icon[${this.iconName}]:`
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: svgHtml is built by renderUntitledIconToSvgHtml from the bundled @untitledui/icons components (constant paths); the name is [a-zA-Z0-9_-]+ and must match a known icon, attribute values are quote-escaped
     span.innerHTML = this.svgHtml
     span.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -200,10 +201,13 @@ class InlineMathWidget extends WidgetType {
       ? 'my-2 py-2 px-3 rounded-sm bg-secondary/40 text-center overflow-x-auto cursor-pointer'
       : 'px-0.5 cursor-pointer'
     try {
-      wrapper.innerHTML = katex.renderToString(this.latex, {
+      const mathHtml = katex.renderToString(this.latex, {
         displayMode: this.displayMode,
-        throwOnError: false
+        throwOnError: false,
+        trust: false
       })
+      // eslint-disable-next-line no-unsanitized/property -- reviewed: KaTeX escapes the TeX source and trust:false disables \href/\url/\includegraphics/\html*; the result is re-sanitized by DOMPurify (sanitizePreviewHtml)
+      wrapper.innerHTML = sanitizePreviewHtml(mathHtml)
     } catch {
       wrapper.textContent = this.latex
     }
@@ -575,7 +579,7 @@ class InlineImageOrDrawingWidget extends WidgetType {
   }
 }
 
-function renderTableCellInlineHtml(rawCell: string): string {
+export function renderTableCellInlineHtml(rawCell: string): string {
   const unescapedPipes = rawCell.replace(/\\\|/g, '|')
   // Split by inline code spans (`...` or ``...``) so code spans are never formatted as Markdown
   const parts = unescapedPipes.split(/(`+[^`]+`+)/g)
@@ -674,6 +678,7 @@ class InlineTableWidget extends WidgetType {
         const th = document.createElement('th')
         const align = alignments[colIdx] || 'left'
         th.className = `border border-subtle bg-secondary px-3 py-1.5 font-semibold text-${align}`
+        // eslint-disable-next-line no-unsanitized/property -- reviewed: renderTableCellInlineHtml escapes & < > in the cell text first and only adds fixed tags (span/strong/em/code/del/mark) without user-controlled attributes (tested in dom-sinks.test.ts)
         th.innerHTML = renderTableCellInlineHtml(h)
         tr.appendChild(th)
       })
@@ -689,6 +694,7 @@ class InlineTableWidget extends WidgetType {
           const td = document.createElement('td')
           const align = alignments[colIdx] || 'left'
           td.className = `border border-subtle px-3 py-1.5 text-${align}`
+          // eslint-disable-next-line no-unsanitized/property -- reviewed: renderTableCellInlineHtml escapes & < > in the cell text first and only adds fixed tags (span/strong/em/code/del/mark) without user-controlled attributes (tested in dom-sinks.test.ts)
           td.innerHTML = renderTableCellInlineHtml(cell)
           tr.appendChild(td)
         })
@@ -736,6 +742,7 @@ class InlineCodeBlockWidget extends WidgetType {
     const pre = document.createElement('pre')
     pre.className = 'p-3 font-mono overflow-x-auto m-0 klartext-codeblock'
     const codeEl = document.createElement('code')
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: highlightCodeToHtml runs every character of the code through escapeHtml and only adds fixed <span class="hl-…"> tags; lang is not used in the output (tested in dom-sinks.test.ts)
     codeEl.innerHTML = highlightCodeToHtml(this.code, this.lang)
     pre.appendChild(codeEl)
     wrapper.appendChild(header)
@@ -835,11 +842,13 @@ class InlineMermaidBlockWidget extends WidgetType {
         document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
       const syncHit = getCachedMermaidSvgSync(currentCode, currentTheme)
       if (syncHit) {
+        // eslint-disable-next-line no-unsanitized/property -- reviewed: the Mermaid cache only holds DOMPurify output (sanitizeMermaidSvg in renderCachedMermaidSvg)
         body.innerHTML = syncHit
         return
       }
       renderCachedMermaidSvg(currentCode, currentTheme)
         .then((sanitizedSvg) => {
+          // eslint-disable-next-line no-unsanitized/property -- reviewed: renderCachedMermaidSvg returns DOMPurify output (sanitizeMermaidSvg)
           body.innerHTML = sanitizedSvg
         })
         .catch((err) => {

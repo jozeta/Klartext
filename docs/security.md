@@ -12,8 +12,36 @@
 - Every file read, write, delete, rename, or `klartext-asset://` request must pass `MultiRootPathGuard.resolveScopedPath(rootId, relativePath)`, which blocks `..` traversal, NUL bytes, cross-root escape, and symlink escape outside the owning root's `realPath`.
 
 ## 3. Markdown, HTML, and SVG Sanitization
-- Markdown is parsed via `unified`/`remark` and sanitized with `rehype-sanitize` plus defense-in-depth stripping of `<script>`, `<iframe>`, `<object>`, `<embed>`, inline `on*` event attributes, and dangerous URL schemes (`javascript:`, `vbscript:`, `file:`, `data:text/html`).
-- Mermaid runs in `securityLevel: 'strict'` and all generated or loaded SVGs pass through `sanitizeSvgContent()`.
+Documents, SVG files and Mermaid sources come from the workspace, which can contain files from others
+(cloned repos, downloads), so their content is untrusted.
+
+- Markdown is parsed via `unified`/`remark` and sanitized with `rehype-sanitize` (an allow-list on the
+  syntax tree) plus defense-in-depth stripping of `<script>`, `<iframe>`, `<object>`, `<embed>`, inline
+  `on*` event attributes, and dangerous URL schemes (`javascript:`, `vbscript:`, `file:`, `data:text/html`).
+- Mermaid runs in `securityLevel: 'strict'`.
+- **Every HTML sink in the renderer is sanitized last, right before insertion, with DOMPurify**
+  (`src/renderer/security/sanitize-markup.ts`; bundled from npm, no network loads). A regex block-list is
+  never the last line of defense. Profiles:
+  - `sanitizeMermaidSvg`: Mermaid output (SVG + HTML labels in `<foreignObject>`, Mermaid's `<style>`).
+    The Mermaid cache only stores this output.
+  - `sanitizeSvgDocument`: SVG files in the visual asset viewer (SVG only, no `<foreignObject>`, no SMIL
+    animation).
+  - `sanitizePreviewHtml`: the Markdown preview, slides (including their Mermaid SVG) and inline KaTeX
+    widgets (HTML + SVG + MathML, `klartext-asset:` URLs). Forms are removed.
+  - In all profiles `<use>` may only reference `#ids` inside the same SVG.
+- `sanitizeSvgContent()` (regex, in `src/shared`) is only used by the main process for SVG it writes or
+  serves through `klartext-asset://`, which the renderer loads as `<img>` (no scripting); it must not be
+  used for markup that is inserted into the DOM.
+- Sinks whose value is escaped text plus fixed markup (code highlighting, live-preview tables, bundled
+  icons) are marked `reviewed: <why>` in the code. ESLint's `no-unsanitized` rule fails on any new
+  unreviewed `innerHTML`/`outerHTML`/`insertAdjacentHTML`; `dangerouslySetInnerHTML` sinks carry a plain
+  `// reviewed: <why>` comment. Tests: `src/tests/security/dom-sinks.test.ts`.
+- If a renderer XSS ever got through, the injected script would have the whole `window.klartext` bridge:
+  read, write and delete documents in every mounted root, commit and push with Git, change settings, and
+  send data out via the Web Clipper/URL metadata fetch or `openExternalUrl`. It would not get Node, `fs`
+  or a shell (`contextIsolation`, `sandbox`, no `nodeIntegration`; template commands still need the
+  native confirmation dialog). The CSP (`script-src 'self'`, no `'unsafe-inline'`) blocks inline event
+  handlers and `javascript:` URLs as a second layer.
 
 ## 4. Subprocess & AI Loopback Security
 - Git operations execute via `simple-git` with argument arrays (`shell: false`) and `-c core.hooksPath=/dev/null` so untrusted repositories cannot execute malicious `.git/hooks`.

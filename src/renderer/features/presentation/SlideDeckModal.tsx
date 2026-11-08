@@ -20,6 +20,7 @@ import {
 } from '../../../shared/markdown/export-formats'
 import { renderMarkdownDocument } from '../../../shared/markdown/pipeline'
 import { renderCachedMermaidSvg } from '../diagrams/DiagramWidgets'
+import { sanitizePreviewHtml } from '../../security/sanitize-markup'
 
 interface SlideDeckModalProps {
   markdown: string
@@ -177,7 +178,8 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
         }
       }
       if (!cancelled) {
-        setSlideHtml(finalHtml)
+        // SEC-DOM-2: sanitize the finished slide (Markdown HTML + Mermaid SVG) as the last step.
+        setSlideHtml(sanitizePreviewHtml(finalHtml))
       }
     }
     void renderSlideWithDiagrams()
@@ -754,6 +756,7 @@ export const SlideDeckModal: React.FC<SlideDeckModalProps> = ({
                   data-testid="slide-rendered-content"
                   style={{ fontSize: `${(fontScale / 100) * 1.12}rem` }}
                   className="klartext-preview-body klartext-slide-typography select-text"
+                  // reviewed: slideHtml is only set from sanitizePreviewHtml(...) (DOMPurify) after the Mermaid placeholders are filled in
                   dangerouslySetInnerHTML={{ __html: slideHtml }}
                 />
               </div>

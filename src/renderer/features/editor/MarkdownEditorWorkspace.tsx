@@ -62,7 +62,7 @@ import {
   type TableManipulationAction,
   type WorkspaceDocEntry
 } from '../../../shared/markdown/knowledge-features'
-import { sanitizeSvgContent } from '../../../shared/serialization/excalidraw-svg'
+import { sanitizePreviewHtml, sanitizeSvgDocument } from '../../security/sanitize-markup'
 import { hasConflictMarkers, parseConflictHunks } from '../../../main/git/conflict-resolver'
 import {
   createLivePreviewExtension,
@@ -2178,6 +2178,17 @@ export const MarkdownEditorWorkspace: React.FC<{
     }
   }
 
+  // SEC-DOM-2: DOMPurify runs last, right before the two innerHTML sinks below (memoized: it is
+  // the most expensive step of a re-render).
+  const safePreviewHtml = useMemo(
+    () => (rendered ? sanitizePreviewHtml(rendered.html) : ''),
+    [rendered]
+  )
+  const safeSvgMarkup = useMemo(
+    () => (isSvgFile && content.trim().startsWith('<') ? sanitizeSvgDocument(content) : ''),
+    [isSvgFile, content]
+  )
+
   const assetProtocolUrl = `klartext-asset://${encodeURIComponent(rootId)}/${relativePath.replace(/^\.\//, '')}`
 
   return (
@@ -3874,15 +3885,25 @@ export const MarkdownEditorWorkspace: React.FC<{
           className="flex-1 flex flex-col items-center justify-center p-8 overflow-auto bg-app/50"
         >
           {isSvgFile ? (
-            <div
-              style={{ transform: `scale(${assetZoom / 100})`, transformOrigin: 'center center' }}
-              className="max-w-4xl w-full p-6 rounded-lg border border-subtle bg-white shadow-xs flex items-center justify-center overflow-auto transition-transform"
-              dangerouslySetInnerHTML={{
-                __html: content.trim().startsWith('<')
-                  ? sanitizeSvgContent(content)
-                  : `<img src="${content.startsWith('data:') ? content : assetProtocolUrl}" alt="${relativePath}" class="max-w-full h-auto" />`
-              }}
-            />
+            content.trim().startsWith('<') ? (
+              <div
+                style={{ transform: `scale(${assetZoom / 100})`, transformOrigin: 'center center' }}
+                className="max-w-4xl w-full p-6 rounded-lg border border-subtle bg-white shadow-xs flex items-center justify-center overflow-auto transition-transform"
+                // reviewed: safeSvgMarkup is the SVG file after DOMPurify (sanitizeSvgDocument: SVG profile, no foreignObject, <use> only to #ids)
+                dangerouslySetInnerHTML={{ __html: safeSvgMarkup }}
+              />
+            ) : (
+              <div
+                style={{ transform: `scale(${assetZoom / 100})`, transformOrigin: 'center center' }}
+                className="max-w-4xl w-full p-6 rounded-lg border border-subtle bg-white shadow-xs flex items-center justify-center overflow-auto transition-transform"
+              >
+                <img
+                  src={content.startsWith('data:') ? content : assetProtocolUrl}
+                  alt={relativePath}
+                  className="max-w-full h-auto"
+                />
+              </div>
+            )
           ) : isRasterImageAsset ? (
             <div
               data-testid="raster-asset-preview-pane"
@@ -4316,7 +4337,8 @@ export const MarkdownEditorWorkspace: React.FC<{
                 <>
                   <div
                     className="klartext-preview-body"
-                    dangerouslySetInnerHTML={{ __html: rendered.html }}
+                    // reviewed: safePreviewHtml = rehype-sanitize allow-list in the pipeline, then a final DOMPurify pass (sanitizePreviewHtml) after the pipeline's string post-processing
+                    dangerouslySetInnerHTML={{ __html: safePreviewHtml }}
                   />
                   {rendered.mermaidBlocks.map((block) => (
                     <MermaidDiagramWidget

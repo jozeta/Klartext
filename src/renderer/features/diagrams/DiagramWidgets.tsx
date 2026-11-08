@@ -13,7 +13,6 @@ import {
 import {
   createDefaultExcalidrawScene,
   serializeExcalidrawSvg,
-  sanitizeSvgContent,
   type ExcalidrawElementItem,
   type ExcalidrawSceneData
 } from '../../../shared/serialization/excalidraw-svg'
@@ -21,6 +20,7 @@ import {
   DIAGRAM_PALETTE_ITEMS,
   StructuredMermaidVisualBuilder
 } from './MermaidVisualParsers'
+import { sanitizeMermaidSvg } from '../../security/sanitize-markup'
 
 let mermaidModulePromise: Promise<typeof import('mermaid').default> | null = null
 let lastMermaidConfigKey: string | null = null
@@ -28,19 +28,9 @@ const mermaidSvgCache = new Map<string, string>()
 
 export type MermaidPreviewTheme = 'auto' | 'default' | 'neutral' | 'dark' | 'forest' | 'base'
 
-/**
- * Sanitizes Mermaid-rendered SVG while preserving `<foreignObject>` HTML labels
- * used by Mermaid flowcharts, mindmaps, kanban boards, architecture, and class diagrams.
- */
-export function sanitizeMermaidSvg(svgString: string): string {
-  return svgString
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(
-      /(?:href|xlink:href)\s*=\s*(?:"\s*(?:javascript:|vbscript:|data:text\/html)[^"]*"|'\s*(?:javascript:|vbscript:|data:text\/html)[^']*')/gi,
-      ''
-    )
-}
+// Mermaid output goes through DOMPurify (see sanitize-markup.ts) before it is cached, so every
+// value in mermaidSvgCache is already sanitized.
+export { sanitizeMermaidSvg }
 
 export function getCachedMermaidSvgSync(
   code: string,
@@ -204,6 +194,7 @@ export const MermaidDiagramWidget: React.FC<{
       <div
         className="p-4 flex justify-center items-center overflow-auto"
         data-testid="mermaid-svg-container"
+        // reviewed: svgHtml only comes from mermaidSvgCache / renderCachedMermaidSvg, which store DOMPurify output (sanitizeMermaidSvg)
         dangerouslySetInnerHTML={{ __html: svgHtml }}
       />
     </div>
@@ -2851,6 +2842,7 @@ export const VisualMermaidBuilderModal: React.FC<{
                     transition: previewPanDragRef.current ? 'none' : 'transform 90ms ease-out'
                   }}
                   className="w-full h-full flex items-center justify-center [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:w-auto [&_svg]:h-auto"
+                  // reviewed: previewSvg only comes from renderCachedMermaidSvg, which returns DOMPurify output (sanitizeMermaidSvg)
                   dangerouslySetInnerHTML={{ __html: previewSvg }}
                 />
               </div>
