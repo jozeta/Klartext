@@ -962,6 +962,13 @@ body[data-portal-tooltips='true'] [data-tooltip]::after {
   max-height: 44vh;
   height: auto;
 }
+/* Mermaid sized each <foreignObject> for its label at the diagram's own font size and line-height;
+   the slide text scale above (p: 1.08em, line-height 1.65) made labels overflow and get clipped. */
+.klartext-slide-typography .klartext-slide-mermaid foreignObject p,
+.klartext-slide-typography .klartext-slide-mermaid foreignObject li {
+  font-size: inherit;
+  line-height: inherit;
+}
 
 /* Respect the system's "Reduce motion" setting: animations and transitions become instant. */
 @media (prefers-reduced-motion: reduce) {
