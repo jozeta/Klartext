@@ -5,6 +5,8 @@
  * - 4.3 Slide Deck Presentation Mode & Slack / Jira / GFM Markdown Exporters
  */
 
+import { decodeCharacterReferences } from './character-references'
+
 export type SlideSplitMode = 'auto' | 'hr' | 'h1-h2' | 'all-headings'
 
 export interface SlideDeckItem {
@@ -335,17 +337,11 @@ export function convertMarkdownToGfm(markdown: string): string {
 }
 
 /**
- * Decode common HTML entities
+ * Decode HTML character references (named, decimal and hex) in plain text, in one pass. nbsp becomes
+ * a normal space, as Markdown expects.
  */
 function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_m, dec) => String.fromCharCode(Number(dec)))
+  return decodeCharacterReferences(str).replace(/\u00a0/g, ' ')
 }
 
 /**
@@ -399,23 +395,26 @@ export function htmlToCleanMarkdown(
     .replace(/<(script|style|noscript|nav|footer|aside|iframe|svg)[^>]*>[\s\S]*?<\/\1>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '')
 
+  // Text keeps its character references until the single decode after the last tag is stripped:
+  // decoding earlier would decode twice (`&amp;lt;` -> `<`) and let `&lt;b&gt;` text be stripped as a tag.
+
   // Convert <pre><code>...</code></pre>
   html = html.replace(/<pre[^>]*>\s*(?:<code[^>]*>)?([\s\S]*?)(?:<\/code>)?\s*<\/pre>/gi, (_m, code) => {
-    const cleanCode = decodeHtmlEntities(code.replace(/<[^>]+>/g, '')).trim()
+    const cleanCode = code.replace(/<[^>]+>/g, '').trim()
     return `\n\n\`\`\`\n${cleanCode}\n\`\`\`\n\n`
   })
 
   // Convert headings h1-h6
   html = html.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, level, inner) => {
-    const text = decodeHtmlEntities(inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
-    if (!text) return ''
+    const text = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+    if (!decodeHtmlEntities(text).trim()) return ''
     return `\n\n${'#'.repeat(Number(level))} ${text}\n\n`
   })
 
   // Convert links <a href="...">text</a>
   html = html.replace(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, inner) => {
-    const text = decodeHtmlEntities(inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
-    if (!text) return ''
+    const text = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+    if (!decodeHtmlEntities(text).trim()) return ''
     let resolvedUrl = href.trim()
     if (sourceUrl && resolvedUrl.startsWith('/')) {
       try {
@@ -430,7 +429,7 @@ export function htmlToCleanMarkdown(
   // Convert images <img src="..." alt="...">
   html = html.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, (fullTag, src) => {
     const altMatch = fullTag.match(/alt=["']([^"']*)["']/i)
-    const alt = altMatch ? decodeHtmlEntities(altMatch[1].trim()) : 'Image'
+    const alt = altMatch ? altMatch[1].trim() : 'Image'
     let resolvedSrc = src.trim()
     if (sourceUrl && resolvedSrc.startsWith('/')) {
       try {
@@ -450,14 +449,14 @@ export function htmlToCleanMarkdown(
 
   // Convert blockquotes
   html = html.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (_m, inner) => {
-    const text = decodeHtmlEntities(inner.replace(/<[^>]+>/g, '').trim())
+    const text = inner.replace(/<[^>]+>/g, '').trim()
     return `\n\n> ${text.split(/\r?\n/).join('\n> ')}\n\n`
   })
 
   // Convert list items
   html = html.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_m, inner) => {
-    const text = decodeHtmlEntities(inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
-    return text ? `\n- ${text}` : ''
+    const text = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+    return decodeHtmlEntities(text).trim() ? `\n- ${text}` : ''
   })
   html = html.replace(/<\/?(ul|ol)[^>]*>/gi, '\n')
 

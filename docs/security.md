@@ -18,6 +18,11 @@ Documents, SVG files and Mermaid sources come from the workspace, which can cont
 - Markdown is parsed via `unified`/`remark` and sanitized with `rehype-sanitize` (an allow-list on the
   syntax tree) plus defense-in-depth stripping of `<script>`, `<iframe>`, `<object>`, `<embed>`, inline
   `on*` event attributes, and dangerous URL schemes (`javascript:`, `vbscript:`, `file:`, `data:text/html`).
+  The allow-list names hast properties (`className`, `ariaHidden`, `strokeLineCap`, `dataWikilink`), not
+  HTML attribute names; a hyphenated entry never matches (test: `src/tests/unit/render-regressions.test.ts`).
+  The defense-in-depth pass (`stripUnsafeAttributes()` in `src/shared/markdown/pipeline.ts`) only edits
+  attributes inside start tags, never text, so code that shows `onerror=` is displayed as written. It
+  matters for the HTML export, which the main process writes from the pipeline output without DOMPurify.
 - Mermaid runs in `securityLevel: 'strict'`.
 - **Every HTML sink in the renderer is sanitized last, right before insertion, with DOMPurify**
   (`src/renderer/security/sanitize-markup.ts`; bundled from npm, no network loads). A regex block-list is

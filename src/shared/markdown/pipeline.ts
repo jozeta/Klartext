@@ -11,6 +11,9 @@ import rehypeStringify from 'rehype-stringify'
 import yaml from 'yaml'
 import { highlightCodeToHtml } from './syntax-highlight'
 import { renderUntitledIconToSvgHtml } from '../icons/untitled-icon-svg'
+import { decodeCharacterReferences } from './character-references'
+
+export { decodeCharacterReferences }
 
 export interface HeadingItem {
   depth: number
@@ -476,42 +479,33 @@ function preprocessExtensions(
   }
 }
 
-const NAMED_REFERENCES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: '\u00a0'
-}
+// A start tag in serialized HTML, with its attributes (quoted values may contain `>`).
+const START_TAG = /<([a-zA-Z][a-zA-Z0-9:-]*)((?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)(\s*\/?)>/g
+const TAG_ATTRIBUTE = /(\s+)([^\s"'>/=]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g
+const UNSAFE_URL = /^["']?\s*(?:javascript|vbscript|data:text\/html|file):/i
 
 /**
- * Turns the character references in serialized HTML text back into the characters they stand for:
- * decimal (`&#60;`), hex (`&#x3C;`, which rehype-stringify writes) and the basic named ones. One pass,
- * so `&#x26;lt;` becomes the text `&lt;`, not `<`. Unknown names stay as they are; code points that
- * aren't valid characters (0, surrogates, > U+10FFFF) become U+FFFD, as in the HTML spec.
- *
- * The result is plain text and must be escaped again before it is used as HTML.
+ * Removes `on*` event attributes and neutralizes `href`/`src` with a dangerous scheme, only inside
+ * start tags. Text content (code blocks, inline code, paragraphs) is never touched, so code that
+ * shows `<img onerror=…>` displays as written.
  */
-export function decodeCharacterReferences(text: string): string {
-  return text.replace(
-    /&(?:#(\d{1,8})|#[xX]([0-9a-fA-F]{1,7})|([a-zA-Z]+));/g,
-    (match, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
-      if (name !== undefined) {
-        return Object.prototype.hasOwnProperty.call(NAMED_REFERENCES, name)
-          ? NAMED_REFERENCES[name]
-          : match
+export function stripUnsafeAttributes(html: string): string {
+  return html.replace(START_TAG, (_tag, name: string, attributes: string, end: string) => {
+    const kept = attributes.replace(
+      TAG_ATTRIBUTE,
+      (attribute: string, space: string, attrName: string, value: string | undefined) => {
+        if (/^on/i.test(attrName)) return ''
+        if (/^(?:href|src)$/i.test(attrName) && value !== undefined && UNSAFE_URL.test(value)) {
+          return `${space}${attrName}="#"`
+        }
+        return attribute
       }
-      const codePoint = dec !== undefined ? parseInt(dec, 10) : parseInt(hex as string, 16)
-      if (codePoint === 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
-        return '\ufffd'
-      }
-      return String.fromCodePoint(codePoint)
-    }
-  )
+    )
+    return `<${name}${kept}${end}>`
+  })
 }
 
-const sanitizeSchema = {
+export const markdownSanitizeSchema = {
   ...defaultSchema,
   protocols: {
     ...defaultSchema.protocols,
@@ -549,42 +543,41 @@ const sanitizeSchema = {
     'svg',
     'path'
   ],
+  // rehype-sanitize matches hast property names, not HTML attribute names: `className` (not `class`),
+  // `ariaHidden`, `strokeWidth`, `strokeLineCap`, `dataMermaidIndex` (not `aria-hidden`,
+  // `stroke-width`, `data-mermaid-index`). A hyphenated entry never matches and the attribute is
+  // dropped. Look names up with `property-information` (`find(html | svg, 'aria-hidden').property`).
+  // A unit test checks that every entry here is a real hast property name.
   attributes: {
     ...defaultSchema.attributes,
-    '*': ['className', 'class', 'id', 'ariaLabel', 'aria-label', 'title'],
+    '*': ['className', 'id', 'ariaLabel', 'title'],
     div: [
       'className',
-      'class',
-      // hast property names (camelCase): rehype-sanitize ignores `data-foo` spellings here.
       'dataMermaidIndex', // slides splice the Mermaid SVG in by this index
       'dataStartLine',
       'dataCallout'
     ],
-    details: ['open', 'className', 'class'],
-    li: ['style', 'className', 'class'],
-    a: ['href', 'className', 'class', 'dataWikilink', 'target', 'rel'], // dataWikilink: preview click + hover preview
-    img: ['src', 'alt', 'title', 'width', 'height', 'className', 'class'],
+    details: ['open', 'className'],
+    li: ['style', 'className'],
+    a: ['href', 'className', 'dataWikilink', 'target', 'rel'], // dataWikilink: preview click + hover preview
+    img: ['src', 'alt', 'title', 'width', 'height', 'className'],
     input: [['type', 'checkbox'], 'checked', 'disabled', 'className'],
-    code: ['className', 'class'],
-    span: ['className', 'class', 'style', 'aria-hidden', 'title', 'dataIcon'],
+    code: ['className'],
+    span: ['className', 'style', 'ariaHidden', 'title', 'dataIcon'],
+    // inline :icon[…]: SVGs (svg/path are parsed in the SVG space: strokeLineCap, capital C)
     svg: [
       'viewBox',
       'width',
       'height',
       'stroke',
       'strokeWidth',
-      'stroke-width',
       'fill',
-      'strokeLinecap',
-      'stroke-linecap',
-      'strokeLinejoin',
-      'stroke-linejoin',
+      'strokeLineCap',
+      'strokeLineJoin',
       'ariaHidden',
-      'aria-hidden',
-      'className',
-      'class'
+      'className'
     ],
-    path: ['d', 'stroke', 'strokeWidth', 'stroke-width', 'fill', 'strokeLinecap', 'stroke-linecap', 'strokeLinejoin', 'stroke-linejoin']
+    path: ['d', 'stroke', 'strokeWidth', 'fill', 'strokeLineCap', 'strokeLineJoin']
   }
 }
 
@@ -612,19 +605,22 @@ export async function renderMarkdownDocument(
     .use(remarkMath)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
-    .use(rehypeSanitize, sanitizeSchema as any)
+    .use(rehypeSanitize, markdownSanitizeSchema as any)
     .use(rehypeKatex)
     .use(rehypeStringify)
 
   const file = await processor.process(schemeFiltered)
   let html = String(file)
 
-  // Extra defense-in-depth strip for any residual event handler attributes or dangerous tags
-  html = html
-    .replace(/<(script|iframe|object|embed|applet|meta|link)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<(script|iframe|object|embed|applet|meta|link)\b[^>]*\/?>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/(href|src)\s*=\s*["']\s*(javascript|vbscript|data:text\/html|file):[^"']*["']/gi, '$1="#"')
+  // Extra defense-in-depth strip for any residual dangerous tags, event handler attributes or URL
+  // schemes. rehype-sanitize already removes all of these; this pass matters for the HTML export,
+  // which uses this string in the main process without DOMPurify. Text in rehype-stringify output
+  // has `<` escaped, so the tag patterns can't match text; attributes are only edited inside tags.
+  html = stripUnsafeAttributes(
+    html
+      .replace(/<(script|iframe|object|embed|applet|meta|link)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+      .replace(/<(script|iframe|object|embed|applet|meta|link)\b[^>]*\/?>/gi, '')
+  )
 
   // Apply color-coded syntax highlighting to fenced <pre><code> blocks
   html = html.replace(
@@ -850,7 +846,7 @@ export function convertHtmlToMarkdown(html: string): string {
       const cells = cellMatches.map((c) =>
         c
           .replace(/<[^>]+>/g, '')
-          .replace(/&nbsp;/gi, ' ')
+          .replace(/&nbsp;|\u00a0/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
       )
@@ -878,12 +874,11 @@ export function convertHtmlToMarkdown(html: string): string {
 
   // Code blocks
   md = md.replace(/<pre\b[^>]*>\s*<code(?:\s+class="[^"]*language-([a-z0-9_-]+)[^"]*")?[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi, (_m, lang, code) => {
+    // Character references stay as they are until the single decode at the end (decoding here too
+    // would turn `&amp;lt;` into `<`). Klartext's own line-number gutter is not part of the code.
     const cleanCode = String(code)
+      .replace(/<span class="klartext-code-linenum"[^>]*>[^<]*<\/span>/g, '')
       .replace(/<[^>]+>/g, '')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
     return `\n\n\`\`\`${lang || ''}\n${cleanCode.trim()}\n\`\`\`\n\n`
   })
 
@@ -907,12 +902,10 @@ export function convertHtmlToMarkdown(html: string): string {
     .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_m, inner) => `- ${String(inner).replace(/<[^>]+>/g, '').trim()}\n`)
     .replace(/<\/?(ul|ol|p|div)\b[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
+
+  // Decode once, after every tag is gone, so decoded `<` text can't be mistaken for a tag.
+  md = decodeCharacterReferences(md)
+    .replace(/\u00a0/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 
