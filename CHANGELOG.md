@@ -9,6 +9,7 @@
 - Development: `eslint-plugin-no-unsanitized` now fails the lint on any `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write` with a non-literal value. Reviewed sinks carry a `reviewed: <why>` comment.
 
 ### Fixed
+- Code blocks and inline code show a `[text](javascript:…)` link exactly as typed; it was rewritten to `[text](#)`. Such links in normal text are still dropped by the sanitizer.
 - Slides never showed Mermaid diagrams, and wikilinks in the preview pane didn't open the note or show the hover preview. The Markdown sanitizer's allow-list spelled the app's own `data-mermaid-index`, `data-wikilink`, `data-callout`, `data-start-line` and `data-icon` attributes with hyphens, so they were silently removed; they are now kept (and still no other `data-*` attributes).
 - Code blocks containing `<` or `&` showed `&#x3C;` and `&#x26;` in the preview and slides instead of the characters. The code is now decoded properly (decimal, hex and the basic named references, in one pass) and escaped again before highlighting, so `<script>` in a code block is still shown as text.
 - Code in code blocks and inline code lost text that looked like an event handler or a `javascript:` link: `<img src=x onerror=alert(2)>` was shown as `<img src=x>`, and `` `x onclick="y"` `` as `x`. The extra cleanup pass after the Markdown sanitizer now only edits attributes inside tags; real `on*` attributes and `javascript:` links are still removed (in the preview, slides and the HTML export).

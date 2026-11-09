@@ -592,12 +592,6 @@ export async function renderMarkdownDocument(
   const assetReferences = extractLocalAssetReferences(markdown)
   const { processed, mermaidBlocks } = preprocessExtensions(body, rootId, headings)
 
-  // Strip dangerous inline schemes before AST processing
-  const schemeFiltered = processed.replace(
-    /(\[[^\]]*\]\()\s*(?:javascript|vbscript|data:text\/html|file):[^)]*(\))/gi,
-    '$1#$2'
-  )
-
   const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -609,7 +603,9 @@ export async function renderMarkdownDocument(
     .use(rehypeKatex)
     .use(rehypeStringify)
 
-  const file = await processor.process(schemeFiltered)
+  // Dangerous link schemes (javascript:, vbscript:, data:text/html, file:) are dropped by
+  // rehype-sanitize's protocol allowlist, which only sees real links, so code shows them as typed.
+  const file = await processor.process(processed)
   let html = String(file)
 
   // Extra defense-in-depth strip for any residual dangerous tags, event handler attributes or URL

@@ -169,6 +169,17 @@ describe('the on* cleanup pass only touches attributes, never text', () => {
     expect(body.querySelector('img')).not.toBeNull()
   })
 
+  it('shows a javascript: Markdown link in code exactly as typed, and still drops it as a real link', async () => {
+    const link = '[x](javascript:alert(1)) [y](vbscript:z) [f](file:///etc/passwd)'
+    expect(await codeText('```md\n' + link + '\n```\n')).toBe(link)
+    const res = await renderMarkdownDocument('`[x](javascript:alert(1))`\n\n' + link)
+    const body = parse(sanitizePreviewHtml(res.html))
+    expect(body.querySelector('code')?.textContent).toBe('[x](javascript:alert(1))')
+    const hrefs = Array.from(body.querySelectorAll('a')).map((a) => a.getAttribute('href'))
+    expect(hrefs.every((h) => h === null)).toBe(true)
+    expect(res.html).not.toMatch(/href="\s*(?:javascript|vbscript|file):/i)
+  })
+
   it('never lets a javascript: href through', async () => {
     const res = await renderMarkdownDocument('<a href="javascript:alert(1)">x</a> <a href=" JavaScript:alert(1)">y</a>')
     expect(res.html).not.toMatch(/javascript:/i)
