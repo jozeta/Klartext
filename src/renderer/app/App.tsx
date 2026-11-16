@@ -41,6 +41,7 @@ import type {
   WorkspaceRoot
 } from '../../shared/types'
 import {
+  APP_METADATA,
   DEFAULT_NORDIC_SAVED_THEMES,
   shouldRunScheduledUpdateCheck
 } from '../../shared/constants'
@@ -3969,7 +3970,7 @@ export const App: React.FC = () => {
                       <Info className="w-3.5 h-3.5 text-accent shrink-0" />
                       <span>About Klartext...</span>
                     </span>
-                    <kbd className="text-[10px] font-mono text-accent">v1.5.0</kbd>
+                    <kbd className="text-[10px] font-mono text-accent">v{APP_METADATA.version}</kbd>
                   </button>
                 </div>
               )}

@@ -1,6 +1,6 @@
 # Klartext
 
-Version: **1.5.1**
+Version: **1.5.2**
 
 **Klartext** is a fast, local-first, cross-platform Markdown editor for macOS, Windows, and Linux. It combines a single-buffer **CodeMirror 6** editing engine (**Source**, **Live Inline Rich / Preview**, and **Split View** modes), interactive **Mermaid** diagrams with a built-in **Visual Diagram Builder**, **Multi-Root Workspaces** with strict per-root asset portability, **Concurrent Multi-Repository Git synchronization**, and an optional **Local AI Assistant** (`127.0.0.1` via Ollama or LM Studio) with a built-in **Hardware & Model Advisor** for English and Swedish.
 
@@ -22,10 +22,11 @@ Version: **1.5.1**
 </tr>
 </table>
 
-## What's new in 1.5.1
+## What's new in 1.5.2
 
-- README: version, this section and the screenshot grid.
-- A unit test keeps the version in the About page the same as `package.json`.
+- The version next to "About Klartext..." in the menu comes from the app's one version number (it
+  still said v1.5.0).
+- The end-to-end tests read the version from `package.json`, so a version bump no longer breaks CI.
 
 Older versions: see [CHANGELOG.md](CHANGELOG.md).
 

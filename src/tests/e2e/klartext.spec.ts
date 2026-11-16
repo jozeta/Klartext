@@ -5,6 +5,9 @@ import http from 'http'
 import { simpleGit } from 'simple-git'
 import { test, expect, _electron as electron, type Page } from '@playwright/test'
 
+// The app's version, from its one source (Playwright runs from the repo root).
+const APP_VERSION = (JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')) as { version: string }).version
+
 // CodeMirror only renders the lines near the visible viewport, so in a small window (CI screens are
 // about 1024x768) a widget further down the document doesn't exist in the DOM yet. Scroll the
 // editor the way a user would until it has been rendered.
@@ -1197,7 +1200,7 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
       await page.getByTestId('help-menu-about').click()
       await expect(page.getByTestId('about-klartext-modal')).toBeVisible()
       await expect(page.getByTestId('about-field-name')).toHaveText('Klartext')
-      await expect(page.getByTestId('about-field-version')).toHaveText('1.5.0')
+      await expect(page.getByTestId('about-field-version')).toHaveText(APP_VERSION)
       await expect(page.getByTestId('about-field-license')).toHaveText('MIT License')
       await expect(page.getByTestId('about-field-author')).toContainText('Johan Zetterström')
       await page.getByTestId('about-modal-close-btn').click()
@@ -1228,7 +1231,7 @@ test.describe('Klartext Electron End-to-End Verification (All 17 Critical User J
         ollamaPort
       )
       expect(mockUpdateRes.ok).toBe(true)
-      expect(mockUpdateRes.currentVersion).toBe('1.5.0')
+      expect(mockUpdateRes.currentVersion).toBe(APP_VERSION)
       expect(mockUpdateRes.latestVersion).toBe('1.6.0')
       expect(mockUpdateRes.updateAvailable).toBe(true)
 

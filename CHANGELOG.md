@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-11-16
+
+### Fixed
+- The menu's "About Klartext..." entry showed a hard-coded v1.5.0; it now shows `APP_METADATA.version`,
+  and a unit test keeps version numbers from being typed into `App.tsx`.
+- The Playwright E2E tests compared the About page and the update check with a hard-coded 1.5.0, so
+  the 1.5.1 bump failed CI on all three platforms; they now read `package.json`.
+
 ## [1.5.1] - 2026-11-12
 
 ### Added

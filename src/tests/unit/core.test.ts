@@ -846,6 +846,9 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
     expect(APP_METADATA.version).toBe(
       (JSON.parse(readFileSync(resolve(__dirname, '../../../package.json'), 'utf8')) as { version: string }).version
     )
+    // The renderer shows APP_METADATA.version; no version number is typed into the UI by hand.
+    const appSource = readFileSync(resolve(__dirname, '../../renderer/app/App.tsx'), 'utf8')
+    expect(appSource).not.toMatch(/>v\d+\.\d+\.\d+</)
     expect(APP_METADATA.license).toBe('MIT License')
     expect(APP_METADATA.author).toContain('Johan Zetterström')
 
