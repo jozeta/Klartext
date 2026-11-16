@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Security
+- Dev dependencies: `minimatch` 7.0.0–11.0.0 (pulled in by typescript-eslint and the Electron build tools) is
+  overridden to ^11.0.1, fixing Dependabot alert 87 (denial of service via globparts amplification).
+  Not shipped in the app.
+
 ## [1.5.2] - 2026-11-16
 
 ### Fixed
