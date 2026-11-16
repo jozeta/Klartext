@@ -1,43 +1,62 @@
 # Klartext
 
+Version: **1.5.1**
+
 **Klartext** is a fast, local-first, cross-platform Markdown editor for macOS, Windows, and Linux. It combines a single-buffer **CodeMirror 6** editing engine (**Source**, **Live Inline Rich / Preview**, and **Split View** modes), interactive **Mermaid** diagrams with a built-in **Visual Diagram Builder**, **Multi-Root Workspaces** with strict per-root asset portability, **Concurrent Multi-Repository Git synchronization**, and an optional **Local AI Assistant** (`127.0.0.1` via Ollama or LM Studio) with a built-in **Hardware & Model Advisor** for English and Swedish.
 
 ![Klartext Inline Rich Overview & Frontmatter Inspector](docs/screenshots/01-inline-rich-overview.png)
 
 ---
 
-## Screenshots & Feature Tour
+## Screenshots
+<table>
+<tr>
+<td align="center"><img src="docs/screenshots/01-inline-rich-overview.png" alt="Live Inline Rich mode with the Frontmatter Inspector" width="100%"><br><sub>Live Inline Rich mode with the Frontmatter Inspector</sub></td>
+<td align="center"><img src="docs/screenshots/02-split-view-katex-math.png" alt="Split View with KaTeX math" width="100%"><br><sub>Split View with KaTeX math</sub></td>
+<td align="center"><img src="docs/screenshots/03-syntax-highlighted-code.png" alt="Syntax-highlighted code blocks" width="100%"><br><sub>Syntax-highlighted code blocks</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/screenshots/04-mermaid-diagrams.png" alt="Interactive Mermaid diagrams" width="100%"><br><sub>Interactive Mermaid diagrams</sub></td>
+<td align="center"><img src="docs/screenshots/05-dark-mode-white-paper.png" alt="Dark mode with white paper canvas" width="100%"><br><sub>Dark mode with white paper canvas</sub></td>
+<td align="center"><img src="docs/screenshots/06-local-ai-hardware-advisor.png" alt="Local AI assistant and Hardware Advisor" width="100%"><br><sub>Local AI assistant and Hardware Advisor</sub></td>
+</tr>
+</table>
+
+## What's new in 1.5.1
+
+- README: version, this section and the screenshot grid.
+- A unit test keeps the version in the About page the same as `package.json`.
+
+Older versions: see [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## Feature Tour
 
 ### 1. Live Inline Rich Mode, Multi-Root Explorer & Frontmatter Inspector
 Edit Markdown directly in a live preview buffer where syntax tokens automatically hide on inactive lines and reveal on the active cursor line. Inspect and edit YAML metadata in the resizable right-hand **Frontmatter Properties** panel.
 - Hover over any root folder's `Local` or Git branch badge in the left sidebar to inspect its full filesystem path, or **double-click** the badge to open that root folder directly in Finder.
 
-![Inline Rich Mode & Frontmatter Inspector](docs/screenshots/01-inline-rich-overview.png)
 
 ### 2. Split View Mode & KaTeX Scientific Mathematics
 Work side-by-side with synchronized scrolling and a draggable, persistent split divider between your raw CodeMirror 6 source buffer and a sanitized live preview featuring inline and display **KaTeX** equations ($E = mc^2$, Gaussian distributions, Maxwell's equations, and matrices).
 
-![Split View & KaTeX Scientific Math](docs/screenshots/02-split-view-katex-math.png)
 
 ### 3. Syntax-Highlighted Code Blocks with Line Numbers
 Fenced code blocks render with compact row numbers, language badges, and Technical Nordic syntax highlighting across TypeScript, Rust, Python, SQL, Bash, and JSON.
 
-![Syntax-Highlighted Code Blocks](docs/screenshots/03-syntax-highlighted-code.png)
 
 ### 4. Interactive Mermaid Diagrams & Visual Diagram Builder
 Render Flowcharts, Sequence Diagrams, and State Diagrams inline. Click **Visual Builder** on any Mermaid block—or open the **Visual Diagram Builder** from the floating formatting bar—to start from a clean, auto-expanding 2D canvas where you can draw shapes and connectors that generate standard Mermaid syntax automatically.
 
-![Interactive Mermaid Diagrams](docs/screenshots/04-mermaid-diagrams.png)
 
 ### 5. Dark Mode with Optional White Paper Canvas & Callout Blocks
 Switch seamlessly between Light and Dark themes, and optionally enable **White Paper Background in Dark Mode** (`View → White Paper Background in Dark Mode`) to keep the surrounding UI chrome dark while writing on a crisp light sheet across the full scrollable document height.
 
-![Dark Mode with White Paper Canvas](docs/screenshots/05-dark-mode-white-paper.png)
 
 ### 6. Bilingual Local AI Assistant & Hardware Model Advisor (English & Svenska)
 Connect strictly over loopback (`127.0.0.1`) to **Ollama** or **LM Studio** with zero cloud dependencies. The built-in **Hardware & Model Advisor** inspects system RAM and recommends vetted English & Swedish models (`gemma4:12b`, `qwen3:8b`, `mistral-small:24b`, `gemma4:26b`, `bge-m3`), paired with bilingual spellcheck (`en-US`, `sv-SE`, `de-DE`, `es-ES`, `fr-FR`) offering word explanations and synonyms.
 
-![Local AI Assistant & Hardware Advisor](docs/screenshots/06-local-ai-hardware-advisor.png)
 
 ---
 

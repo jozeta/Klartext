@@ -2,9 +2,13 @@
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-12
+
+### Added
 - Animations and transitions respect the system's "Reduce motion" setting
 
 ### Changed
+- README shows the current version, a "What's new" section and the screenshots in a captioned grid. A unit test keeps the version in the About page (`APP_METADATA`) the same as `package.json`.
 - Development: ESLint 9 with a flat config (`eslint.config.mjs`, replacing `.eslintrc.cjs`), since ESLint 8 is end-of-life. Same rules and the same files are linted.
 - Development: `eslint-plugin-no-unsanitized` now fails the lint on any `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write` with a non-literal value. Reviewed sinks carry a `reviewed: <why>` comment.
 

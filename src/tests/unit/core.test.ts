@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   renderMarkdownDocument,
   extractFrontmatter,
@@ -841,7 +843,9 @@ Sys: <% git_commit %> | <% uptime %> | <% cpu_cores %> cores`
 
   it('validates About metadata, semver version comparison, and update check intervals (default weekly)', () => {
     expect(APP_METADATA.name).toBe('Klartext')
-    expect(APP_METADATA.version).toBe('1.5.0')
+    expect(APP_METADATA.version).toBe(
+      (JSON.parse(readFileSync(resolve(__dirname, '../../../package.json'), 'utf8')) as { version: string }).version
+    )
     expect(APP_METADATA.license).toBe('MIT License')
     expect(APP_METADATA.author).toContain('Johan Zetterström')
 
