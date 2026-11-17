@@ -10,6 +10,11 @@
 - Every root directory mounted by the user is canonicalized via `fs.realpathSync`.
 - Sensitive system paths (`/etc`, `/System`, `C:\Windows`, `~/.ssh`, `~/.gnupg`, `~/.aws`) are explicitly blocked from being mounted—even via symlinks or `.klartext-workspace` manifests.
 - Every file read, write, delete, rename, or `klartext-asset://` request must pass `MultiRootPathGuard.resolveScopedPath(rootId, relativePath)`, which blocks `..` traversal, NUL bytes, cross-root escape, and symlink escape outside the owning root's `realPath`.
+- Operations on a single entry (write, create, delete, rename, cross-root move) use `resolveScopedEntryPath()`, which also refuses a path that resolves to the root folder itself (`.`, `sub/..`), so a bad path can never delete or overwrite a whole root.
+- Git file lists (stage, unstage, diff, commit) and merge-conflict resolution go through the same guard (`GitRepoInstance.resolveInRepo`), and paths are passed to git after `--`.
+- The renderer never chooses an output file: exports and workspace manifests are saved and opened through native dialogs shown by the main process, and loading a manifest always asks before its folders are mounted. Missing root folders are never created when a saved workspace or a manifest is restored.
+- Symlinks inside a root are listed only when their target stays inside the root; each symlinked folder is expanded at most once per listing.
+- Tests: `src/tests/security/path-confinement.test.ts`, `src/tests/integration/file-operations-safety.test.ts`.
 
 ## 3. Markdown, HTML, and SVG Sanitization
 Documents, SVG files and Mermaid sources come from the workspace, which can contain files from others
@@ -49,6 +54,8 @@ Documents, SVG files and Mermaid sources come from the workspace, which can cont
   handlers and `javascript:` URLs as a second layer.
 
 ## 4. Subprocess & AI Loopback Security
+- Credentials are stored only through Electron `safeStorage` (Keychain / Credential Manager / Secret Service). If OS encryption isn't available, storing a credential fails instead of falling back to a readable encoding.
+- Closing the window or quitting first asks the renderer to write pending autosaves (`EVENT_FLUSH_PENDING_SAVES` → `APP_FLUSH_DONE`, Zod-validated request id, 3 s timeout so a hung renderer can't block quitting; `src/main/ipc/flush-before-close.ts`).
 - Git operations execute via `simple-git` with argument arrays (`shell: false`) and `-c core.hooksPath=/dev/null` so untrusted repositories cannot execute malicious `.git/hooks`.
 - `MultiRootPathGuard.validateLoopbackUrl()` verifies that Local AI requests target `127.0.0.1`, `localhost`, or `[::1]` unless the user explicitly enables non-loopback servers, preventing SSRF.
 - AI outputs pass through `sanitizeAndCleanAIOutput()` and require explicit user approval in the inline diff review flow.

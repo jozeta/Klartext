@@ -67,6 +67,15 @@ describe('Path confinement', () => {
     await expect(repo.stageFiles(['../outside.sh'])).rejects.toThrow(/Security rejection/)
   })
 
+  it('a file whose name starts with a dash is staged as a file, not read as a git option', async () => {
+    execSync('git init -q', { cwd: root })
+    fs.writeFileSync(path.join(root, '--dry-run'), 'x')
+    const repo = new GitRepoInstance('R', 'R', root)
+    await repo.stageFiles(['--dry-run'])
+    const staged = execSync('git diff --cached --name-only', { cwd: root }).toString().trim()
+    expect(staged).toBe('--dry-run')
+  })
+
   it('export requests cannot name an arbitrary output file', () => {
     const parsed = ExportRequestSchema.parse({
       rootId: 'R',

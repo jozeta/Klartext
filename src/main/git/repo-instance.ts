@@ -51,7 +51,10 @@ export class GitRepoInstance {
     return this.pathGuard.resolveScopedEntryPath(this.rootId, relativePath)
   }
 
-  /** Validates every path in a Git file list before it reaches the file system or git. */
+  /**
+   * Validates every path in a Git file list before it reaches the file system or git. Paths are
+   * always passed to git after `--`, so a file named like an option (`--force`) stays a file name.
+   */
   private assertPathsInRepo(files?: string[]): void {
     for (const rel of files ?? []) {
       if (rel === '.') continue
@@ -214,7 +217,7 @@ export class GitRepoInstance {
           }
         }
       }
-      await this.git.add(targetFiles)
+      await this.git.raw(['add', '--', ...targetFiles])
       this.lastError = undefined
     })
     return this.getStatus()
@@ -243,7 +246,7 @@ export class GitRepoInstance {
     await this.enqueue(async () => {
       if (files && files.length > 0) {
         this.assertPathsInRepo(files)
-        await this.git.add(files)
+        await this.git.raw(['add', '--', ...files])
       }
       await this.git.commit(message)
       this.lastError = undefined
@@ -364,7 +367,7 @@ export class GitRepoInstance {
 
     if (!hasConflictMarkers(updated)) {
       await this.enqueue(async () => {
-        await this.git.add([params.relativePath])
+        await this.git.raw(['add', '--', params.relativePath])
       })
     }
 
