@@ -76,6 +76,7 @@ import {
   type SupportedSpellLanguage
 } from './spellcheck-extension'
 import { MermaidDiagramWidget, VisualMermaidBuilderModal } from '../diagrams/DiagramWidgets'
+import { resolveDropInsertion } from './drop-position'
 import { computeFloatingToolbarPosition, type Box } from './floating-toolbar-position'
 import {
   convertMarkdownToSlack,
@@ -2092,6 +2093,9 @@ export const MarkdownEditorWorkspace: React.FC<{
             if (files && files.length > 0) {
               event.preventDefault()
               const file = files[0]
+              // Insert where the file was dropped (the drop cursor), not at the selection: a file
+              // that hasn't been clicked yet has its selection at 0, inside the frontmatter.
+              const dropPos = view.posAtCoords({ x: event.clientX, y: event.clientY })
               const reader = new FileReader()
               reader.onload = async () => {
                 const base64 = String(reader.result).split(',')[1] || ''
@@ -2100,8 +2104,19 @@ export const MarkdownEditorWorkspace: React.FC<{
                   file.type || 'image/png',
                   base64
                 )
-                const pos = view.state.selection.main.from
-                view.dispatch({ changes: { from: pos, to: pos, insert: mdLink } })
+                // resolveDropInsertion clamps the offset, in case the document got shorter while the
+                // asset was being saved.
+                const { pos, prefix } = resolveDropInsertion(
+                  view.state.doc.toString(),
+                  dropPos,
+                  view.state.selection.main.from
+                )
+                const insert = prefix + mdLink
+                view.dispatch({
+                  changes: { from: pos, to: pos, insert },
+                  selection: { anchor: pos + insert.length }
+                })
+                view.focus()
               }
               reader.readAsDataURL(file)
               return true
