@@ -45,6 +45,7 @@ import {
   DEFAULT_NORDIC_SAVED_THEMES,
   shouldRunScheduledUpdateCheck
 } from '../../shared/constants'
+import { AutosaveScheduler } from '../features/editor/autosave-scheduler'
 import { DEFAULT_FRONTMATTER_PROPERTIES } from '../../shared/schemas'
 import {
   parseTagListInput,
@@ -286,7 +287,23 @@ export const App: React.FC = () => {
     selectedText: string
   } | null>(null)
 
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // One pending autosave per tab (see AutosaveScheduler): typing in another tab must not cancel
+  // this tab's save, and pending saves are written on tab close and before the window closes.
+  const autosaveSchedulerRef = useRef<AutosaveScheduler | null>(null)
+  if (!autosaveSchedulerRef.current) {
+    autosaveSchedulerRef.current = new AutosaveScheduler((err) =>
+      console.error('[Klartext] Autosave failed', err)
+    )
+  }
+  const autosaveScheduler = autosaveSchedulerRef.current
+  const flushPendingAutosave = useCallback(
+    (tabKey: string) => autosaveScheduler.flush(tabKey),
+    [autosaveScheduler]
+  )
+  const flushAllPendingAutosaves = useCallback(
+    () => autosaveScheduler.flushAll(),
+    [autosaveScheduler]
+  )
   const primaryActiveTab = useMemo(
     () => tabs.find((t) => t.key === activeTabKey) || tabs[0] || null,
     [tabs, activeTabKey]
@@ -320,6 +337,8 @@ export const App: React.FC = () => {
 
   const closeTabInPane = useCallback(
     (pane: 'primary' | 'secondary', tabKey: string) => {
+      // Write the tab's pending autosave now instead of dropping it with the tab.
+      void flushPendingAutosave(tabKey)
       if (pane === 'primary') {
         setTabs((prev) => {
           const remaining = prev.filter((t) => t.key !== tabKey)
@@ -338,7 +357,7 @@ export const App: React.FC = () => {
         })
       }
     },
-    [activeTabKey, secondaryActiveTabKey]
+    [activeTabKey, secondaryActiveTabKey, flushPendingAutosave]
   )
 
   const splitTabView = useCallback(
@@ -1477,6 +1496,11 @@ export const App: React.FC = () => {
       .catch(() => {})
   }, [tabs, activeTabKey])
 
+  // Before the window closes or the app quits, write autosaves still waiting for their timer.
+  useEffect(() => {
+    return window.klartext.onFlushPendingSaves(flushAllPendingAutosaves)
+  }, [flushAllPendingAutosaves])
+
   // Subscribe to MultiRootWatcher external disk changes (never interrupt local edits with conflict errors)
   useEffect(() => {
     const unsubscribe = window.klartext.onWatcherChange(async (ev) => {
@@ -1648,8 +1672,7 @@ export const App: React.FC = () => {
     setTabs(applyOptimistic)
     setSecondaryTabs(applyOptimistic)
 
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
-    autosaveTimerRef.current = setTimeout(async () => {
+    const save = async () => {
       if (rootId === '__templates__') {
         const currentTpls =
           settings?.customTemplates && settings.customTemplates.length > 0
@@ -1691,7 +1714,8 @@ export const App: React.FC = () => {
         )
       setTabs(applySaved)
       setSecondaryTabs(applySaved)
-    }, settings?.autosaveDelayMs || 900)
+    }
+    autosaveScheduler.schedule(tabKey, settings?.autosaveDelayMs || 900, save)
   }
 
   const handleEditorContentChange = (nextContent: string) => {

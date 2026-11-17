@@ -12,6 +12,7 @@ import { LocalAIOrchestrator } from './ai/orchestrator'
 import { SettingsAndCredentialService } from './settings/settings-service'
 import { ExportService } from './export/export-service'
 import { registerAllIpcHandlers } from './ipc/handlers'
+import { requestRendererFlush } from './ipc/flush-before-close'
 import { seedShowcaseDirectory } from '../shared/showcase/seed-showcase'
 
 // Register custom scheme privileges before app ready
@@ -28,6 +29,8 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+// Set when the user quits (Cmd+Q, menu, app.quit()); window close handlers then finish the quit.
+let quitRequested = false
 
 function createDefaultStarterWorkspace(registry: MultiRootRegistry, userDataDir: string): void {
   const starterDir = path.join(userDataDir, 'Starter-Workspace')
@@ -121,9 +124,25 @@ function createWindow(
   win.on('unmaximize', schedulePersistWindowBounds)
   win.on('enter-full-screen', schedulePersistWindowBounds)
   win.on('leave-full-screen', schedulePersistWindowBounds)
-  win.on('close', () => {
+  // Let the renderer write autosaves that are still waiting for their debounce timer before the
+  // window closes (or the app quits), so the last edits aren't lost.
+  let flushedBeforeClose = false
+  let flushInProgress = false
+  win.on('close', (event) => {
     if (saveBoundsTimer) clearTimeout(saveBoundsTimer)
     persistWindowBoundsNow()
+    if (flushedBeforeClose || win.webContents.isDestroyed() || win.webContents.isCrashed()) return
+    event.preventDefault()
+    if (flushInProgress) return
+    flushInProgress = true
+    void requestRendererFlush((payload) =>
+      win.webContents.send(IPC_CHANNELS.EVENT_FLUSH_PENDING_SAVES, payload)
+    ).finally(() => {
+      flushInProgress = false
+      flushedBeforeClose = true
+      if (quitRequested) app.quit()
+      else if (!win.isDestroyed()) win.close()
+    })
   })
 
   // Block arbitrary navigation and open validated external links in system browser
@@ -516,6 +535,10 @@ app.whenReady().then(() => {
       mainWindow = createWindow(preloadPath, settingsService)
     }
   })
+})
+
+app.on('before-quit', () => {
+  quitRequested = true
 })
 
 app.on('window-all-closed', () => {

@@ -483,3 +483,8 @@ export const ExportRequestSchema = z.object({
   // No output path from the renderer: main asks with a native save dialog (or, in E2E runs,
   // writes next to the document inside its root).
 })
+
+/** Renderer -> main: pending autosaves for this close/quit request are written. */
+export const FlushDoneRequestSchema = z.object({
+  requestId: z.string().min(1).max(64)
+})

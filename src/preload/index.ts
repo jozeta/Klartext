@@ -318,6 +318,21 @@ export const klartextApi = {
     ipcRenderer.on(IPC_CHANNELS.EVENT_WATCHER_CHANGE, listener)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.EVENT_WATCHER_CHANGE, listener)
   },
+  /**
+   * Called when the window is about to close or the app to quit. `callback` writes pending
+   * autosaves; main waits for it (up to a few seconds) before closing.
+   */
+  onFlushPendingSaves: (callback: () => Promise<void>): (() => void) => {
+    const listener = async (_e: unknown, payload: { requestId: string }) => {
+      try {
+        await callback()
+      } finally {
+        void ipcRenderer.invoke(IPC_CHANNELS.APP_FLUSH_DONE, { requestId: payload.requestId })
+      }
+    }
+    ipcRenderer.on(IPC_CHANNELS.EVENT_FLUSH_PENDING_SAVES, listener)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.EVENT_FLUSH_PENDING_SAVES, listener)
+  },
   onAIStreamChunk: (callback: (ev: AIStreamChunkEvent) => void): (() => void) => {
     const listener = (_e: unknown, ev: AIStreamChunkEvent) => callback(ev)
     ipcRenderer.on(IPC_CHANNELS.EVENT_AI_STREAM_CHUNK, listener)

@@ -59,6 +59,7 @@ import { MultiRepoManager } from '../../git/multi-repo-manager'
 import { LocalAIOrchestrator } from '../../ai/orchestrator'
 import { SettingsAndCredentialService } from '../../settings/settings-service'
 import { ExportService } from '../../export/export-service'
+import { handleFlushDone } from '../flush-before-close'
 
 export interface MainServices {
   registry: MultiRootRegistry
@@ -975,6 +976,11 @@ export function registerAllIpcHandlers(
     if (!win) return
     if (win.isMaximized()) win.unmaximize()
     else win.maximize()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.APP_FLUSH_DONE, (_e, rawInput) => {
+    handleFlushDone(rawInput)
+    return { ok: true }
   })
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_CLOSE, () => {

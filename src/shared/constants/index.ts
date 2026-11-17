@@ -88,12 +88,14 @@ export const IPC_CHANNELS = {
   WINDOW_CLOSE: 'window:close',
   SHELL_OPEN_EXTERNAL: 'shell:open-external',
   APP_CHECK_FOR_UPDATES: 'app:check-for-updates',
+  APP_FLUSH_DONE: 'app:flush-done',
 
   // Events pushed from Main -> Renderer
   EVENT_WATCHER_CHANGE: 'event:watcher-change',
   EVENT_AI_STREAM_CHUNK: 'event:ai-stream-chunk',
   EVENT_GIT_STATUS_CHANGED: 'event:git-status-changed',
-  EVENT_MENU_ACTION: 'event:menu-action'
+  EVENT_MENU_ACTION: 'event:menu-action',
+  EVENT_FLUSH_PENDING_SAVES: 'event:flush-pending-saves'
 } as const
 
 export const APP_METADATA = {
