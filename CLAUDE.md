@@ -48,7 +48,12 @@ Shared code is in `src/shared/` (types, schemas, markdown, serialization, templa
 
 - **Adding an IPC channel** means: a Zod schema in `src/shared/schemas`, a handler in
   `src/main/ipc`, a typed method on the preload bridge, and a security test.
-- Never let a path from the renderer reach `fs` without going through the path guard.
+- Never let a path from the renderer reach `fs` without going through the path guard. Operations on
+  one entry (write, create, delete, rename, move) use `resolveScopedEntryPath`, which also refuses
+  the root folder itself; Git file paths go through `GitRepoInstance.resolveInRepo` and are passed
+  to git after `--`. The renderer never chooses an output file: main shows a native dialog.
+- Never overwrite or delete user files as a side effect: renames, moves and asset copies refuse or
+  pick a free name when the target exists (watch case-insensitive file systems: compare inodes).
 - Untrusted markup (documents, SVG files, Mermaid output, KaTeX) reaches the DOM only through
   `src/renderer/security/sanitize-markup.ts` (DOMPurify), applied last, right before the sink. Never
   sanitize and then edit the string. Other HTML sinks must be escaped text plus fixed markup and carry a
