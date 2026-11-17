@@ -321,10 +321,13 @@ export class MultiRootRegistry {
         let isFile = entry.isFile()
         if (entry.isSymbolicLink()) {
           try {
-            const symReal = await fs.promises.realpath(entryAbs)
+            // Same realpath function as the path guard (and as the root's realPath): on Windows the
+            // native one expands 8.3 short names (RUNNER~1) and the JS one doesn't, so mixing them
+            // made every link look like it pointed outside the root.
+            const symReal = fs.realpathSync(entryAbs)
             if (!isStrictSubpath(rootReal, symReal)) continue
             // A link to a folder that contains it would make the tree endless.
-            if (isStrictSubpath(symReal, await fs.promises.realpath(currentAbs))) continue
+            if (isStrictSubpath(symReal, fs.realpathSync(currentAbs))) continue
             const targetStat = await fs.promises.stat(symReal)
             isDirectory = targetStat.isDirectory()
             isFile = targetStat.isFile()
