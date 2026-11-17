@@ -2,7 +2,64 @@
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-11-17
+
+### Fixed
+- Dragging an image onto a file you had just opened (without clicking in it first) put the image
+  link at the very top, inside the frontmatter. Dropped files now go where you drop them (the drop
+  cursor), and never inside the frontmatter.
+- Renaming a file by changing only the case of its name (`note.md` → `Note.md`) deleted the file on
+  macOS and Windows. It is now renamed in place.
+- Renaming a file onto the name of another file overwrote that file; it is now refused.
+- Moving a document to another root overwrote a different image with the same name there (pasted
+  images are often all called `image.png`), and could overwrite a document with the same name. The
+  image is now copied under a free name (`image-2.png`, or reused if it is identical), and the move
+  is refused if the document already exists.
+- Typing in a second tab (split view, or quickly switching tabs) within 0.9 s of typing in the first
+  cancelled the first tab's autosave and its recovery snapshot, and quitting within 0.9 s of typing
+  lost the last edits. Every tab now saves on its own timer, closing a tab saves it at once, and
+  closing the window or quitting waits for pending saves.
+- A change made by another program (git pull, a sync tool, another editor) to an open document was
+  ignored while you had unsaved edits, or within 5 s of Klartext's own save, and the next autosave
+  then overwrote it. Klartext now recognises its own saves by content, and when the file changes
+  under unsaved edits it shows a banner to **Reload from disk** or **Keep my version**; until you
+  choose, the file is not overwritten (your edits are kept in a recovery snapshot). Documents in the
+  split view's second pane are now reloaded too.
+- A burst of file changes (switching branches, a large pull) made Klartext re-read every folder and
+  run `git status` on every repository once per changed file. It now refreshes once per burst.
+- Regex Replace changed fewer places than Search had found (`^` and `$` matched only at the start and
+  end of the file) and inserted `$1` literally. It now matches line by line like Search, and `$1`,
+  `$&` and `$<name>` work. Plain-text replace still inserts `$` as typed.
+- A root folder on an unplugged drive or a missing network share was recreated as an empty folder at
+  startup (or when loading a manifest). It is now skipped and comes back when the folder is there
+  again.
+- One invalid value in `settings.json` reset every setting, custom templates included. Only that
+  value now falls back to its default, and the old file is kept as `settings.json.bak`.
+- The workspace state file is written atomically, so a crash while saving can't leave the workspace
+  empty on the next start.
+- Symlinked files and folders inside a root didn't appear in the file tree (links that point outside
+  the root are still hidden).
+- File names starting with two dots (`..notes.md`) were rejected as path traversal.
+
+### Changed
+- Settings → Workspace Manifest: **Save Manifest** and **Load Manifest** open the system's save/open
+  dialog (a path typed in the field is the starting point). Loading a manifest always asks before
+  mounting its folders.
+
 ### Security
+- Resolving a Git merge conflict, staging, unstaging, diffing and committing took file paths from
+  the app window without checking them, so a crafted path (`../…`) could read or rewrite files
+  outside the repository. They now go through the same path guard as every other file operation.
+  Branch names starting with `-` are refused and file names are passed to git after `--`, so a
+  name like `--force` can't be read as an option.
+- Writing, creating, deleting and renaming refuse a path that points at the root folder itself
+  (`.`, `sub/..`), so a bad path can never delete a whole root.
+- The app window could choose any output file for exports and any file to save or load a workspace
+  manifest from, and could skip the confirmation before a manifest's folders are mounted. The output
+  file is now always chosen in a native dialog shown by the main process, and the confirmation
+  can't be skipped.
+- When the system keychain is not available (e.g. Linux without a keyring), credentials were stored
+  base64-encoded, which anyone can read. Klartext now refuses to store them and says why.
 - Dev dependencies: `minimatch` 7.0.0–11.0.0 (pulled in by typescript-eslint and the Electron build tools) is
   overridden to ^11.0.1, fixing Dependabot alert 87 (denial of service via globparts amplification).
   Not shipped in the app.
