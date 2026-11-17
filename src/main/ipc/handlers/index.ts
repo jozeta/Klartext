@@ -280,9 +280,8 @@ export function registerAllIpcHandlers(
       return { ok: true, updatedAt: Date.now() }
     }
     const absPath = registry.pathGuard.resolveScopedEntryPath(rootId, relativePath)
-    watcher.markInternalWrite(rootId, relativePath)
+    watcher.markInternalWrite(rootId, relativePath, content)
     await atomicWriteFile(absPath, content)
-    watcher.markInternalWrite(rootId, relativePath)
     await recoveryService.clearSnapshot(rootId, relativePath)
     const stat = await fs.promises.stat(absPath)
     return { ok: true, updatedAt: stat.mtimeMs }
@@ -291,9 +290,8 @@ export function registerAllIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.DOC_CREATE, async (_e, rawInput) => {
     const { rootId, relativePath, content } = DocWriteRequestSchema.parse(rawInput)
     const absPath = registry.pathGuard.resolveScopedEntryPath(rootId, relativePath)
-    watcher.markInternalWrite(rootId, relativePath)
+    watcher.markInternalWrite(rootId, relativePath, content)
     await atomicWriteFile(absPath, content)
-    watcher.markInternalWrite(rootId, relativePath)
     return { ok: true, relativePath }
   })
 

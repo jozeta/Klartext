@@ -38,6 +38,14 @@ export class AutosaveScheduler {
     await Promise.all([...keys.map((key) => this.flush(key)), ...Array.from(this.running)])
   }
 
+  /** Drops `key`'s pending save without writing it (e.g. the user chose the version on disk). */
+  cancel(key: string): void {
+    const entry = this.pending.get(key)
+    if (!entry) return
+    clearTimeout(entry.timer)
+    this.pending.delete(key)
+  }
+
   hasPending(): boolean {
     return this.pending.size > 0 || this.running.size > 0
   }

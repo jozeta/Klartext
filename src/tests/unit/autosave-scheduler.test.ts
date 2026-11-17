@@ -66,4 +66,14 @@ describe('AutosaveScheduler', () => {
     expect(onError).toHaveBeenCalledTimes(1)
     expect(saved).toEqual(['good'])
   })
+
+  it('cancel(key) drops a pending save without writing it', async () => {
+    const save = vi.fn(async () => {})
+    const s = new AutosaveScheduler()
+    s.schedule('A', 900, save)
+    s.cancel('A')
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(save).not.toHaveBeenCalled()
+    expect(s.hasPending()).toBe(false)
+  })
 })

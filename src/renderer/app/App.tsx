@@ -46,6 +46,8 @@ import {
   shouldRunScheduledUpdateCheck
 } from '../../shared/constants'
 import { AutosaveScheduler } from '../features/editor/autosave-scheduler'
+import { decideExternalChange } from '../features/editor/external-change'
+import { createCoalescedRunner } from '../features/workspace/coalesced-runner'
 import { DEFAULT_FRONTMATTER_PROPERTIES } from '../../shared/schemas'
 import {
   parseTagListInput,
@@ -1501,23 +1503,46 @@ export const App: React.FC = () => {
     return window.klartext.onFlushPendingSaves(flushAllPendingAutosaves)
   }, [flushAllPendingAutosaves])
 
-  // Subscribe to MultiRootWatcher external disk changes (never interrupt local edits with conflict errors)
+  // Latest tabs of both panes, for event handlers that run outside React's render cycle.
+  const openTabsRef = useRef<OpenDocumentTab[]>([])
+  openTabsRef.current = [...tabs, ...secondaryTabs]
+  // Tabs whose file changed on disk while they had unsaved edits. Their autosave keeps a recovery
+  // snapshot but doesn't overwrite the file until the user picks a version in the banner.
+  const externalConflictKeysRef = useRef(new Set<string>())
+
+  // One tree/Git refresh per burst of watcher events (see createCoalescedRunner).
+  const refreshWorkspaceAndTreesRef = useRef(refreshWorkspaceAndTrees)
+  refreshWorkspaceAndTreesRef.current = refreshWorkspaceAndTrees
+  const scheduleWorkspaceRefreshRef = useRef<(() => void) | null>(null)
+  if (!scheduleWorkspaceRefreshRef.current) {
+    scheduleWorkspaceRefreshRef.current = createCoalescedRunner(
+      () => refreshWorkspaceAndTreesRef.current(),
+      250
+    )
+  }
+
+  // Subscribe to MultiRootWatcher external disk changes
   useEffect(() => {
-    const unsubscribe = window.klartext.onWatcherChange(async (ev) => {
-      await refreshWorkspaceAndTrees()
-      if (ev.eventType !== 'change') return
+    const unsubscribe = window.klartext.onWatcherChange((ev) => {
+      scheduleWorkspaceRefreshRef.current?.()
+      if (ev.eventType !== 'change' && ev.eventType !== 'add') return
 
       const key = `${ev.rootId}::${ev.relativePath}`
-      setTabs((prevTabs) => {
-        const target = prevTabs.find((t) => t.key === key)
-        if (!target || target.dirty) return prevTabs
-        window.klartext
-          .readDocument(ev.rootId, ev.relativePath)
-          .then(({ content: diskContent }) => {
-            setTabs((current) =>
-              current.map((t) => {
-                if (t.key !== key) return t
-                if (t.dirty || diskContent === t.content) return t
+      if (!openTabsRef.current.some((t) => t.key === key)) return
+      window.klartext
+        .readDocument(ev.rootId, ev.relativePath)
+        .then(({ content: diskContent }) => {
+          const target = openTabsRef.current.find((t) => t.key === key)
+          if (!target) return
+          const action = decideExternalChange(target, diskContent)
+          if (action === 'ignore') return
+          if (action === 'conflict') externalConflictKeysRef.current.add(key)
+          const apply = (prev: OpenDocumentTab[]) =>
+            prev.map((t) => {
+              if (t.key !== key) return t
+              // Re-check against the tab as it is now; it may have changed since the read started.
+              const now = decideExternalChange(t, diskContent)
+              if (now === 'reload') {
                 return {
                   ...t,
                   content: diskContent,
@@ -1525,15 +1550,55 @@ export const App: React.FC = () => {
                   dirty: false,
                   externalConflictContent: undefined
                 }
-              })
-            )
-          })
-          .catch(() => {})
-        return prevTabs
-      })
+              }
+              if (now === 'conflict') return { ...t, externalConflictContent: diskContent }
+              return t
+            })
+          setTabs(apply)
+          setSecondaryTabs(apply)
+        })
+        .catch(() => {})
     })
     return unsubscribe
-  }, [refreshWorkspaceAndTrees])
+  }, [])
+
+  const resolveExternalConflict = useCallback(
+    async (tabKey: string, choice: 'disk' | 'mine') => {
+      const tab = openTabsRef.current.find((t) => t.key === tabKey)
+      if (!tab || tab.externalConflictContent === undefined) return
+      externalConflictKeysRef.current.delete(tabKey)
+      if (choice === 'disk') {
+        autosaveScheduler.cancel(tabKey)
+        const disk = tab.externalConflictContent
+        const apply = (prev: OpenDocumentTab[]) =>
+          prev.map((t) =>
+            t.key === tabKey
+              ? { ...t, content: disk, savedContent: disk, dirty: false, externalConflictContent: undefined }
+              : t
+          )
+        setTabs(apply)
+        setSecondaryTabs(apply)
+        return
+      }
+      // Keep my version: write it over the version on disk now.
+      await autosaveScheduler.flush(tabKey)
+      await window.klartext.writeDocument(tab.rootId, tab.relativePath, tab.content)
+      const apply = (prev: OpenDocumentTab[]) =>
+        prev.map((t) =>
+          t.key === tabKey
+            ? {
+                ...t,
+                savedContent: tab.content,
+                dirty: t.content !== tab.content,
+                externalConflictContent: undefined
+              }
+            : t
+        )
+      setTabs(apply)
+      setSecondaryTabs(apply)
+    },
+    [autosaveScheduler]
+  )
 
   // Subscribe to Local AI streaming token chunks
   useEffect(() => {
@@ -1664,8 +1729,7 @@ export const App: React.FC = () => {
           ? {
               ...t,
               content: nextContent,
-              dirty: nextContent !== t.savedContent,
-              externalConflictContent: undefined
+              dirty: nextContent !== t.savedContent
             }
           : t
       )
@@ -1700,6 +1764,9 @@ export const App: React.FC = () => {
         return
       }
       await window.klartext.saveRecoverySnapshot(rootId, relativePath, nextContent)
+      // The file changed on disk while this tab had unsaved edits: keep the recovery snapshot, but
+      // don't overwrite the other version until the user chooses in the banner.
+      if (externalConflictKeysRef.current.has(tabKey)) return
       await window.klartext.writeDocument(rootId, relativePath, nextContent)
       const applySaved = (prev: OpenDocumentTab[]) =>
         prev.map((t) =>
@@ -1707,8 +1774,7 @@ export const App: React.FC = () => {
             ? {
                 ...t,
                 savedContent: nextContent,
-                dirty: t.content !== nextContent,
-                externalConflictContent: undefined
+                dirty: t.content !== nextContent
               }
             : t
         )
@@ -4254,6 +4320,47 @@ export const App: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* A file open in an editor changed on disk while it had unsaved edits */}
+      {(() => {
+        const conflicted = [...tabs, ...secondaryTabs].find(
+          (t) => t.externalConflictContent !== undefined
+        )
+        if (!conflicted) return null
+        return (
+          <div
+            role="alert"
+            data-testid="external-change-banner"
+            className="px-4 py-1.5 bg-secondary border-b border-subtle flex items-center justify-between gap-3 text-xs"
+          >
+            <div className="flex items-center gap-2 text-warning font-medium min-w-0">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                <strong>{conflicted.relativePath}</strong> changed on disk while you were editing it.
+                Your changes are not saved to the file yet.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                data-testid="external-change-reload-btn"
+                onClick={() => void resolveExternalConflict(conflicted.key, 'disk')}
+                className="px-2 py-1 rounded-sm bg-app border border-subtle text-primary hover:bg-hover"
+              >
+                Reload from disk
+              </button>
+              <button
+                type="button"
+                data-testid="external-change-keep-btn"
+                onClick={() => void resolveExternalConflict(conflicted.key, 'mine')}
+                className="px-2 py-1 rounded-sm bg-accent text-white font-medium"
+              >
+                Keep my version
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Crash Recovery Banner if snapshots from previous session exist */}
       {recoverySnapshots.length > 0 && (
