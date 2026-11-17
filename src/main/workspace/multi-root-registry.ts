@@ -297,6 +297,10 @@ export class MultiRootRegistry {
     const targetDir = this.pathGuard.resolveScopedPath(rootId, dirRelPath)
     const rootReal = this.pathGuard.getRoot(rootId).realPath
 
+    // Real paths of folders already listed through a symlink. Each symlinked folder is expanded at
+    // most once per listing, so links that point at each other (a -> b, b -> a) can't loop forever.
+    const expandedLinkTargets = new Set<string>()
+
     const readRecursive = async (currentAbs: string, currentRel: string): Promise<FileTreeNode[]> => {
       let entries: fs.Dirent[] = []
       try {
@@ -324,6 +328,10 @@ export class MultiRootRegistry {
             const targetStat = await fs.promises.stat(symReal)
             isDirectory = targetStat.isDirectory()
             isFile = targetStat.isFile()
+            if (isDirectory) {
+              if (expandedLinkTargets.has(symReal)) continue
+              expandedLinkTargets.add(symReal)
+            }
           } catch {
             continue
           }

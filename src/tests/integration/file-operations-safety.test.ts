@@ -192,6 +192,17 @@ describe('File operations never lose or overwrite user data', () => {
     expect(linkedDir?.children?.map((c) => c.name)).toEqual(['inner.md'])
   })
 
+  it('symlinked folders that point at each other do not make the listing loop forever', async () => {
+    fs.mkdirSync(path.join(rootA, 'x'))
+    fs.mkdirSync(path.join(rootA, 'y'))
+    fs.symlinkSync(path.join(rootA, 'y'), path.join(rootA, 'x', 'to-y'))
+    fs.symlinkSync(path.join(rootA, 'x'), path.join(rootA, 'y', 'to-x'))
+    const countNodes = (nodes: Awaited<ReturnType<typeof registry.listFilesForRoot>>): number =>
+      nodes.reduce((n, node) => n + 1 + (node.children ? countNodes(node.children) : 0), 0)
+    const tree = await registry.listFilesForRoot('A')
+    expect(countNodes(tree)).toBeLessThan(20)
+  }, 5000)
+
   it('a single invalid settings field only resets that field, and the old file is backed up', () => {
     const userData = path.join(base, 'ud-settings')
     fs.mkdirSync(userData)
