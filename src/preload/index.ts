@@ -36,10 +36,11 @@ export const klartextApi = {
     ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_REORDER_ROOTS, { orderedIds }),
   renameRoot: (rootId: string, newName: string): Promise<WorkspaceRoot> =>
     ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_RENAME_ROOT, { rootId, newName }),
-  saveWorkspaceManifest: (filePath: string, name?: string): Promise<WorkspaceManifest> =>
+  // `filePath` only pre-fills the native save/open dialog that main shows; null when cancelled.
+  saveWorkspaceManifest: (filePath?: string, name?: string): Promise<WorkspaceManifest | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_SAVE_MANIFEST, { filePath, name }),
-  loadWorkspaceManifest: (filePath: string, trusted?: boolean): Promise<WorkspaceManifest> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LOAD_MANIFEST, { filePath, trusted }),
+  loadWorkspaceManifest: (filePath?: string): Promise<WorkspaceManifest | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LOAD_MANIFEST, { filePath }),
   listFilesForRoot: (rootId: string, dirRelPath?: string): Promise<FileTreeNode[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LIST_FILES, { rootId, dirRelPath }),
   openRootInFinder: (rootId: string): Promise<{ ok: boolean; path: string }> =>
@@ -270,7 +271,6 @@ export const klartextApi = {
     markdown: string
     title?: string
     inlineAssets?: boolean
-    targetFilePath?: string
   }): Promise<{ outputPath: string; html: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.EXPORT_HTML, params),
   exportPdf: (params: {
@@ -279,7 +279,6 @@ export const klartextApi = {
     markdown: string
     title?: string
     inlineAssets?: boolean
-    targetFilePath?: string
   }): Promise<{ outputPath: string; sizeBytes: number; canceled?: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.EXPORT_PDF, params),
   exportDocx: (params: {
@@ -287,7 +286,6 @@ export const klartextApi = {
     relativePath: string
     markdown: string
     title?: string
-    targetFilePath?: string
   }): Promise<{ outputPath: string; sizeBytes: number; canceled?: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.EXPORT_DOCX, params),
   fetchUrlMetadata: (params: {

@@ -162,21 +162,50 @@ export function registerAllIpcHandlers(
     return updated
   })
 
+  // The manifest file is always chosen in a native dialog shown by main; a path typed in the
+  // renderer is only the dialog's starting point. (E2E runs set KLARTEXT_E2E_AUTO_SAVE_EXPORT=1
+  // and use the given path directly, as the exports do.)
+  const isE2EAutoSave = () => process.env.KLARTEXT_E2E_AUTO_SAVE_EXPORT === '1'
+  const MANIFEST_FILTERS = [{ name: 'Klartext Workspace', extensions: ['klartext-workspace', 'json'] }]
+
   ipcMain.handle(IPC_CHANNELS.WORKSPACE_SAVE_MANIFEST, async (_e, rawInput) => {
     const { filePath, name } = z
-      .object({ filePath: z.string().min(1), name: z.string().optional() })
+      .object({ filePath: z.string().optional(), name: z.string().optional() })
       .parse(rawInput)
-    return registry.saveManifestToFile(filePath, name)
+    let target = isE2EAutoSave() ? filePath : undefined
+    if (!target) {
+      const win = getMainWindow()
+      const options: Electron.SaveDialogOptions = {
+        title: 'Save Workspace Manifest',
+        defaultPath: filePath || 'workspace.klartext-workspace',
+        filters: MANIFEST_FILTERS
+      }
+      const res = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+      if (res.canceled || !res.filePath) return null
+      target = res.filePath
+    }
+    return registry.saveManifestToFile(target, name)
   })
 
   ipcMain.handle(IPC_CHANNELS.WORKSPACE_LOAD_MANIFEST, async (_e, rawInput) => {
-    const { filePath, trusted } = z
-      .object({ filePath: z.string().min(1), trusted: z.boolean().optional() })
-      .parse(rawInput)
-    const manifest = await registry.loadManifestFromFile(filePath, async (paths) => {
-      if (trusted) return true
+    const { filePath } = z.object({ filePath: z.string().optional() }).parse(rawInput || {})
+    let source = isE2EAutoSave() ? filePath : undefined
+    if (!source) {
       const win = getMainWindow()
-      if (!win) return true
+      const options: Electron.OpenDialogOptions = {
+        title: 'Open Workspace Manifest',
+        defaultPath: filePath || undefined,
+        properties: ['openFile'],
+        filters: MANIFEST_FILTERS
+      }
+      const res = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+      if (res.canceled || res.filePaths.length === 0) return null
+      source = res.filePaths[0]
+    }
+    // Always ask before mounting the folders a manifest names: it may come from someone else.
+    const manifest = await registry.loadManifestFromFile(source, async (paths) => {
+      const win = getMainWindow()
+      if (!win) return false
       const resp = await dialog.showMessageBox(win, {
         type: 'question',
         buttons: ['Mount Workspace Roots', 'Cancel'],
@@ -189,7 +218,7 @@ export function registerAllIpcHandlers(
       return resp.response === 0
     })
     await watcher.closeAll()
-    for (const r of manifest.roots) {
+    for (const r of registry.getState().roots) {
       watcher.watchRoot(r.id, r.path)
     }
     gitManager.syncInstancesWithRegistry()
@@ -249,7 +278,7 @@ export function registerAllIpcHandlers(
     if (getBinaryAssetMime(relativePath)) {
       return { ok: true, updatedAt: Date.now() }
     }
-    const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
+    const absPath = registry.pathGuard.resolveScopedEntryPath(rootId, relativePath)
     watcher.markInternalWrite(rootId, relativePath)
     await atomicWriteFile(absPath, content)
     watcher.markInternalWrite(rootId, relativePath)
@@ -260,7 +289,7 @@ export function registerAllIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.DOC_CREATE, async (_e, rawInput) => {
     const { rootId, relativePath, content } = DocWriteRequestSchema.parse(rawInput)
-    const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
+    const absPath = registry.pathGuard.resolveScopedEntryPath(rootId, relativePath)
     watcher.markInternalWrite(rootId, relativePath)
     await atomicWriteFile(absPath, content)
     watcher.markInternalWrite(rootId, relativePath)
@@ -269,14 +298,14 @@ export function registerAllIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.DOC_CREATE_DIR, async (_e, rawInput) => {
     const { rootId, relativePath } = RootScopedPathSchema.parse(rawInput)
-    const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
+    const absPath = registry.pathGuard.resolveScopedEntryPath(rootId, relativePath)
     await fs.promises.mkdir(absPath, { recursive: true })
     return { ok: true, relativePath }
   })
 
   ipcMain.handle(IPC_CHANNELS.DOC_DELETE, async (_e, rawInput) => {
     const { rootId, relativePath } = RootScopedPathSchema.parse(rawInput)
-    const absPath = registry.pathGuard.resolveScopedPath(rootId, relativePath)
+    const absPath = registry.pathGuard.resolveScopedEntryPath(rootId, relativePath)
     if (fs.existsSync(absPath)) {
       await fs.promises.rm(absPath, { recursive: true, force: true })
     }
@@ -286,9 +315,13 @@ export function registerAllIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.DOC_RENAME, async (_e, rawInput) => {
     const { rootId, oldRelativePath, newRelativePath } = DocRenameRequestSchema.parse(rawInput)
-    const oldAbs = registry.pathGuard.resolveScopedPath(rootId, oldRelativePath)
-    const newAbs = registry.pathGuard.resolveScopedPath(rootId, newRelativePath)
+    const oldAbs = registry.pathGuard.resolveScopedEntryPath(rootId, oldRelativePath)
+    const newAbs = registry.pathGuard.resolveScopedEntryPath(rootId, newRelativePath)
     if (fs.existsSync(oldAbs) && fs.statSync(oldAbs).isDirectory()) {
+      const sameFolder = fs.existsSync(newAbs) && fs.statSync(newAbs).ino === fs.statSync(oldAbs).ino
+      if (fs.existsSync(newAbs) && !sameFolder) {
+        throw new Error(`"${newRelativePath}" already exists`)
+      }
       await fs.promises.mkdir(path.dirname(newAbs), { recursive: true })
       await fs.promises.rename(oldAbs, newAbs)
       return { ok: true, newRelativePath, updatedMarkdown: '' }
@@ -703,6 +736,8 @@ export function registerAllIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.GIT_CHECKOUT, async (_e, rawInput) => {
     const { rootId, branch, createBranch } = GitActionRequestSchema.parse(rawInput)
     if (!branch) throw new Error('Branch name is required')
+    // A leading dash would be read by git as an option, not a branch name.
+    if (branch.startsWith('-')) throw new Error('Invalid branch name')
     return gitManager.getRepo(rootId).checkoutBranch(branch, createBranch)
   })
 
@@ -794,7 +829,7 @@ export function registerAllIpcHandlers(
   // Export
   ipcMain.handle(IPC_CHANNELS.EXPORT_HTML, async (_e, rawInput) => {
     const input = ExportRequestSchema.parse(rawInput)
-    let targetFilePath = input.targetFilePath
+    let targetFilePath: string | undefined
     if (!targetFilePath && process.env.KLARTEXT_E2E_AUTO_SAVE_EXPORT !== '1') {
       let defaultHtmlOut: string
       try {
@@ -840,7 +875,7 @@ export function registerAllIpcHandlers(
         path.basename(input.relativePath).replace(/\.(md|markdown)$/i, '') + '.pdf'
       )
     }
-    let outputPath = input.targetFilePath
+    let outputPath: string | undefined
     if (!outputPath && process.env.KLARTEXT_E2E_AUTO_SAVE_EXPORT !== '1') {
       const win = getMainWindow()
       const saveRes = await dialog.showSaveDialog(win!, {
@@ -893,7 +928,7 @@ export function registerAllIpcHandlers(
         path.basename(input.relativePath).replace(/\.(md|markdown)$/i, '') + '.docx'
       )
     }
-    let outputPath = input.targetFilePath
+    let outputPath: string | undefined
     if (!outputPath && process.env.KLARTEXT_E2E_AUTO_SAVE_EXPORT !== '1') {
       const win = getMainWindow()
       const saveRes = await dialog.showSaveDialog(win!, {

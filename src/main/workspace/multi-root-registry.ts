@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { WorkspaceManifestSchema, PerRootConfigSchema, type WorkspaceManifest } from '../../shared/schemas'
 import type { FileTreeNode, WorkspaceRoot } from '../../shared/types'
-import { MultiRootPathGuard, isSensitiveSystemPath } from '../security/path-guard'
+import { MultiRootPathGuard, isSensitiveSystemPath, isStrictSubpath } from '../security/path-guard'
 
 const IGNORED_DIRS = new Set(['.git', 'node_modules', '.DS_Store', 'dist', 'out'])
 
@@ -51,8 +51,25 @@ export async function atomicWriteFile(filePath: string, content: string | Buffer
   }
 }
 
+/** Synchronous variant of atomicWriteFile for state that is saved from synchronous code paths. */
+export function atomicWriteFileSync(filePath: string, content: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  const tmpPath = `${filePath}.klartext-${process.pid}-${Date.now()}.tmp`
+  fs.writeFileSync(tmpPath, content, 'utf-8')
+  try {
+    fs.renameSync(tmpPath, filePath)
+  } catch (err) {
+    fs.rmSync(tmpPath, { force: true })
+    throw err
+  }
+}
+
 export class MultiRootRegistry {
   private roots: WorkspaceRoot[] = []
+  // Roots from the saved workspace whose folder was missing at startup (an unplugged drive, a
+  // network share that isn't mounted yet). They are not mounted, but are kept in the saved state so
+  // they come back once the folder is there again.
+  private unavailableRoots: WorkspaceRoot[] = []
   private workspaceName = 'Klartext Workspace'
   private stateFilePath: string
   public readonly pathGuard: MultiRootPathGuard
@@ -71,10 +88,14 @@ export class MultiRootRegistry {
         if (parsed.success) {
           this.workspaceName = parsed.data.name
           for (const root of parsed.data.roots) {
+            if (!fs.existsSync(path.resolve(root.path))) {
+              this.unavailableRoots.push(root)
+              continue
+            }
             try {
-              this.addRoot(root, false)
+              this.addRoot(root, false, { createIfMissing: false })
             } catch {
-              // Skip invalid or missing roots from previous session
+              // Skip invalid roots from previous session
             }
           }
         }
@@ -86,13 +107,13 @@ export class MultiRootRegistry {
 
   private persistState(): void {
     try {
+      const mountedIds = new Set(this.roots.map((r) => r.id))
       const manifest: WorkspaceManifest = {
         version: 1,
         name: this.workspaceName,
-        roots: this.roots
+        roots: [...this.roots, ...this.unavailableRoots.filter((r) => !mountedIds.has(r.id))]
       }
-      fs.mkdirSync(path.dirname(this.stateFilePath), { recursive: true })
-      fs.writeFileSync(this.stateFilePath, JSON.stringify(manifest, null, 2), 'utf-8')
+      atomicWriteFileSync(this.stateFilePath, JSON.stringify(manifest, null, 2))
     } catch {
       // Non-fatal in test environments
     }
@@ -113,11 +134,20 @@ export class MultiRootRegistry {
       assetDir?: string
       gitSyncPolicy?: WorkspaceRoot['gitSyncPolicy']
     },
-    persist = true
+    persist = true,
+    options: { createIfMissing?: boolean } = {}
   ): WorkspaceRoot {
     const resolvedPath = path.resolve(input.path)
     if (isSensitiveSystemPath(resolvedPath)) {
       throw new Error(`Security rejection: Sensitive path "${resolvedPath}" cannot be mounted`)
+    }
+    if (!fs.existsSync(resolvedPath)) {
+      // Mounting a new folder from the UI creates it; restoring a saved workspace or loading a
+      // manifest never does (see loadPersistedState / loadManifestFromFile).
+      if (options.createIfMissing === false) {
+        throw new Error(`Root folder does not exist: "${resolvedPath}"`)
+      }
+      fs.mkdirSync(resolvedPath, { recursive: true })
     }
 
     const existing = this.roots.find((r) => path.resolve(r.path) === resolvedPath)
@@ -169,12 +199,16 @@ export class MultiRootRegistry {
     }
 
     this.roots.push(rootEntry)
+    this.unavailableRoots = this.unavailableRoots.filter(
+      (r) => r.id !== id && path.resolve(r.path) !== resolvedPath
+    )
     if (persist) this.persistState()
     return rootEntry
   }
 
   removeRoot(rootId: string): void {
     this.roots = this.roots.filter((r) => r.id !== rootId)
+    this.unavailableRoots = this.unavailableRoots.filter((r) => r.id !== rootId)
     this.pathGuard.unregisterRoot(rootId)
     this.persistState()
   }
@@ -242,11 +276,18 @@ export class MultiRootRegistry {
     }
 
     this.roots = []
+    this.unavailableRoots = []
     this.pathGuard.clearRoots()
     this.workspaceName = validated.name
 
     for (const r of validated.roots) {
-      this.addRoot(r, false)
+      // A manifest (possibly from someone else) never creates folders; missing ones are kept for
+      // later, like a saved workspace whose drive is unplugged.
+      if (!fs.existsSync(path.resolve(r.path))) {
+        this.unavailableRoots.push(r)
+        continue
+      }
+      this.addRoot(r, false, { createIfMissing: false })
     }
     this.persistState()
     return validated
@@ -270,20 +311,25 @@ export class MultiRootRegistry {
         const entryRel = currentRel ? `${currentRel}/${entry.name}` : entry.name
         const entryAbs = path.join(currentAbs, entry.name)
 
-        // Do not follow symlinks that escape the owning root
+        // Symlinks are listed only when their target stays inside the owning root. A symlink's
+        // Dirent is neither a file nor a directory, so classify it by what it points to.
+        let isDirectory = entry.isDirectory()
+        let isFile = entry.isFile()
         if (entry.isSymbolicLink()) {
           try {
             const symReal = await fs.promises.realpath(entryAbs)
-            const relCheck = path.relative(rootReal, symReal)
-            if (relCheck.startsWith('..') || path.isAbsolute(relCheck)) {
-              continue
-            }
+            if (!isStrictSubpath(rootReal, symReal)) continue
+            // A link to a folder that contains it would make the tree endless.
+            if (isStrictSubpath(symReal, await fs.promises.realpath(currentAbs))) continue
+            const targetStat = await fs.promises.stat(symReal)
+            isDirectory = targetStat.isDirectory()
+            isFile = targetStat.isFile()
           } catch {
             continue
           }
         }
 
-        if (entry.isDirectory()) {
+        if (isDirectory) {
           const children = await readRecursive(entryAbs, entryRel)
           nodes.push({
             name: entry.name,
@@ -292,7 +338,7 @@ export class MultiRootRegistry {
             isDirectory: true,
             children
           })
-        } else if (entry.isFile()) {
+        } else if (isFile) {
           const stat = await fs.promises.stat(entryAbs)
           nodes.push({
             name: entry.name,

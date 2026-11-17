@@ -65,6 +65,28 @@ export function validateAssetMimeAndMagicBytes(
   return buffer.length > 0
 }
 
+/** True when both paths exist and are the same file on disk (e.g. `note.md` / `Note.md` on macOS). */
+function isSameExistingFile(a: string, b: string): boolean {
+  try {
+    const sa = fs.statSync(a)
+    const sb = fs.statSync(b)
+    return sa.ino === sb.ino && sa.dev === sb.dev
+  } catch {
+    return false
+  }
+}
+
+/** `name.png`, `name-2.png`, `name-3.png`, … until one doesn't exist in `dirRel`. */
+function nextFreeRelPath(exists: (rel: string) => boolean, dirRel: string, fileName: string): string {
+  const dot = fileName.indexOf('.')
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName
+  const ext = dot > 0 ? fileName.slice(dot) : ''
+  for (let n = 2; ; n++) {
+    const candidate = `${dirRel}/${stem}-${n}${ext}`
+    if (!exists(candidate)) return candidate
+  }
+}
+
 export class AssetAndDocumentService {
   constructor(private registry: MultiRootRegistry) {}
 
@@ -224,15 +246,18 @@ export class AssetAndDocumentService {
     migratedAssets: string[]
     updatedMarkdown: string
   }> {
-    const sourceDocAbs = this.registry.pathGuard.resolveScopedPath(
+    const sourceDocAbs = this.registry.pathGuard.resolveScopedEntryPath(
       params.sourceRootId,
       params.sourceRelativePath
     )
-    const targetDocAbs = this.registry.pathGuard.resolveScopedPath(
+    const targetDocAbs = this.registry.pathGuard.resolveScopedEntryPath(
       params.targetRootId,
       params.targetRelativePath
     )
     const targetRoot = this.registry.pathGuard.getRoot(params.targetRootId)
+    if (fs.existsSync(targetDocAbs) && !isSameExistingFile(sourceDocAbs, targetDocAbs)) {
+      throw new Error(`"${params.targetRelativePath}" already exists in the target folder`)
+    }
 
     let markdown = await fs.promises.readFile(sourceDocAbs, 'utf-8')
     const migratedAssets: string[] = []
@@ -258,17 +283,34 @@ export class AssetAndDocumentService {
 
           const subCategory = ref.isExcalidrawSvg ? 'drawings' : 'images'
           const fileName = path.posix.basename(sourceAssetRel)
-          const targetAssetRel = `${targetRoot.assetDir}/${subCategory}/${fileName}`.replace(
-            /\\/g,
-            '/'
-          )
-          const targetAssetAbs = this.registry.pathGuard.resolveScopedPath(
+          const targetDirRel = `${targetRoot.assetDir}/${subCategory}`.replace(/\\/g, '/')
+          let targetAssetRel = `${targetDirRel}/${fileName}`
+          let targetAssetAbs = this.registry.pathGuard.resolveScopedEntryPath(
             params.targetRootId,
             targetAssetRel
           )
 
-          await fs.promises.mkdir(path.dirname(targetAssetAbs), { recursive: true })
-          await fs.promises.copyFile(sourceAssetAbs, targetAssetAbs)
+          // Never overwrite a different file that happens to share the name (pasted images are
+          // often all called image.png); an identical file is reused instead of duplicated.
+          const alreadyThere =
+            fs.existsSync(targetAssetAbs) &&
+            (await fs.promises.readFile(targetAssetAbs)).equals(await fs.promises.readFile(sourceAssetAbs))
+          if (!alreadyThere) {
+            if (fs.existsSync(targetAssetAbs)) {
+              targetAssetRel = nextFreeRelPath(
+                (rel) =>
+                  fs.existsSync(this.registry.pathGuard.resolveScopedPath(params.targetRootId, rel)),
+                targetDirRel,
+                fileName
+              )
+              targetAssetAbs = this.registry.pathGuard.resolveScopedEntryPath(
+                params.targetRootId,
+                targetAssetRel
+              )
+            }
+            await fs.promises.mkdir(path.dirname(targetAssetAbs), { recursive: true })
+            await fs.promises.copyFile(sourceAssetAbs, targetAssetAbs, fs.constants.COPYFILE_EXCL)
+          }
           migratedAssets.push(targetAssetRel)
 
           const newRelFromTargetDoc =
@@ -356,8 +398,8 @@ export class AssetAndDocumentService {
     oldRelativePath: string
     newRelativePath: string
   }): Promise<{ newRelativePath: string; updatedMarkdown: string }> {
-    const oldAbs = this.registry.pathGuard.resolveScopedPath(params.rootId, params.oldRelativePath)
-    const newAbs = this.registry.pathGuard.resolveScopedPath(params.rootId, params.newRelativePath)
+    const oldAbs = this.registry.pathGuard.resolveScopedEntryPath(params.rootId, params.oldRelativePath)
+    const newAbs = this.registry.pathGuard.resolveScopedEntryPath(params.rootId, params.newRelativePath)
 
     let markdown = await fs.promises.readFile(oldAbs, 'utf-8')
     const oldDir = path.posix.dirname(params.oldRelativePath.replace(/\\/g, '/'))
@@ -383,8 +425,17 @@ export class AssetAndDocumentService {
       }
     }
 
-    await atomicWriteFile(newAbs, markdown)
-    if (oldAbs !== newAbs && fs.existsSync(oldAbs)) {
+    if (oldAbs === newAbs || isSameExistingFile(oldAbs, newAbs)) {
+      // Same file on disk: either no rename at all, or a case-only rename on a case-insensitive
+      // file system (macOS, Windows). Writing to the "new" name and unlinking the "old" one would
+      // delete the document, so update it in place and let rename change the case.
+      await atomicWriteFile(oldAbs, markdown)
+      if (oldAbs !== newAbs) await fs.promises.rename(oldAbs, newAbs)
+    } else {
+      if (fs.existsSync(newAbs)) {
+        throw new Error(`"${params.newRelativePath}" already exists`)
+      }
+      await atomicWriteFile(newAbs, markdown)
       await fs.promises.unlink(oldAbs)
     }
 

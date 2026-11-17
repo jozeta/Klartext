@@ -479,6 +479,7 @@ export const ExportRequestSchema = z.object({
   relativePath: z.string().min(1),
   markdown: z.string(),
   title: z.string().default('Document'),
-  inlineAssets: z.boolean().default(true),
-  targetFilePath: z.string().optional()
+  inlineAssets: z.boolean().default(true)
+  // No output path from the renderer: main asks with a native save dialog (or, in E2E runs,
+  // writes next to the document inside its root).
 })

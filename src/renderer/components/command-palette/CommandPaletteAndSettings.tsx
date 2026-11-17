@@ -309,8 +309,8 @@ export const SettingsModal: React.FC<{
   settings: AppSettings
   roots: WorkspaceRoot[]
   onUpdateSettings: (partial: Partial<AppSettings>) => void
-  onSaveWorkspaceManifest: (filePath: string) => void
-  onLoadWorkspaceManifest: (filePath: string) => void
+  onSaveWorkspaceManifest: (filePath?: string) => void
+  onLoadWorkspaceManifest: (filePath?: string) => void
   onClose: () => void
 }> = ({
   settings,
@@ -2000,7 +2000,7 @@ export const SettingsModal: React.FC<{
                   <input
                     type="text"
                     data-testid="manifest-filepath-input"
-                    placeholder="/path/to/project.klartext-workspace"
+                    placeholder="Optional: /path/to/project.klartext-workspace"
                     value={manifestPath}
                     onChange={(e) => setManifestPath(e.target.value)}
                     className="flex-1 px-2 py-1.5 rounded-sm bg-app border border-subtle text-primary font-mono"
@@ -2009,7 +2009,7 @@ export const SettingsModal: React.FC<{
                     type="button"
                     data-testid="save-manifest-btn"
                     onClick={() =>
-                      manifestPath.trim() && onSaveWorkspaceManifest(manifestPath.trim())
+                      onSaveWorkspaceManifest(manifestPath.trim() || undefined)
                     }
                     className="px-3 py-1.5 rounded-sm bg-accent text-white font-medium"
                   >
@@ -2019,7 +2019,7 @@ export const SettingsModal: React.FC<{
                     type="button"
                     data-testid="load-manifest-btn"
                     onClick={() =>
-                      manifestPath.trim() && onLoadWorkspaceManifest(manifestPath.trim())
+                      onLoadWorkspaceManifest(manifestPath.trim() || undefined)
                     }
                     className="px-3 py-1.5 rounded-sm bg-secondary border border-subtle text-primary font-medium"
                   >

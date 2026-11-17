@@ -25,6 +25,30 @@ function matchesSimpleGlob(relPath: string, globPattern?: string): boolean {
   })
 }
 
+/**
+ * Expands `$1`, `$&`, `$<name>` and `$$` in a regex replacement, exactly like
+ * String.prototype.replace does with a string replacement. `args` are a replacer callback's args.
+ */
+function expandReplacementTemplate(template: string, args: unknown[]): string {
+  const hasNamedGroups = typeof args[args.length - 1] === 'object' && args[args.length - 1] !== null
+  const groups = hasNamedGroups ? (args[args.length - 1] as Record<string, string | undefined>) : undefined
+  const match = String(args[0])
+  const captures = args.slice(1, hasNamedGroups ? -3 : -2) as Array<string | undefined>
+  return template.replace(/\$(\$|&|\d{1,2}|<[^>]*>)/g, (token, spec: string) => {
+    if (spec === '$') return '$'
+    if (spec === '&') return match
+    if (spec.startsWith('<')) return groups ? (groups[spec.slice(1, -1)] ?? '') : token
+    const index = Number(spec)
+    if (index >= 1 && index <= captures.length) return captures[index - 1] ?? ''
+    // `$10` with fewer than 10 groups means `$1` followed by "0", as in String.replace.
+    const single = Number(spec[0])
+    if (spec.length === 2 && single >= 1 && single <= captures.length) {
+      return (captures[single - 1] ?? '') + spec[1]
+    }
+    return token
+  })
+}
+
 export class MultiRootSearchService {
   constructor(private registry: MultiRootRegistry) {}
 
@@ -55,7 +79,9 @@ export class MultiRootSearchService {
   }): RegExp {
     const flags = params.caseSensitive ? 'g' : 'gi'
     if (params.isRegex) {
-      return new RegExp(params.query, flags)
+      // Search runs line by line, so `^` and `$` mean start/end of line there. Replace runs on the
+      // whole file, so it needs the `m` flag to match the same places.
+      return new RegExp(params.query, `${flags}m`)
     }
     const escaped = params.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const pattern = params.wholeWord ? `\\b${escaped}\\b` : escaped
@@ -205,11 +231,21 @@ export class MultiRootSearchService {
       if (!fs.existsSync(absPath)) continue
 
       const original = await fs.promises.readFile(absPath, 'utf-8')
+      // Search sees lines without their \r, so a CRLF file is replaced line by line too; otherwise
+      // `$` would not match before "\r\n".
+      const parts = original.split(/(\r?\n)/)
       let fileReplacements = 0
-      const updated = original.replace(matcher, () => {
-        fileReplacements++
-        return params.replacement
-      })
+      const updated = parts
+        .map((part, i) => {
+          if (i % 2 === 1) return part // line separator
+          matcher.lastIndex = 0
+          return part.replace(matcher, (...args: unknown[]) => {
+            fileReplacements++
+            if (!params.search.isRegex) return params.replacement // plain text: `$` is literal
+            return expandReplacementTemplate(params.replacement, args)
+          })
+        })
+        .join('')
 
       if (fileReplacements > 0 && updated !== original) {
         await atomicWriteFile(absPath, updated)

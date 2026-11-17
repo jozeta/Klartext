@@ -33,7 +33,23 @@ export class SettingsAndCredentialService {
     try {
       if (fs.existsSync(this.settingsPath)) {
         const raw = JSON.parse(fs.readFileSync(this.settingsPath, 'utf-8'))
-        const parsed = AppSettingsSchema.safeParse(raw)
+        let parsed = AppSettingsSchema.safeParse(raw)
+        if (!parsed.success && raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          // One bad field (an older or newer version's value, a hand edit) must not throw away every
+          // other setting, custom templates included. Keep a copy of the file, drop only the fields
+          // that fail validation, and let those fall back to their defaults.
+          try {
+            fs.copyFileSync(this.settingsPath, `${this.settingsPath}.bak`)
+          } catch {
+            // Backup is best effort
+          }
+          const repaired: Record<string, unknown> = { ...(raw as Record<string, unknown>) }
+          for (const issue of parsed.error.issues) {
+            const topKey = issue.path[0]
+            if (typeof topKey === 'string') delete repaired[topKey]
+          }
+          parsed = AppSettingsSchema.safeParse(repaired)
+        }
         if (parsed.success) {
           return {
             ...parsed.data,
@@ -96,14 +112,14 @@ export class SettingsAndCredentialService {
    */
   async setSecret(serviceKey: string, secretValue: string): Promise<void> {
     if (!serviceKey.trim()) throw new Error('Invalid credential key')
-    if (this.safeStorageAdapter && this.safeStorageAdapter.isEncryptionAvailable()) {
-      const encryptedBuf = this.safeStorageAdapter.encryptString(secretValue)
-      this.encryptedCredentials[serviceKey] = `enc:${encryptedBuf.toString('base64')}`
-    } else {
-      // Fallback in headless CI where OS keychain daemon is unavailable: still isolated in credentials.enc.json
-      const obf = Buffer.from(secretValue, 'utf-8').toString('base64')
-      this.encryptedCredentials[serviceKey] = `b64:${obf}`
+    if (!this.safeStorageAdapter || !this.safeStorageAdapter.isEncryptionAvailable()) {
+      // Never fall back to storing the secret readably on disk (base64 is not encryption).
+      throw new Error(
+        'Cannot store the credential: OS encryption (Keychain / Credential Manager / Secret Service) is not available'
+      )
     }
+    const encryptedBuf = this.safeStorageAdapter.encryptString(secretValue)
+    this.encryptedCredentials[serviceKey] = `enc:${encryptedBuf.toString('base64')}`
     await atomicWriteFile(this.credentialsPath, JSON.stringify(this.encryptedCredentials, null, 2))
   }
 

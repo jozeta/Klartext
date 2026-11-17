@@ -5801,11 +5801,12 @@ export const App: React.FC = () => {
           roots={roots}
           onUpdateSettings={handleUpdateSettings}
           onSaveWorkspaceManifest={async (filePath) => {
-            await window.klartext.saveWorkspaceManifest(filePath, 'Multi-Root Workspace')
-            setShowSettingsModal(false)
+            const saved = await window.klartext.saveWorkspaceManifest(filePath, 'Multi-Root Workspace')
+            if (saved) setShowSettingsModal(false)
           }}
           onLoadWorkspaceManifest={async (filePath) => {
-            await window.klartext.loadWorkspaceManifest(filePath, true)
+            const loaded = await window.klartext.loadWorkspaceManifest(filePath)
+            if (!loaded) return
             await refreshWorkspaceAndTrees()
             setShowSettingsModal(false)
           }}

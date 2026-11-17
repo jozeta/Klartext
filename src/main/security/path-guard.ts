@@ -40,7 +40,8 @@ export function isSensitiveSystemPath(candidatePath: string): boolean {
 export function isStrictSubpath(parentRealPath: string, targetRealPath: string): boolean {
   const rel = path.relative(parentRealPath, targetRealPath)
   if (rel === '') return true
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+  // Only a leading `..` path segment escapes; a name such as `..notes.md` is a normal file.
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || rel.startsWith('../') || path.isAbsolute(rel)) {
     return false
   }
   return true
@@ -54,8 +55,10 @@ export class MultiRootPathGuard {
     if (isSensitiveSystemPath(resolved)) {
       throw new Error(`Security rejection: Cannot mount sensitive system path "${resolved}" as a workspace root`)
     }
+    // Never create the folder here: a root on an unplugged drive must not be recreated as an empty
+    // folder on the internal disk. Callers that mount a brand-new folder create it first.
     if (!fs.existsSync(resolved)) {
-      fs.mkdirSync(resolved, { recursive: true })
+      throw new Error(`Root folder does not exist: "${resolved}"`)
     }
     const realPath = fs.realpathSync(resolved)
     if (isSensitiveSystemPath(realPath)) {
@@ -132,6 +135,21 @@ export class MultiRootPathGuard {
     }
 
     return candidate
+  }
+
+  /**
+   * Like resolveScopedPath, but for operations on one entry (write, delete, rename, …): refuses a
+   * path that resolves to the root folder itself (`.`, `sub/..`), so a bad path can never delete or
+   * overwrite the whole root.
+   */
+  resolveScopedEntryPath(rootId: string, relativePath: string): string {
+    const resolved = this.resolveScopedPath(rootId, relativePath)
+    if (resolved === this.getRoot(rootId).realPath) {
+      throw new Error(
+        `Security rejection: "${relativePath}" resolves to the root folder itself of "${rootId}"`
+      )
+    }
+    return resolved
   }
 
   /**

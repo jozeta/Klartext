@@ -11,6 +11,7 @@ import type {
 import { hasConflictMarkers, resolveAllConflictHunksInText, resolveConflictHunkInText } from './conflict-resolver'
 import { atomicWriteFile } from '../workspace/multi-root-registry'
 import { RecoveryService } from '../recovery/recovery-service'
+import { MultiRootPathGuard } from '../security/path-guard'
 
 export class GitRepoInstance {
   private git: SimpleGit
@@ -18,6 +19,7 @@ export class GitRepoInstance {
   private isSyncing = false
   private lastSyncAt?: number
   private lastError?: string
+  private pathGuard?: MultiRootPathGuard
 
   constructor(
     public readonly rootId: string,
@@ -34,6 +36,27 @@ export class GitRepoInstance {
         allowUnsafeHooksPath: true
       }
     })
+  }
+
+  /**
+   * Resolves a repository-relative path from the renderer through the same confinement rules as
+   * every other file operation (no `..` escapes, no symlinks pointing outside the root).
+   */
+  private resolveInRepo(relativePath: string): string {
+    if (!this.pathGuard) {
+      const guard = new MultiRootPathGuard()
+      guard.registerRoot({ id: this.rootId, name: this.rootName, path: this.rootPath })
+      this.pathGuard = guard
+    }
+    return this.pathGuard.resolveScopedEntryPath(this.rootId, relativePath)
+  }
+
+  /** Validates every path in a Git file list before it reaches the file system or git. */
+  private assertPathsInRepo(files?: string[]): void {
+    for (const rel of files ?? []) {
+      if (rel === '.') continue
+      this.resolveInRepo(rel)
+    }
   }
 
   /**
@@ -177,10 +200,11 @@ export class GitRepoInstance {
   async stageFiles(files?: string[]): Promise<GitRepoStatus> {
     await this.enqueue(async () => {
       const targetFiles = files && files.length > 0 ? files : ['.']
+      this.assertPathsInRepo(targetFiles)
       // Prevent staging files that still contain unresolved <<<<<<< conflict markers
       for (const rel of targetFiles) {
         if (rel === '.') continue
-        const abs = path.join(this.rootPath, rel)
+        const abs = this.resolveInRepo(rel)
         if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
           const text = await fs.promises.readFile(abs, 'utf-8')
           if (hasConflictMarkers(text)) {
@@ -199,6 +223,7 @@ export class GitRepoInstance {
   async unstageFiles(files?: string[]): Promise<GitRepoStatus> {
     await this.enqueue(async () => {
       const targetFiles = files && files.length > 0 ? files : ['.']
+      this.assertPathsInRepo(targetFiles)
       await this.git.reset(['HEAD', '--', ...targetFiles])
     })
     return this.getStatus()
@@ -207,6 +232,7 @@ export class GitRepoInstance {
   async getDiff(relativePath?: string): Promise<string> {
     return this.enqueue(async () => {
       if (relativePath) {
+        this.assertPathsInRepo([relativePath])
         return await this.git.diff(['--', relativePath])
       }
       return await this.git.diff()
@@ -216,6 +242,7 @@ export class GitRepoInstance {
   async commit(message: string, files?: string[]): Promise<GitRepoStatus> {
     await this.enqueue(async () => {
       if (files && files.length > 0) {
+        this.assertPathsInRepo(files)
         await this.git.add(files)
       }
       await this.git.commit(message)
@@ -318,7 +345,7 @@ export class GitRepoInstance {
     resolution: 'current' | 'incoming' | 'both' | 'custom'
     customContent?: string
   }): Promise<{ updatedContent: string; remainingConflicts: number; status: GitRepoStatus }> {
-    const absPath = path.join(this.rootPath, params.relativePath)
+    const absPath = this.resolveInRepo(params.relativePath)
     const raw = await fs.promises.readFile(absPath, 'utf-8')
 
     let updated: string
